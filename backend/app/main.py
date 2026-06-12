@@ -57,7 +57,13 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # CORS — only allow the panel frontend origin
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[settings.SERVER_URL, "http://localhost:5173", "http://localhost:4173"],
+    allow_origins=[
+        settings.SERVER_URL,
+        "https://tv.keitanyfrank.store",
+        "https://live.keitanyfrank.store",
+        "http://localhost:5173",
+        "http://localhost:4173",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

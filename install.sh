@@ -1,8 +1,14 @@
 #!/bin/bash
 # ================================================================
 #  IPTV Panel — One-command installer for Ubuntu 22.04
-#  Usage: bash install.sh
-#  Repo:  https://github.com/keitanyfrank/mzeekobe
+#
+#  tv.keitanyfrank.store   → Admin dashboard
+#  live.keitanyfrank.store → Xtream / HLS for players
+#
+#  Run as root on a fresh Ubuntu 22.04 VPS:
+#    apt update -y && apt upgrade -y && apt install -y git curl wget && \
+#    git clone https://github.com/justkeitany/Kobe_stores.git /tmp/mzeekobe && \
+#    chmod +x /tmp/mzeekobe/install.sh && bash /tmp/mzeekobe/install.sh
 # ================================================================
 set -euo pipefail
 
@@ -15,14 +21,16 @@ error() { echo -e "${RED}[✗] $1${NC}"; exit 1; }
 step()  { echo -e "\n${CYAN}${BOLD}══ $1 ══${NC}"; }
 
 [[ $EUID -ne 0 ]] && error "Run as root: sudo bash install.sh"
-[[ $(lsb_release -rs) != "22.04" ]] && warn "Tested on Ubuntu 22.04. Continuing anyway..."
 
-# ── Config ───────────────────────────────────────────────────
+# ── Config ───────────────────────────────────────────────────────
 APP_DIR="/opt/iptv-panel"
 HLS_DIR="/var/iptv/hls"
 WEB_DIR="/var/www/iptv-panel"
 REPO_DIR="/tmp/mzeekobe"
-DOMAIN="${DOMAIN:-live.keitanyfrank.store}"
+
+PANEL_DOMAIN="tv.keitanyfrank.store"
+STREAM_DOMAIN="live.keitanyfrank.store"
+
 DB_NAME="iptvpanel"
 DB_USER="iptv"
 DB_PASS=$(openssl rand -hex 20)
@@ -52,30 +60,29 @@ mkdir -p /etc/ssl/iptv /etc/nginx/snippets
 step "Setting up PostgreSQL"
 systemctl enable postgresql --now
 sudo -u postgres psql -c "CREATE USER $DB_USER WITH PASSWORD '$DB_PASS';" 2>/dev/null || true
-sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;" 2>/dev/null || true
+sudo -u postgres psql -c "CREATE DATABASE $DB_NAME OWNER $DB_USER;"         2>/dev/null || true
 sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE $DB_NAME TO $DB_USER;"
 
-# Tune PG
 PG_CONF=$(find /etc/postgresql -name postgresql.conf 2>/dev/null | head -1)
 if [[ -f "$PG_CONF" ]]; then
-    sed -i "s/^#*shared_buffers\s*=.*/shared_buffers = 256MB/"       "$PG_CONF"
-    sed -i "s/^#*effective_cache_size\s*=.*/effective_cache_size = 1GB/" "$PG_CONF"
-    sed -i "s/^#*max_connections\s*=.*/max_connections = 100/"       "$PG_CONF"
+    sed -i "s/^#*shared_buffers\s*=.*/shared_buffers = 512MB/"          "$PG_CONF"
+    sed -i "s/^#*effective_cache_size\s*=.*/effective_cache_size = 2GB/" "$PG_CONF"
+    sed -i "s/^#*max_connections\s*=.*/max_connections = 200/"           "$PG_CONF"
     systemctl restart postgresql
 fi
 
 step "Configuring Redis"
 systemctl enable redis-server --now
-redis-cli config set maxmemory 256mb >/dev/null
+redis-cli config set maxmemory     512mb       >/dev/null
 redis-cli config set maxmemory-policy allkeys-lru >/dev/null
-redis-cli config set tcp-keepalive 60 >/dev/null
+redis-cli config set tcp-keepalive 60          >/dev/null
 
 step "Copying application files"
 cp -r "$REPO_DIR/backend"  "$APP_DIR/"
 cp -r "$REPO_DIR/nginx"    "$APP_DIR/"
 cp -r "$REPO_DIR/scripts"  "$APP_DIR/"
 
-step "Building Python environment (Python 3.11)"
+step "Building Python 3.11 environment"
 python3.11 -m venv "$APP_DIR/venv"
 "$APP_DIR/venv/bin/pip" install --upgrade pip -q
 "$APP_DIR/venv/bin/pip" install -r "$APP_DIR/backend/requirements.txt" -q
@@ -90,7 +97,8 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 REFRESH_TOKEN_EXPIRE_DAYS=30
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin
-SERVER_URL=https://$DOMAIN
+SERVER_URL=https://$STREAM_DOMAIN
+PANEL_URL=https://$PANEL_DOMAIN
 PANEL_PORT=8000
 HLS_SEGMENT_TIME=2
 HLS_LIST_SIZE=6
@@ -109,23 +117,23 @@ npm install --silent
 npm run build
 cp -r dist/* "$WEB_DIR/"
 
+step "Generating SSL certificates (self-signed — replace with Let's Encrypt)"
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/iptv/tv-key.pem \
+    -out    /etc/ssl/iptv/tv-cert.pem \
+    -subj   "/CN=$PANEL_DOMAIN"  2>/dev/null
+
+openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+    -keyout /etc/ssl/iptv/live-key.pem \
+    -out    /etc/ssl/iptv/live-cert.pem \
+    -subj   "/CN=$STREAM_DOMAIN" 2>/dev/null
+
 step "Configuring Nginx"
-# Self-signed cert for initial setup
-if [[ ! -f /etc/ssl/iptv/cert.pem ]]; then
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout /etc/ssl/iptv/key.pem \
-        -out /etc/ssl/iptv/cert.pem \
-        -subj "/CN=$DOMAIN" 2>/dev/null
-fi
-cp "$APP_DIR/nginx/iptv-panel.conf"    /etc/nginx/sites-available/iptv-panel
-cp "$APP_DIR/nginx/iptv-locations.conf" /etc/nginx/snippets/iptv-locations.conf
+cp "$APP_DIR/nginx/iptv-panel.conf" /etc/nginx/sites-available/iptv-panel
 ln -sf /etc/nginx/sites-available/iptv-panel /etc/nginx/sites-enabled/iptv-panel
-rm -f /etc/nginx/sites-enabled/default
+rm -f  /etc/nginx/sites-enabled/default
 
-# Replace localhost placeholder in nginx config
-sed -i "s/live\.keitanyfrank\.store/$DOMAIN/g" /etc/nginx/sites-available/iptv-panel
-
-nginx -t 2>/dev/null && systemctl reload nginx || warn "Nginx config issue — check: nginx -t"
+nginx -t 2>/dev/null && systemctl reload nginx || warn "Nginx config issue — run: nginx -t"
 systemctl enable nginx
 
 step "Creating systemd service"
@@ -142,7 +150,9 @@ Group=www-data
 WorkingDirectory=$APP_DIR/backend
 Environment="PATH=$APP_DIR/venv/bin"
 EnvironmentFile=$APP_DIR/backend/.env
-ExecStart=$APP_DIR/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --workers 2 --loop uvloop --http httptools
+ExecStart=$APP_DIR/venv/bin/uvicorn app.main:app \\
+    --host 127.0.0.1 --port 8000 --workers 4 \\
+    --loop uvloop --http httptools
 Restart=always
 RestartSec=5
 StandardOutput=journal
@@ -158,7 +168,7 @@ chmod -R 755 "$HLS_DIR"
 
 step "Kernel tuning for low-latency streaming"
 cat >> /etc/sysctl.conf <<'SYSCTLEOF'
-# IPTV Panel
+# IPTV Panel — streaming optimisation
 net.core.rmem_max=16777216
 net.core.wmem_max=16777216
 net.ipv4.tcp_wmem=4096 65536 16777216
@@ -169,7 +179,7 @@ net.ipv4.tcp_fastopen=3
 vm.swappiness=10
 SYSCTLEOF
 modprobe tcp_bbr 2>/dev/null || true
-sysctl -p -q 2>/dev/null || true
+sysctl -p -q    2>/dev/null || true
 
 step "Firewall (UFW)"
 ufw allow 22/tcp  >/dev/null
@@ -180,38 +190,36 @@ ufw --force enable >/dev/null
 step "Starting IPTV Panel"
 systemctl daemon-reload
 systemctl enable iptv-panel
-systemctl start iptv-panel
-sleep 4
+systemctl start  iptv-panel
+sleep 5
 
 if systemctl is-active --quiet iptv-panel; then
     info "Backend is running"
 else
-    warn "Backend may have failed to start"
-    warn "Check: journalctl -u iptv-panel -n 50"
+    warn "Backend may have failed — check: journalctl -u iptv-panel -n 50"
 fi
 
-# ── SSL with Let's Encrypt ────────────────────────────────────
+# ── Let's Encrypt SSL ─────────────────────────────────────────
 echo ""
-echo -e "${YELLOW}To get a free SSL certificate run:${NC}"
-echo "  certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m admin@$DOMAIN"
+echo -e "${YELLOW}To enable real SSL certificates run:${NC}"
+echo "  certbot --nginx -d $PANEL_DOMAIN -d $STREAM_DOMAIN --agree-tos -m admin@keitanyfrank.store --non-interactive"
 
-# ── Print credentials ─────────────────────────────────────────
+# ── Final output ──────────────────────────────────────────────
 echo ""
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════${NC}"
-echo -e "${BOLD}  IPTV Panel installed successfully!${NC}"
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════${NC}"
+echo -e "${BOLD}${GREEN}════════════════════════════════════════════════${NC}"
+echo -e "${BOLD}  IPTV Panel installed!${NC}"
+echo -e "${BOLD}${GREEN}════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  Panel URL:   ${CYAN}https://$DOMAIN${NC}"
+echo -e "  Dashboard:      ${CYAN}https://$PANEL_DOMAIN${NC}"
+echo -e "  Xtream server:  ${CYAN}https://$STREAM_DOMAIN${NC} (DNS only)"
+echo ""
 echo -e "  Username:    ${BOLD}admin${NC}"
-echo -e "  Password:    ${BOLD}admin${NC}  ← change on first login"
+echo -e "  Password:    ${BOLD}admin${NC}  ← you will be forced to change on first login"
 echo ""
-echo -e "  Xtream URL:  ${CYAN}https://$DOMAIN${NC}"
+echo -e "  DB password: ${BOLD}$DB_PASS${NC}"
 echo ""
-echo -e "  DB password: $DB_PASS"
-echo -e "  JWT secret:  (saved in $APP_DIR/backend/.env)"
+echo -e "${YELLOW}  SAVE THE DB PASSWORD — you will need it for backups!${NC}"
+echo -e "${BOLD}${GREEN}════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${YELLOW}  SAVE THESE CREDENTIALS NOW!${NC}"
-echo -e "${BOLD}${GREEN}════════════════════════════════════════════${NC}"
-echo ""
-echo -e "To update later:  ${CYAN}bash $APP_DIR/scripts/update.sh${NC}"
-echo -e "Reset password:   ${CYAN}bash $APP_DIR/scripts/reset-password.sh${NC}"
+echo -e "Update anytime:  ${CYAN}bash $APP_DIR/scripts/update.sh${NC}"
+echo -e "Reset password:  ${CYAN}bash $APP_DIR/scripts/reset-password.sh${NC}"

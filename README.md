@@ -1,106 +1,73 @@
-# IPTV Panel
+# IPTV Panel (Kobe Stores)
 
-Personal IPTV panel with full Xtream Codes API, HLS streaming via FFmpeg, and a TailAdmin-style dashboard.
+Personal IPTV panel — full Xtream Codes API, HLS streaming via FFmpeg, React dashboard.
 
-## Stack
+| URL | Purpose | Cloudflare |
+|---|---|---|
+| `tv.keitanyfrank.store` | Admin dashboard | Proxied (orange cloud) |
+| `live.keitanyfrank.store` | Xtream / HLS for players | DNS only (grey cloud) |
 
-| Layer | Tech |
-|---|---|
-| Frontend | Vite + React + Tailwind (TailAdmin style) |
-| Backend | Python FastAPI |
-| Database | PostgreSQL |
-| Cache/Rate-limit | Redis |
-| Streaming | FFmpeg (HLS output) |
-| Proxy | Nginx |
-| Domain | live.keitanyfrank.store (Cloudflare) |
+**Server:** Linode 8GB / 4 CPU / 160GB — London (`172.237.102.20`)
 
-## Quick Deploy (Ubuntu 22.04 VPS)
+---
+
+## One-Command Install (Ubuntu 22.04)
+
+SSH into your VPS as root, then run:
 
 ```bash
-# Clone or upload the project to your VPS
-scp -r iptv-panel/ root@YOUR_VPS:/tmp/
-
-# SSH in and run the installer
-ssh root@YOUR_VPS
-cd /tmp/iptv-panel
-sudo bash scripts/install.sh
+apt update -y && apt upgrade -y && apt install -y git curl wget && \
+git clone https://github.com/justkeitany/Kobe_stores.git /tmp/mzeekobe && \
+chmod +x /tmp/mzeekobe/install.sh && bash /tmp/mzeekobe/install.sh
 ```
 
 The installer will:
-1. Install all dependencies (Node 20, Python, PostgreSQL, Redis, FFmpeg, Nginx)
-2. Set up the database and Redis
-3. Build the frontend and deploy it
-4. Create a systemd service (`iptv-panel`)
-5. Configure Nginx with Cloudflare-compatible settings
-6. Tune the kernel for low-latency streaming (BBR TCP, socket buffers)
-7. Print your credentials
+- Install Python 3.11, Node 20, PostgreSQL, Redis, FFmpeg, Nginx
+- Build and deploy the frontend to `/var/www/iptv-panel`
+- Set up the FastAPI backend as a systemd service
+- Configure Nginx with two virtual hosts (tv + live)
+- Tune the kernel for low-latency HLS streaming
+- Print your DB password at the end — **save it**
 
-## Xtream Codes API Endpoints
+---
 
-All endpoints are served by FastAPI — no PHP anywhere.
+## After Install
 
-| Endpoint | Purpose |
-|---|---|
-| `/player_api.php` | Authentication + channel list |
-| `/get.php` | M3U playlist download |
-| `/live/{user}/{pass}/{id}.m3u8` | Stream delivery (HLS) |
-| `/xmltv.php` | EPG guide data |
-
-**Use in your player:**
-- Server: `https://live.keitanyfrank.store`
-- Username: `admin`
-- Password: *(set during install)*
-
-## Features
-
-- Upload M3U files — auto-imports channels + creates categories from `group-title`
-- Create channels manually with name, URL, logo
-- Full category management (CRUD, reorder, move streams)
-- Bouquets (package categories together)
-- EPG via XMLTV sources — auto-fetch + map to channels
-- Live server stats (CPU, RAM, bandwidth) via WebSocket
-- FFmpeg: starts on first viewer, stops when idle, auto-restarts on crash
-- JWT authentication with refresh tokens
-- Brute force protection
-- Rate limiting via Redis
-
-## Update
-
+**Enable real SSL:**
 ```bash
-cd /tmp/iptv-panel
-sudo bash scripts/update.sh
+certbot --nginx -d tv.keitanyfrank.store -d live.keitanyfrank.store \
+  --agree-tos -m admin@keitanyfrank.store --non-interactive
 ```
 
-## SSL
-
-The installer creates a self-signed cert. Since you're using Cloudflare:
-- Set Cloudflare SSL mode to **Full** or **Flexible**
-- Cloudflare handles the public SSL — your server just needs to accept connections
-
-For a proper cert (optional):
+**Update live (pull from GitHub + redeploy):**
 ```bash
-certbot --nginx -d live.keitanyfrank.store --agree-tos -m your@email.com
+sudo bash /opt/iptv-panel/scripts/update.sh
 ```
 
-## Ports
+**Reset forgotten password:**
+```bash
+sudo bash /opt/iptv-panel/scripts/reset-password.sh
+```
 
-| Port | Use |
+---
+
+## Xtream Codes Setup in Players
+
+| Field | Value |
 |---|---|
-| 80 | HTTP (Cloudflare proxied) |
-| 443 | HTTPS |
-| 8000 | FastAPI (internal only, bound to 127.0.0.1) |
+| Server URL | `https://live.keitanyfrank.store` |
+| Username | your admin username |
+| Password | your admin password |
+| M3U URL | `https://live.keitanyfrank.store/get.php?username=X&password=Y&type=m3u_plus` |
+| XMLTV URL | `https://live.keitanyfrank.store/xmltv.php?username=X&password=Y` |
 
-## Directory Structure
+---
 
-```
-iptv-panel/
-├── frontend/          Vite + React dashboard
-├── backend/
-│   └── app/
-│       ├── main.py        FastAPI app entry
-│       ├── models.py      SQLAlchemy models
-│       ├── ffmpeg_manager.py  Stream process manager
-│       └── routers/       API route handlers
-├── nginx/             Nginx config
-└── scripts/           install.sh + update.sh
-```
+## Stack
+
+- Frontend: Vite + React + Tailwind CSS (Inter font)
+- Backend: Python 3.11 + FastAPI + uvicorn
+- Database: PostgreSQL 14+
+- Cache: Redis 7
+- Streaming: FFmpeg (HLS output, 2s segments)
+- Proxy: Nginx (separate vhosts for dashboard vs stream)

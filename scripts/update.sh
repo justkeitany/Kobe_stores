@@ -15,7 +15,7 @@ step() { echo -e "\n${CYAN}══ $1 ══${NC}"; }
 
 APP_DIR="/opt/iptv-panel"
 WEB_DIR="/var/www/iptv-panel"
-REPO_URL="https://github.com/keitanyfrank/mzeekobe.git"
+REPO_URL="https://github.com/justkeitany/Kobe_stores.git"
 TMP_DIR="/tmp/mzeekobe-update-$$"
 
 step "Pulling latest code"
