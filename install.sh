@@ -1,14 +1,7 @@
 #!/bin/bash
 # ================================================================
 #  IPTV Panel — One-command installer for Ubuntu 22.04
-#
-#  tv.keitanyfrank.store   → Admin dashboard
-#  live.keitanyfrank.store → Xtream / HLS for players
-#
-#  Run as root on a fresh Ubuntu 22.04 VPS:
-#    apt update -y && apt upgrade -y && apt install -y git curl wget && \
-#    git clone https://github.com/justkeitany/Kobe_stores.git /tmp/mzeekobe && \
-#    chmod +x /tmp/mzeekobe/install.sh && bash /tmp/mzeekobe/install.sh
+#  Run as root on a fresh Ubuntu 22.04 VPS
 # ================================================================
 set -euo pipefail
 
@@ -28,8 +21,8 @@ HLS_DIR="/var/iptv/hls"
 WEB_DIR="/var/www/iptv-panel"
 REPO_DIR="/tmp/mzeekobe"
 
-PANEL_DOMAIN="tv.keitanyfrank.store"
-STREAM_DOMAIN="live.keitanyfrank.store"
+PANEL_DOMAIN="${PANEL_DOMAIN:-tv.example.com}"
+STREAM_DOMAIN="${STREAM_DOMAIN:-live.example.com}"
 
 DB_NAME="iptvpanel"
 DB_USER="iptv"
@@ -202,7 +195,7 @@ fi
 # ── Let's Encrypt SSL ─────────────────────────────────────────
 echo ""
 echo -e "${YELLOW}To enable real SSL certificates run:${NC}"
-echo "  certbot --nginx -d $PANEL_DOMAIN -d $STREAM_DOMAIN --agree-tos -m admin@keitanyfrank.store --non-interactive"
+echo "  certbot --nginx -d $PANEL_DOMAIN -d $STREAM_DOMAIN --agree-tos -m your@email.com --non-interactive"
 
 # ── Final output ──────────────────────────────────────────────
 echo ""
