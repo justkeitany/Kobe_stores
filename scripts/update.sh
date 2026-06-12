@@ -18,6 +18,11 @@ WEB_DIR="/var/www/iptv-panel"
 REPO_URL="https://github.com/justkeitany/Kobe_stores.git"
 TMP_DIR="/tmp/mzeekobe-update-$$"
 
+# If repo is private, pass token as env var: GH_TOKEN=xxx bash update.sh
+if [[ -n "${GH_TOKEN:-}" ]]; then
+    REPO_URL="https://$GH_TOKEN@github.com/justkeitany/Kobe_stores.git"
+fi
+
 step "Pulling latest code"
 git clone --depth=1 "$REPO_URL" "$TMP_DIR"
 info "Cloned latest version"
