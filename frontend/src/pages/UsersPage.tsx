@@ -125,7 +125,7 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
   const [showPass, setShowPass] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   
-  const streamBaseHttp = "http://tv.keitanyfrank.store:8080";
+  const streamBaseHttp = "http://tv.keitanyfrank.store";
 
   function copy(key: string, text: string) {
     navigator.clipboard.writeText(text);
@@ -396,12 +396,12 @@ function UserModal({ user, onClose, onSaved }: {
               <Key size={12} /> Xtream Credentials Preview
             </p>
             <PreviewRow label="Server"   value="http://tv.keitanyfrank.store" />
-            <PreviewRow label="Port"     value="8080" />
+            <PreviewRow label="Port"     value="80" />
             <PreviewRow label="Username" value={username} />
             <PreviewRow label="Password" value={password} />
             <PreviewRow
               label="M3U URL"
-              value={`http://tv.keitanyfrank.store:8080/get.php?username=${username}&password=${password}&type=m3u_plus`}
+              value={`http://tv.keitanyfrank.store/get.php?username=${username}&password=${password}&type=m3u_plus`}
             />
           </div>
         )}

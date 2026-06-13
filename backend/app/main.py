@@ -59,7 +59,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "https://tv.keitanyfrank.store",
-        "http://tv.keitanyfrank.store:8080",
+        "http://tv.keitanyfrank.store",
         "http://localhost:5173",
         "http://localhost:4173",
     ],
