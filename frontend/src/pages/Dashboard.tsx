@@ -188,7 +188,7 @@ function MetricChart({ label, value, sub, dataKey, data, color }: {
 
 /* ── Quick Access Links ──────────────────────────────────────── */
 function QuickAccessLinks() {
-  const base = window.location.origin;
+  const base = "https://live.keitanyfrank.store";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   function copy(key: string, value: string) {

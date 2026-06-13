@@ -124,7 +124,7 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
 }) {
   const [showPass, setShowPass] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const base = window.location.origin;
+  const streamBase = "https://live.keitanyfrank.store";
 
   function copy(key: string, text: string) {
     navigator.clipboard.writeText(text);
@@ -133,8 +133,8 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
     setTimeout(() => setCopiedKey(null), 2000);
   }
 
-  const xtreamUrl = `${base}/player_api.php?username=${u.username}&password=${u.password}`;
-  const m3uUrl = `${base}/get.php?username=${u.username}&password=${u.password}&type=m3u_plus`;
+  const xtreamUrl = `${streamBase}/player_api.php?username=${u.username}&password=${u.password}`;
+  const m3uUrl = `${streamBase}/get.php?username=${u.username}&password=${u.password}&type=m3u_plus`;
 
   const isExpired = u.expires_at ? new Date(u.expires_at) < new Date() : false;
 
@@ -253,6 +253,8 @@ function UserModal({ user, onClose, onSaved }: {
     queryKey: ["bouquets"],
     queryFn: () => api.get("/bouquets").then((r) => r.data),
   });
+
+  const streamBase = "https://live.keitanyfrank.store";
 
   function generatePassword() {
     const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -392,12 +394,12 @@ function UserModal({ user, onClose, onSaved }: {
             <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1.5">
               <Key size={12} /> Xtream Credentials Preview
             </p>
-            <PreviewRow label="Server" value={window.location.origin} />
+            <PreviewRow label="Server"   value={streamBase} />
             <PreviewRow label="Username" value={username} />
             <PreviewRow label="Password" value={password} />
             <PreviewRow
               label="M3U URL"
-              value={`${window.location.origin}/get.php?username=${username}&password=${password}&type=m3u_plus`}
+              value={`${streamBase}/get.php?username=${username}&password=${password}&type=m3u_plus`}
             />
           </div>
         )}

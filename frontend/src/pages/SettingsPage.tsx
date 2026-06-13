@@ -73,7 +73,7 @@ export default function SettingsPage() {
     toast.success("Copied");
   }
 
-  const base = serverUrl || window.location.origin;
+  const base = "https://live.keitanyfrank.store";
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
