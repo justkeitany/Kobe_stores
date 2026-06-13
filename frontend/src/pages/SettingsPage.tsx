@@ -74,6 +74,7 @@ export default function SettingsPage() {
   }
 
   const base = "https://live.keitanyfrank.store";
+  const playerBase = "http://live.keitanyfrank.store";
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">
@@ -136,11 +137,12 @@ export default function SettingsPage() {
         <p className="text-xs text-gray-400">
           Use these in TiviMate, IPTV Smarters, GSE, VLC, or any Xtream-compatible player.
         </p>
-        <EndpointRow label="Server URL"   value={base} onCopy={copy} />
-        <EndpointRow label="M3U Playlist" value={`${base}/get.php?username=admin&password=YOUR_PASS&type=m3u_plus`} onCopy={copy} />
-        <EndpointRow label="Player API"   value={`${base}/player_api.php?username=admin&password=YOUR_PASS`} onCopy={copy} />
-        <EndpointRow label="XMLTV EPG"    value={`${base}/xmltv.php?username=admin&password=YOUR_PASS`} onCopy={copy} />
-        <EndpointRow label="Live Stream"  value={`${base}/live/admin/YOUR_PASS/{stream_id}.m3u8`} onCopy={copy} />
+        <EndpointRow label="Server URL (HTTPS)"   value={base} onCopy={copy} />
+        <EndpointRow label="Server URL (HTTP/Port 80)" value={playerBase} onCopy={copy} />
+        <EndpointRow label="M3U Playlist" value={`${playerBase}/get.php?username=admin&password=YOUR_PASS&type=m3u_plus`} onCopy={copy} />
+        <EndpointRow label="Player API"   value={`${playerBase}/player_api.php?username=admin&password=YOUR_PASS`} onCopy={copy} />
+        <EndpointRow label="XMLTV EPG"    value={`${playerBase}/xmltv.php?username=admin&password=YOUR_PASS`} onCopy={copy} />
+        <EndpointRow label="Live Stream"  value={`${playerBase}/live/admin/YOUR_PASS/{stream_id}.m3u8`} onCopy={copy} />
       </div>
 
       {/* ── Change Password ───────────────────────────────────── */}

@@ -124,7 +124,8 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
 }) {
   const [showPass, setShowPass] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const streamBase = "https://live.keitanyfrank.store";
+  
+  const streamBaseHttp = "http://live.keitanyfrank.store";  // port 80 for players that need http+port
 
   function copy(key: string, text: string) {
     navigator.clipboard.writeText(text);
@@ -133,8 +134,8 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
     setTimeout(() => setCopiedKey(null), 2000);
   }
 
-  const xtreamUrl = `${streamBase}/player_api.php?username=${u.username}&password=${u.password}`;
-  const m3uUrl = `${streamBase}/get.php?username=${u.username}&password=${u.password}&type=m3u_plus`;
+  const xtreamUrl = `${streamBaseHttp}/player_api.php?username=${u.username}&password=${u.password}`;
+  const m3uUrl = `${streamBaseHttp}/get.php?username=${u.username}&password=${u.password}&type=m3u_plus`;
 
   const isExpired = u.expires_at ? new Date(u.expires_at) < new Date() : false;
 
@@ -254,7 +255,7 @@ function UserModal({ user, onClose, onSaved }: {
     queryFn: () => api.get("/bouquets").then((r) => r.data),
   });
 
-  const streamBase = "https://live.keitanyfrank.store";
+  
 
   function generatePassword() {
     const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
@@ -394,12 +395,13 @@ function UserModal({ user, onClose, onSaved }: {
             <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1.5">
               <Key size={12} /> Xtream Credentials Preview
             </p>
-            <PreviewRow label="Server"   value={streamBase} />
+            <PreviewRow label="Server"   value="http://live.keitanyfrank.store" />
+            <PreviewRow label="Port"     value="80" />
             <PreviewRow label="Username" value={username} />
             <PreviewRow label="Password" value={password} />
             <PreviewRow
               label="M3U URL"
-              value={`${streamBase}/get.php?username=${username}&password=${password}&type=m3u_plus`}
+              value={`http://live.keitanyfrank.store/get.php?username=${username}&password=${password}&type=m3u_plus`}
             />
           </div>
         )}

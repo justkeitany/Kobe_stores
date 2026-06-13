@@ -188,7 +188,6 @@ function MetricChart({ label, value, sub, dataKey, data, color }: {
 
 /* ── Quick Access Links ──────────────────────────────────────── */
 function QuickAccessLinks() {
-  const base = "https://live.keitanyfrank.store";
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
 
   function copy(key: string, value: string) {
@@ -198,13 +197,15 @@ function QuickAccessLinks() {
     setTimeout(() => setCopiedKey(null), 2000);
   }
 
+  const playerBase = "http://live.keitanyfrank.store";
+
   const links = [
-    { key: "panel",      label: "Admin Panel",       desc: "This dashboard",                          value: base },
-    { key: "xtream",     label: "Xtream Server URL",  desc: "Enter in TiviMate / Smarters / GSE",     value: base },
-    { key: "m3u",        label: "M3U Playlist",       desc: "Direct playlist URL for VLC, Kodi etc.", value: `${base}/get.php?username=admin&password=YOUR_PASS&type=m3u_plus` },
-    { key: "xmltv",      label: "XMLTV / EPG",        desc: "Electronic programme guide URL",         value: `${base}/xmltv.php?username=admin&password=YOUR_PASS` },
-    { key: "player_api", label: "Player API",         desc: "Xtream Codes authentication endpoint",   value: `${base}/player_api.php?username=admin&password=YOUR_PASS` },
-    { key: "live",       label: "Live Stream",        desc: "Stream delivery URL pattern",            value: `${base}/live/admin/YOUR_PASS/{stream_id}.m3u8` },
+    { key: "panel",      label: "Admin Panel",       desc: "This dashboard",                               value: "https://tv.keitanyfrank.store" },
+    { key: "xtream",     label: "Xtream Server URL",  desc: "Server: live.keitanyfrank.store  Port: 80",   value: playerBase },
+    { key: "m3u",        label: "M3U Playlist",       desc: "Direct playlist URL for VLC, Kodi etc.",      value: `${playerBase}/get.php?username=admin&password=YOUR_PASS&type=m3u_plus` },
+    { key: "xmltv",      label: "XMLTV / EPG",        desc: "Electronic programme guide URL",              value: `${playerBase}/xmltv.php?username=admin&password=YOUR_PASS` },
+    { key: "player_api", label: "Player API",         desc: "Xtream Codes authentication endpoint",        value: `${playerBase}/player_api.php?username=admin&password=YOUR_PASS` },
+    { key: "live",       label: "Live Stream",        desc: "Stream delivery URL pattern",                 value: `${playerBase}/live/admin/YOUR_PASS/{stream_id}.m3u8` },
   ];
 
   return (
