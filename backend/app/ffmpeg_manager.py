@@ -27,9 +27,10 @@ class StreamProcess:
         self.retry_count: int = 0
         self.started_at: Optional[datetime] = None
         self.last_error: Optional[str] = None
-        self.status: str = "idle"  # idle, starting, running, error, stopped
+        self.status: str = "idle"
         self._lock = asyncio.Lock()
         self._health_task: Optional[asyncio.Task] = None
+        self._viewer_dropped = asyncio.Event()
 
     @property
     def hls_dir(self) -> str:
@@ -123,7 +124,12 @@ class StreamProcess:
         """Monitor process health and restart if it crashes."""
         while True:
             try:
-                await asyncio.sleep(settings.HEALTH_CHECK_INTERVAL)
+                # Wait max 5s OR until a viewer drops — whichever comes first
+                try:
+                    await asyncio.wait_for(self._viewer_dropped.wait(), timeout=5)
+                    self._viewer_dropped.clear()
+                except asyncio.TimeoutError:
+                    pass
 
                 if self.viewer_count == 0:
                     logger.info(f"Stream {self.stream_id} has no viewers, stopping")
@@ -131,7 +137,6 @@ class StreamProcess:
                     break
 
                 if self.process and self.process.returncode is not None:
-                    # Process died
                     returncode = self.process.returncode
                     if self.process.stderr:
                         try:
@@ -154,20 +159,23 @@ class StreamProcess:
                         break
 
                     self.status = "starting"
-                    await asyncio.sleep(min(self.retry_count * 2, 30))  # backoff
+                    await asyncio.sleep(min(self.retry_count * 2, 30))
                     await self.start()
 
             except asyncio.CancelledError:
                 break
             except Exception as e:
                 logger.error(f"Health monitor error for stream {self.stream_id}: {e}")
-                await asyncio.sleep(10)
+                await asyncio.sleep(5)
 
     def add_viewer(self):
         self.viewer_count += 1
 
     def remove_viewer(self):
         self.viewer_count = max(0, self.viewer_count - 1)
+        if self.viewer_count == 0:
+            # Signal health monitor to wake up immediately
+            self._viewer_dropped.set()
 
 
 class FFmpegManager:
