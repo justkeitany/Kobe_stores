@@ -58,9 +58,8 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
-        settings.SERVER_URL,
         "https://tv.keitanyfrank.store",
-        "https://live.keitanyfrank.store",
+        "http://tv.keitanyfrank.store:8080",
         "http://localhost:5173",
         "http://localhost:4173",
     ],

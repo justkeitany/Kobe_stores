@@ -197,11 +197,11 @@ function QuickAccessLinks() {
     setTimeout(() => setCopiedKey(null), 2000);
   }
 
-  const playerBase = "http://live.keitanyfrank.store";
+  const playerBase = "http://tv.keitanyfrank.store:8080";
 
   const links = [
     { key: "panel",      label: "Admin Panel",       desc: "This dashboard",                               value: "https://tv.keitanyfrank.store" },
-    { key: "xtream",     label: "Xtream Server URL",  desc: "Server: live.keitanyfrank.store  Port: 80",   value: playerBase },
+    { key: "xtream",     label: "Xtream Server URL",  desc: "Server: tv.keitanyfrank.store  Port: 8080",  value: playerBase },
     { key: "m3u",        label: "M3U Playlist",       desc: "Direct playlist URL for VLC, Kodi etc.",      value: `${playerBase}/get.php?username=admin&password=YOUR_PASS&type=m3u_plus` },
     { key: "xmltv",      label: "XMLTV / EPG",        desc: "Electronic programme guide URL",              value: `${playerBase}/xmltv.php?username=admin&password=YOUR_PASS` },
     { key: "player_api", label: "Player API",         desc: "Xtream Codes authentication endpoint",        value: `${playerBase}/player_api.php?username=admin&password=YOUR_PASS` },

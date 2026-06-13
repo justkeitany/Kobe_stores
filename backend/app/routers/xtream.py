@@ -78,8 +78,8 @@ async def _check_credentials(username: str, password: str):
 
 def _server_info() -> dict:
     return {
-        "url": "http://live.keitanyfrank.store",
-        "port": "80",
+        "url": "http://tv.keitanyfrank.store",
+        "port": "8080",
         "https_port": "443",
         "server_protocol": "http",
         "rtmp_port": "1935",
@@ -258,7 +258,7 @@ async def get_playlist(
     lines = ["#EXTM3U"]
     for stream, cat in rows:
         cat_name = cat.name if cat else "Uncategorized"
-        stream_url = f"http://live.keitanyfrank.store/live/{username}/{password}/{stream.id}"
+        stream_url = f"http://tv.keitanyfrank.store:8080/live/{username}/{password}/{stream.id}"
         if output == "ts":
             stream_url += ".ts"
         elif output == "m3u8":
@@ -317,11 +317,11 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
 
     if ext == "m3u8":
         # Redirect to the HLS playlist via Nginx
-        hls_url = f"http://live.keitanyfrank.store/hls/{stream_id}/index.m3u8"
+        hls_url = f"http://tv.keitanyfrank.store:8080/hls/{stream_id}/index.m3u8"
         return RedirectResponse(url=hls_url, status_code=302)
     else:
         # For .ts — redirect to HLS so the player can handle segments
-        hls_url = f"http://live.keitanyfrank.store/hls/{stream_id}/index.m3u8"
+        hls_url = f"http://tv.keitanyfrank.store:8080/hls/{stream_id}/index.m3u8"
         return RedirectResponse(url=hls_url, status_code=302)
 
 

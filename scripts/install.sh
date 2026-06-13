@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # IPTV Panel — Ubuntu 22.04 Install Script
-# Domain: live.keitanyfrank.store
+# Domain: tv.keitanyfrank.store
 # Run as root: sudo bash install.sh
 # ============================================================
 set -e
@@ -14,7 +14,7 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 [[ $EUID -ne 0 ]] && error "Run as root: sudo bash install.sh"
 
 # ── Config ───────────────────────────────────────────────────
-DOMAIN="live.keitanyfrank.store"
+DOMAIN="tv.keitanyfrank.store"
 APP_DIR="/opt/iptv-panel"
 HLS_DIR="/var/iptv/hls"
 WEB_DIR="/var/www/iptv-panel"

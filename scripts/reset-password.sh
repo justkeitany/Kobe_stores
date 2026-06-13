@@ -59,7 +59,7 @@ systemctl restart iptv-panel && \
 echo ""
 echo -e "${GREEN}================================================${NC}"
 echo -e "${GREEN} Password reset complete!${NC}"
-echo -e "${GREEN} Login at:  https://live.keitanyfrank.store${NC}"
+echo -e "${GREEN} Login at:  https://tv.keitanyfrank.store${NC}"
 echo -e "${GREEN} Username:  admin${NC}"
 echo -e "${GREEN} Password:  $NEW_PASS${NC}"
 echo -e "${GREEN}================================================${NC}"

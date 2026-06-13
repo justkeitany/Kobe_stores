@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = "changeme123"
 
     # Server
-    SERVER_URL: str = "https://live.keitanyfrank.store"
+    SERVER_URL: str = "https://tv.keitanyfrank.store"
     PANEL_PORT: int = 8000
 
     # HLS / FFmpeg
