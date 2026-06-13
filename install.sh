@@ -144,7 +144,7 @@ WorkingDirectory=$APP_DIR/backend
 Environment="PATH=$APP_DIR/venv/bin"
 EnvironmentFile=$APP_DIR/backend/.env
 ExecStart=$APP_DIR/venv/bin/uvicorn app.main:app \\
-    --host 127.0.0.1 --port 8000 --workers 4 \\
+    --host 127.0.0.1 --port 8000 --workers 1 \\
     --loop uvloop --http httptools
 Restart=always
 RestartSec=5
