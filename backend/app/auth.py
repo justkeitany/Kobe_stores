@@ -71,7 +71,13 @@ async def get_current_admin(
         raise HTTPException(status_code=401, detail="Invalid token type")
 
     username = payload.get("sub")
-    if username != settings.ADMIN_USERNAME:
+
+    # Accept token if:
+    # 1. Token username matches current ADMIN_USERNAME, OR
+    # 2. Token has role=admin (set on login), OR  
+    # 3. Token username was ever a valid admin (role check)
+    role = payload.get("role", "")
+    if role != "admin" and username != settings.ADMIN_USERNAME:
         raise HTTPException(status_code=401, detail="Not authorized")
 
     return {"username": username}

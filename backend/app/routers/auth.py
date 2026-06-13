@@ -164,7 +164,8 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
     )
     must_change = using_default and await _is_default_password_unchanged()
 
-    data = {"sub": form_data.username}
+    # Always embed role=admin so tokens survive username changes
+    data = {"sub": form_data.username, "role": "admin"}
     return TokenResponse(
         access_token=create_access_token(data),
         refresh_token=create_refresh_token(data),
@@ -210,7 +211,8 @@ async def refresh(body: RefreshRequest):
     payload = decode_token(body.refresh_token)
     if payload.get("type") != "refresh":
         raise HTTPException(status_code=401, detail="Invalid refresh token")
-    data = {"sub": payload["sub"]}
+    # Preserve role from original token
+    data = {"sub": payload["sub"], "role": payload.get("role", "admin")}
     return TokenResponse(
         access_token=create_access_token(data),
         refresh_token=create_refresh_token(data),
