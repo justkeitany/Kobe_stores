@@ -23,21 +23,65 @@ from app.config import settings
 router = APIRouter(tags=["xtream"])
 logger = logging.getLogger(__name__)
 
-# The single valid credential (you / personal use)
-XTREAM_USERNAME = settings.ADMIN_USERNAME
-XTREAM_PASSWORD = settings.ADMIN_PASSWORD
 
+async def _check_credentials(username: str, password: str):
+    """
+    Check credentials against:
+    1. Admin credentials (settings)
+    2. IPTV users table
+    Returns user info dict if valid, None if invalid.
+    """
+    from app.routers.users import IPTVUser
+    from datetime import timezone as tz
 
-def _check_credentials(username: str, password: str) -> bool:
-    return username == XTREAM_USERNAME and password == XTREAM_PASSWORD
+    # Check admin credentials first
+    if username == settings.ADMIN_USERNAME and password == settings.ADMIN_PASSWORD:
+        return {
+            "username": username,
+            "password": password,
+            "auth": 1,
+            "status": "Active",
+            "exp_date": None,
+            "max_connections": "999",
+            "is_trial": "0",
+        }
+
+    # Check IPTV users table
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(IPTVUser).where(
+                IPTVUser.username == username,
+                IPTVUser.password == password,
+                IPTVUser.is_active == True,
+            )
+        )
+        user = result.scalar_one_or_none()
+
+    if not user:
+        return None
+
+    # Check expiry
+    if user.expires_at and user.expires_at.replace(tzinfo=tz.utc) < datetime.now(tz.utc):
+        return None
+
+    exp_str = user.expires_at.strftime("%Y-%m-%d") if user.expires_at else None
+    return {
+        "username": user.username,
+        "password": user.password,
+        "auth": 1,
+        "status": "Active",
+        "exp_date": exp_str,
+        "max_connections": str(user.max_connections),
+        "is_trial": "0",
+    }
 
 
 def _server_info() -> dict:
     return {
-        "url": settings.SERVER_URL,
+        "url": "http://live.keitanyfrank.store",
         "port": "80",
         "https_port": "443",
-        "server_protocol": "https",
+        "server_protocol": "http",
         "rtmp_port": "1935",
         "timezone": "UTC",
         "timestamp_now": int(datetime.now(timezone.utc).timestamp()),
@@ -45,18 +89,18 @@ def _server_info() -> dict:
     }
 
 
-def _user_info(username: str) -> dict:
+def _user_info_from_data(data: dict) -> dict:
     return {
-        "username": username,
-        "password": XTREAM_PASSWORD,
+        "username": data["username"],
+        "password": data["password"],
         "message": "",
         "auth": 1,
-        "status": "Active",
-        "exp_date": None,
-        "is_trial": "0",
+        "status": data.get("status", "Active"),
+        "exp_date": data.get("exp_date"),
+        "is_trial": data.get("is_trial", "0"),
         "active_cons": "0",
         "created_at": "0",
-        "max_connections": "1",
+        "max_connections": data.get("max_connections", "1"),
         "allowed_output_formats": ["ts", "m3u8", "rtmp"],
     }
 
@@ -86,14 +130,15 @@ async def player_api(
         category_id = category_id or form.get("category_id")
         stream_id = stream_id or form.get("stream_id")
 
-    if not _check_credentials(username or "", password or ""):
+    user_data = await _check_credentials(username or "", password or "")
+    if not user_data:
         return {"user_info": {"auth": 0}}
 
     async with AsyncSessionLocal() as db:
         # Authentication / handshake
         if not action:
             return {
-                "user_info": _user_info(username),
+                "user_info": _user_info_from_data(user_data),
                 "server_info": _server_info(),
             }
 
@@ -197,7 +242,8 @@ async def get_playlist(
     type: str = Query("m3u_plus"),
     output: str = Query("ts"),
 ):
-    if not _check_credentials(username, password):
+    user_data = await _check_credentials(username, password)
+    if not user_data:
         raise HTTPException(401, "Unauthorized")
 
     async with AsyncSessionLocal() as db:
@@ -212,7 +258,7 @@ async def get_playlist(
     lines = ["#EXTM3U"]
     for stream, cat in rows:
         cat_name = cat.name if cat else "Uncategorized"
-        stream_url = f"{settings.SERVER_URL}/live/{username}/{password}/{stream.id}"
+        stream_url = f"http://live.keitanyfrank.store/live/{username}/{password}/{stream.id}"
         if output == "ts":
             stream_url += ".ts"
         elif output == "m3u8":
@@ -238,7 +284,8 @@ async def get_playlist(
 
 @router.get("/live/{username}/{password}/{stream_file}")
 async def serve_live(username: str, password: str, stream_file: str, request: Request):
-    if not _check_credentials(username, password):
+    user_data = await _check_credentials(username, password)
+    if not user_data:
         raise HTTPException(401, "Unauthorized")
 
     # Extract stream ID from filename (e.g. "123.ts" or "123.m3u8" or "123")
@@ -270,11 +317,11 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
 
     if ext == "m3u8":
         # Redirect to the HLS playlist via Nginx
-        hls_url = f"{settings.SERVER_URL}/hls/{stream_id}/index.m3u8"
+        hls_url = f"http://live.keitanyfrank.store/hls/{stream_id}/index.m3u8"
         return RedirectResponse(url=hls_url, status_code=302)
     else:
         # For .ts — redirect to HLS so the player can handle segments
-        hls_url = f"{settings.SERVER_URL}/hls/{stream_id}/index.m3u8"
+        hls_url = f"http://live.keitanyfrank.store/hls/{stream_id}/index.m3u8"
         return RedirectResponse(url=hls_url, status_code=302)
 
 
@@ -285,7 +332,8 @@ async def xmltv(
     username: str = Query(...),
     password: str = Query(...),
 ):
-    if not _check_credentials(username, password):
+    user_data = await _check_credentials(username, password)
+    if not user_data:
         raise HTTPException(401, "Unauthorized")
 
     async with AsyncSessionLocal() as db:
