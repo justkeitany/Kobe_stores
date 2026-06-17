@@ -21,7 +21,7 @@ HLS_DIR="/var/iptv/hls"
 WEB_DIR="/var/www/iptv-panel"
 REPO_DIR="/tmp/mzeekobe"
 
-PANEL_PORT_HTTP=8080   # dashboard / Xtream port advertised to users
+PANEL_PORT_HTTP=25461   # dashboard / Xtream port advertised to users (Xtream Codes default)
 
 DB_NAME="iptvpanel"
 DB_USER="iptv"
@@ -114,12 +114,23 @@ npm run build
 cp -r dist/* "$WEB_DIR/"
 
 step "Configuring Nginx"
-cp "$APP_DIR/nginx/iptv-panel.conf" /etc/nginx/sites-available/iptv-panel
+mkdir -p /etc/nginx/snippets
+cp "$APP_DIR/nginx/iptv-locations.conf" /etc/nginx/snippets/iptv-locations.conf
+cp "$APP_DIR/nginx/iptv-panel.conf"     /etc/nginx/sites-available/iptv-panel
 ln -sf /etc/nginx/sites-available/iptv-panel /etc/nginx/sites-enabled/iptv-panel
 rm -f  /etc/nginx/sites-enabled/default
 
 nginx -t 2>/dev/null && systemctl reload nginx || warn "Nginx config issue — run: nginx -t"
 systemctl enable nginx
+
+step "Installing automatic-HTTPS helper"
+# Root-owned helper the backend may run via sudo to issue Let's Encrypt certs.
+install -m 0755 -o root -g root "$APP_DIR/scripts/iptv-ssl-setup.sh" /usr/local/sbin/iptv-ssl-setup.sh
+cat > /etc/sudoers.d/iptv-panel <<'SUDOEOF'
+www-data ALL=(root) NOPASSWD: /usr/local/sbin/iptv-ssl-setup.sh
+SUDOEOF
+chmod 0440 /etc/sudoers.d/iptv-panel
+visudo -cf /etc/sudoers.d/iptv-panel >/dev/null || { rm -f /etc/sudoers.d/iptv-panel; warn "sudoers entry invalid — auto-HTTPS disabled"; }
 
 step "Creating systemd service"
 cat > /etc/systemd/system/iptv-panel.service <<SVCEOF
@@ -167,11 +178,11 @@ modprobe tcp_bbr 2>/dev/null || true
 sysctl -p -q    2>/dev/null || true
 
 step "Firewall (UFW)"
-ufw allow 22/tcp   >/dev/null
-ufw allow 80/tcp   >/dev/null
-ufw allow 443/tcp  >/dev/null
-ufw allow 8080/tcp >/dev/null
-ufw --force enable >/dev/null
+ufw allow 22/tcp    >/dev/null
+ufw allow 80/tcp    >/dev/null
+ufw allow 443/tcp   >/dev/null
+ufw allow 25461/tcp >/dev/null
+ufw --force enable  >/dev/null
 
 step "Starting IPTV Panel"
 systemctl daemon-reload

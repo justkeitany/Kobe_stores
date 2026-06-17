@@ -6,8 +6,9 @@
 #
 #    curl -fsSL https://raw.githubusercontent.com/justkeitany/Kobe_stores/main/scripts/bootstrap.sh | sudo bash
 #
-#  No domain needed — the dashboard opens at http://<VPS-IP>:8080
-#  and you set your domain later under Settings -> Public Server URL.
+#  No domain needed — the dashboard opens at http://<VPS-IP>:25461
+#  and you set your domain later under Settings -> Access & Domain
+#  (HTTPS is then issued automatically).
 # ================================================================
 set -e
 

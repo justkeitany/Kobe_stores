@@ -43,10 +43,20 @@ cp -r dist/* "$WEB_DIR/"
 info "Frontend built and deployed"
 
 step "Updating Nginx config"
+mkdir -p /etc/nginx/snippets
 cp "$TMP_DIR/nginx/iptv-panel.conf"     /etc/nginx/sites-available/iptv-panel
 cp "$TMP_DIR/nginx/iptv-locations.conf" /etc/nginx/snippets/iptv-locations.conf
 nginx -t 2>/dev/null && systemctl reload nginx
 info "Nginx reloaded"
+
+step "Updating HTTPS helper"
+install -m 0755 -o root -g root "$TMP_DIR/scripts/iptv-ssl-setup.sh" /usr/local/sbin/iptv-ssl-setup.sh
+if [[ ! -f /etc/sudoers.d/iptv-panel ]]; then
+    echo 'www-data ALL=(root) NOPASSWD: /usr/local/sbin/iptv-ssl-setup.sh' > /etc/sudoers.d/iptv-panel
+    chmod 0440 /etc/sudoers.d/iptv-panel
+    visudo -cf /etc/sudoers.d/iptv-panel >/dev/null || rm -f /etc/sudoers.d/iptv-panel
+fi
+info "HTTPS helper updated"
 
 step "Restarting backend"
 chown -R www-data:www-data "$APP_DIR" "$WEB_DIR"

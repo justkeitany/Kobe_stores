@@ -6,8 +6,9 @@ Works with TiviMate, IPTV Smarters, GSE, VLC, Kodi and any Xtream-compatible pla
 - ⚡ FastAPI backend · React dashboard · PostgreSQL · Redis · Nginx
 - 📺 Xtream Codes API (`player_api.php`, `get.php`, `xmltv.php`, live streams)
 - 🔐 JWT auth with forced first-login password change
-- 🌐 **No domain required** — install, open `http://YOUR_VPS_IP:8080`, then set your
-  domain later from the dashboard. It is embedded in all playlists and Xtream links.
+- 🌐 **No domain required** — install, open `http://YOUR_VPS_IP:25461`, then optionally
+  add your own domain from the dashboard with **automatic HTTPS**. The chosen address is
+  embedded in all playlists and Xtream links.
 
 ---
 
@@ -25,7 +26,7 @@ repo, builds the dashboard, and starts the service. **No domain is asked for.**
 When it finishes it prints your dashboard URL and login, e.g.:
 
 ```
-Dashboard:   http://203.0.113.10:8080
+Dashboard:   http://203.0.113.10:25461
 Username:    admin
 Password:    admin   (you must change it on first login)
 ```
@@ -46,28 +47,31 @@ bash /tmp/mzeekobe/install.sh
 
 ## First steps after install
 
-1. Open **`http://YOUR_VPS_IP:8080`** (port `80` also works) and log in with `admin` / `admin`.
+1. Open **`http://YOUR_VPS_IP:25461`** (port `80` also works) and log in with `admin` / `admin`.
 2. Set a new username and password when prompted.
 3. Add categories and streams, then create users under **Users**.
-4. Share the Xtream details with your players — by default they use `http://YOUR_VPS_IP:8080`.
+4. Share the Xtream details with your players — by default they use `http://YOUR_VPS_IP:25461`.
 
-## Using your own domain
+## Choose: server IP or your own domain
 
-You set the domain **inside the dashboard**, not at install time:
+Open **Settings → Access & Domain** and pick one. You can switch at any time.
+
+**Option 1 — Use server IP (default):** playlists and Xtream links use
+`http://YOUR_VPS_IP:25461`. Nothing else to do.
+
+**Option 2 — Use my domain (with automatic HTTPS):**
 
 1. Point your domain's DNS (an `A` record) at your VPS IP.
-2. In the dashboard go to **Settings → Public Server URL** and enter your domain,
-   e.g. `http://your.domain.com`. Save.
-3. All M3U playlists and Xtream links now use your domain. Because Nginx accepts any
-   host, `http://your.domain.com/get.php?...` works immediately over HTTP — no extra config.
+2. In **Settings → Access & Domain**, choose **Use my domain**, enter it
+   (e.g. `tv.example.com`) and click **Save & enable HTTPS**.
+3. The site works over `http://your.domain` immediately, and a Let's Encrypt
+   certificate is obtained **automatically in the background**. When it finishes,
+   the status turns green and all playlists/Xtream links switch to
+   `https://your.domain`. Renewal is automatic.
 
-### Optional: HTTPS on your domain
-
-```bash
-sudo certbot --nginx -d your.domain.com --agree-tos -m you@email.com --non-interactive
-```
-
-Then set the Public Server URL to `https://your.domain.com`.
+> If HTTPS shows "failed", it almost always means the domain's DNS isn't pointing at
+> the server yet — fix the `A` record and click save again. The panel keeps working
+> over HTTP in the meantime.
 
 ---
 
@@ -90,7 +94,7 @@ sudo bash /opt/iptv-panel/scripts/reset-password.sh
 ## Notes
 
 - The backend listens on `127.0.0.1:8000`; Nginx serves the panel + API + Xtream + HLS
-  on ports **80** and **8080**.
+  on ports **80** and **25461** (and **443** once a domain's HTTPS is enabled).
 - Each install is **single-admin** (one operator per VPS).
 - An advanced Cloudflare-proxied HTTPS Nginx config is included as
   `nginx/iptv-panel-cloudflare.conf.example`.

@@ -63,7 +63,7 @@ SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || true)
 echo ""
 echo -e "${GREEN}================================================${NC}"
 echo -e "${GREEN} Password reset complete!${NC}"
-echo -e "${GREEN} Login at:  http://$SERVER_IP:8080${NC}"
+echo -e "${GREEN} Login at:  http://$SERVER_IP:25461${NC}"
 echo -e "${GREEN} Username:  admin${NC}"
 echo -e "${GREEN} Password:  $NEW_PASS${NC}"
 echo -e "${GREEN}================================================${NC}"

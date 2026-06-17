@@ -14,7 +14,7 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 [[ $EUID -ne 0 ]] && error "Run as root: sudo bash install.sh"
 
 # ── Config ───────────────────────────────────────────────────
-PANEL_PORT_HTTP=8080   # dashboard / Xtream port advertised to users
+PANEL_PORT_HTTP=25461   # dashboard / Xtream port advertised to users (Xtream Codes default)
 APP_DIR="/opt/iptv-panel"
 HLS_DIR="/var/iptv/hls"
 WEB_DIR="/var/www/iptv-panel"
@@ -131,17 +131,23 @@ cp -r dist/* "$WEB_DIR/"
 # ── Nginx ─────────────────────────────────────────────────────
 info "Configuring Nginx..."
 
-cp "$APP_DIR/nginx/iptv-panel.conf" /etc/nginx/sites-available/iptv-panel
+mkdir -p /etc/nginx/snippets
+cp "$APP_DIR/nginx/iptv-locations.conf" /etc/nginx/snippets/iptv-locations.conf
+cp "$APP_DIR/nginx/iptv-panel.conf"     /etc/nginx/sites-available/iptv-panel
 ln -sf /etc/nginx/sites-available/iptv-panel /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 
-# Tune Nginx for streaming
-cat >> /etc/nginx/nginx.conf <<'NGINXEOF' 2>/dev/null || true
-# Streaming tuning (appended by iptv install script)
-NGINXEOF
-
 nginx -t && systemctl reload nginx || warn "Nginx config error — check manually"
 systemctl enable nginx
+
+# ── Automatic-HTTPS helper ────────────────────────────────────
+info "Installing automatic-HTTPS helper..."
+install -m 0755 -o root -g root "$APP_DIR/scripts/iptv-ssl-setup.sh" /usr/local/sbin/iptv-ssl-setup.sh
+cat > /etc/sudoers.d/iptv-panel <<'SUDOEOF'
+www-data ALL=(root) NOPASSWD: /usr/local/sbin/iptv-ssl-setup.sh
+SUDOEOF
+chmod 0440 /etc/sudoers.d/iptv-panel
+visudo -cf /etc/sudoers.d/iptv-panel >/dev/null || { rm -f /etc/sudoers.d/iptv-panel; warn "sudoers entry invalid — auto-HTTPS disabled"; }
 
 # ── Systemd service ───────────────────────────────────────────
 info "Creating systemd service..."
@@ -197,11 +203,11 @@ modprobe tcp_bbr 2>/dev/null || true
 # ── Firewall ──────────────────────────────────────────────────
 if command -v ufw &>/dev/null; then
     info "Configuring firewall (UFW)..."
-    ufw allow 22/tcp   >/dev/null 2>&1 || true
-    ufw allow 80/tcp   >/dev/null 2>&1 || true
-    ufw allow 443/tcp  >/dev/null 2>&1 || true
-    ufw allow 8080/tcp >/dev/null 2>&1 || true
-    ufw --force enable >/dev/null 2>&1 || true
+    ufw allow 22/tcp    >/dev/null 2>&1 || true
+    ufw allow 80/tcp    >/dev/null 2>&1 || true
+    ufw allow 443/tcp   >/dev/null 2>&1 || true
+    ufw allow 25461/tcp >/dev/null 2>&1 || true
+    ufw --force enable  >/dev/null 2>&1 || true
 fi
 
 # ── Start services ────────────────────────────────────────────

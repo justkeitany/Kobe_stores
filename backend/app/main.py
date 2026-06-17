@@ -13,7 +13,7 @@ from app.config import settings
 from app.database import init_db
 from app.redis_client import get_redis, close_redis
 from app.websocket import stats_sender
-from app.routers import auth, streams, categories, bouquets, epg, server, settings as settings_router
+from app.routers import auth, streams, categories, bouquets, epg, server, settings as settings_router, domain as domain_router
 from app.routers.users import router as users_router
 from app.routers.xtream import router as xtream_router
 
@@ -73,6 +73,7 @@ app.include_router(bouquets.router)
 app.include_router(epg.router)
 app.include_router(server.router)
 app.include_router(settings_router.router)
+app.include_router(domain_router.router)
 
 # Xtream Codes API (no PHP — pure FastAPI)
 app.include_router(xtream_router)

@@ -1,11 +1,23 @@
 import { useState, useEffect } from "react";
-import { Settings, Save, Copy, Link, KeyRound, Eye, EyeOff } from "lucide-react";
+import {
+  Settings, Save, Copy, Link, KeyRound, Eye, EyeOff,
+  Globe, Server as ServerIcon, Loader2, CheckCircle2, AlertCircle,
+} from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
 
+type SslStatus = "none" | "pending" | "active" | "failed";
+
 export default function SettingsPage() {
-  // ── Server / streaming settings ────────────────────────────
-  const [serverUrl, setServerUrl]         = useState("");
+  // ── Access mode (IP vs domain) ─────────────────────────────
+  const [mode, setMode]                   = useState<"ip" | "domain">("ip");
+  const [domainInput, setDomainInput]     = useState("");
+  const [serverUrl, setServerUrl]         = useState(window.location.origin);
+  const [sslStatus, setSslStatus]         = useState<SslStatus>("none");
+  const [sslMessage, setSslMessage]       = useState("");
+  const [savingDomain, setSavingDomain]   = useState(false);
+
+  // ── FFmpeg / streaming settings ────────────────────────────
   const [hlsSegmentTime, setHlsSegmentTime] = useState("2");
   const [hlsListSize, setHlsListSize]     = useState("6");
   const [maxRetry, setMaxRetry]           = useState("5");
@@ -20,22 +32,64 @@ export default function SettingsPage() {
   const [showNew, setShowNew]           = useState(false);
   const [savingPass, setSavingPass]     = useState(false);
 
+  function applyDomainData(d: any) {
+    setMode(d.mode === "domain" ? "domain" : "ip");
+    setDomainInput(d.domain || "");
+    setServerUrl(d.server_url || window.location.origin);
+    setSslStatus((d.ssl_status as SslStatus) || "none");
+    setSslMessage(d.ssl_message || "");
+  }
+
   useEffect(() => {
+    api.get("/domain").then((r) => applyDomainData(r.data)).catch(() => {});
     api.get("/settings").then((r) => {
       const s = r.data;
-      setServerUrl(s.server_url || window.location.origin);
       setHlsSegmentTime(s.hls_segment_time || "2");
       setHlsListSize(s.hls_list_size || "6");
       setMaxRetry(s.max_retry || "5");
       setHealthCheck(s.health_check || "30");
-    }).catch(() => setServerUrl(window.location.origin));
+    }).catch(() => {});
   }, []);
+
+  // Poll while a certificate is being issued.
+  useEffect(() => {
+    if (sslStatus !== "pending") return;
+    const id = setInterval(() => {
+      api.get("/domain").then((r) => {
+        applyDomainData(r.data);
+        if (r.data.ssl_status === "active") toast.success("HTTPS enabled");
+        if (r.data.ssl_status === "failed") toast.error("HTTPS setup failed");
+      }).catch(() => {});
+    }, 4000);
+    return () => clearInterval(id);
+  }, [sslStatus]);
+
+  async function saveDomain(nextMode: "ip" | "domain") {
+    if (nextMode === "domain" && !domainInput.trim()) {
+      toast.error("Enter your domain first");
+      return;
+    }
+    setSavingDomain(true);
+    try {
+      const body = nextMode === "domain"
+        ? { mode: "domain", domain: domainInput.trim().toLowerCase() }
+        : { mode: "ip" };
+      const r = await api.post("/domain", body);
+      applyDomainData({ ...r.data, ssl_message: r.data.ssl_status === "pending" ? "Issuing certificate…" : "" });
+      setMode(nextMode);
+      if (nextMode === "domain") toast.success("Domain saved — issuing HTTPS certificate…");
+      else toast.success("Switched to server IP");
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Failed to update access mode");
+    } finally {
+      setSavingDomain(false);
+    }
+  }
 
   async function saveSettings() {
     setSavingSettings(true);
     try {
       await api.put("/settings/bulk", {
-        server_url: serverUrl,
         hls_segment_time: hlsSegmentTime,
         hls_list_size: hlsListSize,
         max_retry: maxRetry,
@@ -79,24 +133,86 @@ export default function SettingsPage() {
     <div className="p-6 space-y-6 max-w-2xl">
       <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Settings</h1>
 
-      {/* ── Server URL ──────────────────────────────────────── */}
+      {/* ── Access mode ─────────────────────────────────────── */}
       <div className="card space-y-4">
         <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
-          <Settings size={14} className="text-gray-400" /> Server Configuration
+          <Settings size={14} className="text-gray-400" /> Access &amp; Domain
         </h2>
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1.5">Public Server URL</label>
-          <input
-            className="input"
-            value={serverUrl}
-            onChange={(e) => setServerUrl(e.target.value)}
-            placeholder="http://YOUR_VPS_IP:8080 or https://your.domain.com"
-          />
-          <p className="text-xs text-gray-400 mt-1">
-            Embedded in all M3U playlists and Xtream links. Leave blank to auto-use the
-            address you're connecting from, or enter your own domain once its DNS points
-            at this server.
-          </p>
+        <p className="text-xs text-gray-400">
+          Choose how your panel and Xtream links are addressed. This URL is embedded in
+          all M3U playlists and Xtream links.
+        </p>
+
+        {/* Option: server IP */}
+        <button
+          type="button"
+          onClick={() => mode !== "ip" && saveDomain("ip")}
+          disabled={savingDomain}
+          className={`w-full text-left flex items-start gap-3 p-3 rounded-[10px] border transition-colors ${
+            mode === "ip" ? "border-gray-900 bg-gray-50" : "border-gray-200 hover:border-gray-300"
+          }`}
+        >
+          <ServerIcon size={16} className="text-gray-500 mt-0.5" />
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-900">Use server IP</p>
+            <p className="text-xs text-gray-500 break-all">{window.location.origin}</p>
+          </div>
+          {mode === "ip" && <CheckCircle2 size={16} className="text-gray-900 ml-auto" />}
+        </button>
+
+        {/* Option: custom domain */}
+        <div
+          className={`p-3 rounded-[10px] border ${
+            mode === "domain" ? "border-gray-900 bg-gray-50" : "border-gray-200"
+          }`}
+        >
+          <div className="flex items-start gap-3">
+            <Globe size={16} className="text-gray-500 mt-0.5" />
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium text-gray-900">Use my domain</p>
+              <p className="text-xs text-gray-500 mb-2">
+                Point your domain's DNS (A record) at this server, then enter it below.
+                HTTPS is set up automatically.
+              </p>
+              <div className="flex gap-2">
+                <input
+                  className="input"
+                  value={domainInput}
+                  onChange={(e) => setDomainInput(e.target.value)}
+                  placeholder="tv.example.com"
+                />
+                <button
+                  className="btn-primary px-3 whitespace-nowrap"
+                  onClick={() => saveDomain("domain")}
+                  disabled={savingDomain}
+                >
+                  {savingDomain ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+                  Save &amp; enable HTTPS
+                </button>
+              </div>
+
+              {/* SSL status */}
+              {mode === "domain" && sslStatus === "pending" && (
+                <p className="text-xs text-amber-600 mt-2 flex items-center gap-1.5">
+                  <Loader2 size={12} className="animate-spin" /> Issuing HTTPS certificate… this can take a minute.
+                </p>
+              )}
+              {mode === "domain" && sslStatus === "active" && (
+                <p className="text-xs text-green-600 mt-2 flex items-center gap-1.5">
+                  <CheckCircle2 size={12} /> HTTPS active — {serverUrl}
+                </p>
+              )}
+              {mode === "domain" && sslStatus === "failed" && (
+                <p className="text-xs text-red-500 mt-2 flex items-start gap-1.5">
+                  <AlertCircle size={12} className="mt-0.5 shrink-0" />
+                  <span>
+                    HTTPS failed: {sslMessage || "check that the domain's DNS points to this server, then try again."}
+                    {" "}The panel still works over <span className="font-mono">http://{domainInput}</span>.
+                  </span>
+                </p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
 
