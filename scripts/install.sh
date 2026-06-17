@@ -214,6 +214,7 @@ if command -v ufw &>/dev/null; then
     ufw allow 80/tcp    >/dev/null 2>&1 || true
     ufw allow 443/tcp   >/dev/null 2>&1 || true
     ufw allow 25461/tcp >/dev/null 2>&1 || true
+    ufw allow 8080/tcp  >/dev/null 2>&1 || true
     ufw --force enable  >/dev/null 2>&1 || true
 fi
 

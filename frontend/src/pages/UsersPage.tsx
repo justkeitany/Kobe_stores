@@ -5,7 +5,7 @@ import {
   Search, Users, Key, Eye, EyeOff, RefreshCw,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import api from "../lib/api";
+import api, { xtreamBaseUrl } from "../lib/api";
 import clsx from "clsx";
 
 interface IUser {
@@ -122,7 +122,7 @@ function useServerBase() {
     queryFn: async () => (await api.get("/settings")).data,
     staleTime: 60_000,
   });
-  return ((data?.server_url || window.location.origin) as string).replace(/\/+$/, "");
+  return xtreamBaseUrl(data?.server_url);
 }
 
 function UserRow({ user: u, onEdit, onDelete, onToggle }: {

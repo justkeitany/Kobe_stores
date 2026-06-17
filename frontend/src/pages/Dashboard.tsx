@@ -4,7 +4,7 @@ import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { useServerStats } from "../hooks/useServerStats";
-import api from "../lib/api";
+import api, { xtreamBaseUrl } from "../lib/api";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
@@ -189,11 +189,11 @@ function MetricChart({ label, value, sub, dataKey, data, color }: {
 /* ── Quick Access Links ──────────────────────────────────────── */
 function QuickAccessLinks() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
-  const [serverUrl, setServerUrl] = useState(window.location.origin);
+  const [serverUrl, setServerUrl] = useState(xtreamBaseUrl(""));
 
   useEffect(() => {
     api.get("/settings")
-      .then((r) => setServerUrl((r.data?.server_url || window.location.origin).replace(/\/+$/, "")))
+      .then((r) => setServerUrl(xtreamBaseUrl(r.data?.server_url)))
       .catch(() => {});
   }, []);
 

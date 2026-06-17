@@ -42,4 +42,16 @@ api.interceptors.response.use(
   }
 );
 
+// Public Xtream/player base URL.
+// - If a domain is configured (server_url set), use it as-is (e.g. https://tv.example.com).
+// - Otherwise (IP mode) players connect on the dedicated Xtream port 8080, even though
+//   the dashboard itself is served on 25461.
+export const XTREAM_PORT = 8080;
+
+export function xtreamBaseUrl(serverUrl?: string | null): string {
+  if (serverUrl && serverUrl.trim()) return serverUrl.trim().replace(/\/+$/, "");
+  const { protocol, hostname } = window.location;
+  return `${protocol}//${hostname}:${XTREAM_PORT}`;
+}
+
 export default api;

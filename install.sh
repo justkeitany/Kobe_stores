@@ -189,6 +189,7 @@ ufw allow 22/tcp    >/dev/null
 ufw allow 80/tcp    >/dev/null
 ufw allow 443/tcp   >/dev/null
 ufw allow 25461/tcp >/dev/null
+ufw allow 8080/tcp  >/dev/null
 ufw --force enable  >/dev/null
 
 step "Starting IPTV Panel"

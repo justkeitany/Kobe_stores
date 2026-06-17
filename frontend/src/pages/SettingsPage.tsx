@@ -4,7 +4,7 @@ import {
   Globe, Server as ServerIcon, Loader2, CheckCircle2, AlertCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
-import api from "../lib/api";
+import api, { xtreamBaseUrl } from "../lib/api";
 
 type SslStatus = "none" | "pending" | "active" | "failed";
 
@@ -127,7 +127,8 @@ export default function SettingsPage() {
     toast.success("Copied");
   }
 
-  const base = (serverUrl || window.location.origin).replace(/\/+$/, "");
+  // Xtream links use the dedicated player port (8080) in IP mode, or the domain if set.
+  const base = xtreamBaseUrl(mode === "domain" ? serverUrl : "");
 
   return (
     <div className="p-6 space-y-6 max-w-2xl">

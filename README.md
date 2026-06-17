@@ -89,6 +89,20 @@ Reset the admin password:
 sudo bash /opt/iptv-panel/scripts/reset-password.sh
 ```
 
+### Clean reinstall (wipe and install the latest)
+
+Removes the service, files, nginx config and database, then reinstall fresh:
+
+```bash
+# 1. Clean the VPS
+curl -fsSL https://raw.githubusercontent.com/justkeitany/Kobe_stores/main/scripts/uninstall.sh | sudo bash
+
+# 2. Install the latest
+curl -fsSL https://raw.githubusercontent.com/justkeitany/Kobe_stores/main/scripts/bootstrap.sh | sudo bash
+```
+
+Add `KEEP_DB=1` before the uninstall command to keep your streams/users/settings.
+
 ---
 
 ## Notes
