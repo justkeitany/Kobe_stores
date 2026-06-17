@@ -14,7 +14,13 @@ set -e
 
 [[ $EUID -ne 0 ]] && echo "Run as root (use sudo)" && exit 1
 
-apt update -y && apt upgrade -y
+# Fully non-interactive apt (no kernel/service dialogs).
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+
+apt update -y
+apt upgrade -y -o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef
 apt install -y git curl wget
 
 rm -rf /tmp/mzeekobe

@@ -15,6 +15,13 @@ step()  { echo -e "\n${CYAN}${BOLD}══ $1 ══${NC}"; }
 
 [[ $EUID -ne 0 ]] && error "Run as root: sudo bash install.sh"
 
+# Fully non-interactive apt: no debconf dialogs, no needrestart kernel/service
+# prompts, and keep existing config files on package upgrades.
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+APT_OPTS=(-o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef)
+
 # ── Config ───────────────────────────────────────────────────────
 APP_DIR="/opt/iptv-panel"
 HLS_DIR="/var/iptv/hls"
@@ -30,16 +37,16 @@ JWT_SECRET=$(openssl rand -hex 32)
 
 step "System update"
 apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+apt-get upgrade -y -qq "${APT_OPTS[@]}"
 
 step "Enabling Python 3.11 (deadsnakes PPA)"
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+apt-get install -y -qq "${APT_OPTS[@]}" \
     curl wget git unzip ca-certificates gnupg software-properties-common ufw
 add-apt-repository -y ppa:deadsnakes/ppa
 apt-get update -qq
 
 step "Installing dependencies"
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+apt-get install -y -qq "${APT_OPTS[@]}" \
     build-essential \
     python3.11 python3.11-venv python3.11-dev \
     nginx postgresql postgresql-contrib redis-server \
@@ -48,7 +55,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 
 step "Installing Node.js 20"
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
-apt-get install -y -qq nodejs
+apt-get install -y -qq "${APT_OPTS[@]}" nodejs
 
 step "Creating directories"
 mkdir -p "$APP_DIR" "$HLS_DIR" "$WEB_DIR"

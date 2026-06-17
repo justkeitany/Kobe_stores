@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================================
 # IPTV Panel — Ubuntu 22.04 Install Script
-# Domain: tv.keitanyfrank.store
+# No domain needed — opens at http://<VPS-IP>:25461
 # Run as root: sudo bash install.sh
 # ============================================================
 set -e
@@ -12,6 +12,13 @@ warn()  { echo -e "${YELLOW}[WARN]${NC} $1"; }
 error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 
 [[ $EUID -ne 0 ]] && error "Run as root: sudo bash install.sh"
+
+# Fully non-interactive apt: no debconf dialogs, no needrestart kernel/service
+# prompts, and keep existing config files on package upgrades.
+export DEBIAN_FRONTEND=noninteractive
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
+APT_OPTS=(-o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef)
 
 # ── Config ───────────────────────────────────────────────────
 PANEL_PORT_HTTP=25461   # dashboard / Xtream port advertised to users (Xtream Codes default)
@@ -29,17 +36,17 @@ info "Starting IPTV Panel installation..."
 # ── System update ─────────────────────────────────────────────
 info "Updating system..."
 apt-get update -qq
-DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+apt-get upgrade -y -qq "${APT_OPTS[@]}"
 
 # Tools needed to add the deadsnakes PPA (Python 3.11 is not in Ubuntu 22.04's
 # default repositories, so we must enable it before installing python3.11).
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+apt-get install -y -qq "${APT_OPTS[@]}" \
     curl wget git unzip ca-certificates gnupg software-properties-common
 add-apt-repository -y ppa:deadsnakes/ppa
 apt-get update -qq
 
 info "Installing dependencies..."
-DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+apt-get install -y -qq "${APT_OPTS[@]}" \
     build-essential python3.11 python3.11-venv python3.11-dev python3-pip \
     nginx postgresql postgresql-contrib redis-server \
     ffmpeg certbot python3-certbot-nginx \
@@ -48,7 +55,7 @@ DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
 # ── Node.js 20 ───────────────────────────────────────────────
 info "Installing Node.js 20..."
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
-apt-get install -y nodejs
+apt-get install -y -qq "${APT_OPTS[@]}" nodejs
 
 # ── Directories ───────────────────────────────────────────────
 info "Creating directories..."
