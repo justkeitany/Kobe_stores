@@ -56,10 +56,14 @@ systemctl restart iptv-panel && \
     echo -e "${GREEN}✓ Backend restarted${NC}" || \
     echo -e "${YELLOW}⚠ Could not restart service — restart manually: systemctl restart iptv-panel${NC}"
 
+SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || true)
+[[ -z "$SERVER_IP" ]] && SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+[[ -z "$SERVER_IP" ]] && SERVER_IP="<your-vps-ip>"
+
 echo ""
 echo -e "${GREEN}================================================${NC}"
 echo -e "${GREEN} Password reset complete!${NC}"
-echo -e "${GREEN} Login at:  https://tv.keitanyfrank.store${NC}"
+echo -e "${GREEN} Login at:  http://$SERVER_IP:8080${NC}"
 echo -e "${GREEN} Username:  admin${NC}"
 echo -e "${GREEN} Password:  $NEW_PASS${NC}"
 echo -e "${GREEN}================================================${NC}"

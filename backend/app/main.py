@@ -54,15 +54,11 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
-# CORS — only allow the panel frontend origin
+# CORS — self-hosted panel is reachable on any IP or domain the operator points
+# at it, so reflect whatever Origin the request came from.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://tv.keitanyfrank.store",
-        "http://tv.keitanyfrank.store",
-        "http://localhost:5173",
-        "http://localhost:4173",
-    ],
+    allow_origin_regex=".*",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

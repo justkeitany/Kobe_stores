@@ -16,12 +16,43 @@ from fastapi import APIRouter, Request, Response, HTTPException, Query
 from fastapi.responses import StreamingResponse, RedirectResponse, PlainTextResponse
 from sqlalchemy import select
 from app.database import AsyncSessionLocal
-from app.models import Stream, StreamCategory, EpgData
+from app.models import Stream, StreamCategory, EpgData, Settings as SettingsModel
 from app.ffmpeg_manager import ffmpeg_manager
 from app.config import settings
 
 router = APIRouter(tags=["xtream"])
 logger = logging.getLogger(__name__)
+
+
+async def _configured_server_url() -> Optional[str]:
+    """The Public Server URL set in the dashboard (DB Settings), or None."""
+    async with AsyncSessionLocal() as db:
+        row = await db.execute(
+            select(SettingsModel).where(SettingsModel.key == "server_url")
+        )
+        setting = row.scalar_one_or_none()
+    if setting and setting.value and setting.value.strip():
+        return setting.value.strip()
+    return None
+
+
+def _base_from_request(request: Request) -> str:
+    """Derive the public base URL from the incoming request (honours proxy headers)."""
+    proto = request.headers.get("x-forwarded-proto") or request.url.scheme
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or request.url.netloc
+    )
+    return f"{proto}://{host}"
+
+
+async def _base_url(request: Request) -> str:
+    """Public base URL: the dashboard-configured domain if set, else the request host:port."""
+    configured = await _configured_server_url()
+    if configured:
+        return configured.rstrip("/")
+    return _base_from_request(request).rstrip("/")
 
 
 async def _check_credentials(username: str, password: str):
@@ -65,23 +96,34 @@ async def _check_credentials(username: str, password: str):
         return None
 
     exp_str = user.expires_at.strftime("%Y-%m-%d") if user.expires_at else None
+    exp_ts = str(int(user.expires_at.timestamp())) if user.expires_at else None
     return {
         "username": user.username,
         "password": user.password,
         "auth": 1,
         "status": "Active",
-        "exp_date": exp_str,
+        "exp_date": exp_ts,
         "max_connections": str(user.max_connections),
         "is_trial": "0",
     }
 
 
-def _server_info() -> dict:
+def _server_info(base_url: str) -> dict:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(base_url)
+    protocol = parsed.scheme or "http"
+    host = parsed.hostname or base_url
+    if parsed.port:
+        port = str(parsed.port)
+    else:
+        port = "443" if protocol == "https" else "80"
+
     return {
-        "url": "http://tv.keitanyfrank.store",
-        "port": "80",
+        "url": host,
+        "port": port,
         "https_port": "443",
-        "server_protocol": "http",
+        "server_protocol": protocol,
         "rtmp_port": "1935",
         "timezone": "UTC",
         "timestamp_now": int(datetime.now(timezone.utc).timestamp()),
@@ -102,6 +144,9 @@ def _user_info_from_data(data: dict) -> dict:
         "created_at": "0",
         "max_connections": data.get("max_connections", "1"),
         "allowed_output_formats": ["ts", "m3u8", "rtmp"],
+        "is_mag": "0",
+        "is_stalker": "0",
+        "package": "",
     }
 
 
@@ -139,7 +184,7 @@ async def player_api(
         if not action:
             return {
                 "user_info": _user_info_from_data(user_data),
-                "server_info": _server_info(),
+                "server_info": _server_info(await _base_url(request)),
             }
 
         # ── Live streams ──────────────────────────────────────────────────
@@ -237,6 +282,7 @@ async def player_api(
 
 @router.get("/get.php")
 async def get_playlist(
+    request: Request,
     username: str = Query(...),
     password: str = Query(...),
     type: str = Query("m3u_plus"),
@@ -245,6 +291,8 @@ async def get_playlist(
     user_data = await _check_credentials(username, password)
     if not user_data:
         raise HTTPException(401, "Unauthorized")
+
+    base_url = await _base_url(request)
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(
@@ -258,7 +306,7 @@ async def get_playlist(
     lines = ["#EXTM3U"]
     for stream, cat in rows:
         cat_name = cat.name if cat else "Uncategorized"
-        stream_url = f"http://tv.keitanyfrank.store/live/{username}/{password}/{stream.id}"
+        stream_url = f"{base_url}/live/{username}/{password}/{stream.id}"
         if output == "ts":
             stream_url += ".ts"
         elif output == "m3u8":
@@ -295,8 +343,6 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
     except ValueError:
         raise HTTPException(400, "Invalid stream ID")
 
-    ext = stream_file.split(".")[-1] if "." in stream_file else "ts"
-
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Stream).where(Stream.id == stream_id))
         stream = result.scalar_one_or_none()
@@ -315,14 +361,10 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
         import asyncio
         await asyncio.sleep(0.5)
 
-    if ext == "m3u8":
-        # Redirect to the HLS playlist via Nginx
-        hls_url = f"http://tv.keitanyfrank.store/hls/{stream_id}/index.m3u8"
-        return RedirectResponse(url=hls_url, status_code=302)
-    else:
-        # For .ts — redirect to HLS so the player can handle segments
-        hls_url = f"http://tv.keitanyfrank.store/hls/{stream_id}/index.m3u8"
-        return RedirectResponse(url=hls_url, status_code=302)
+    # Redirect to the HLS playlist served by Nginx (both .m3u8 and .ts players)
+    base_url = await _base_url(request)
+    hls_url = f"{base_url}/hls/{stream_id}/index.m3u8"
+    return RedirectResponse(url=hls_url, status_code=302)
 
 
 # ── /xmltv.php — XMLTV EPG output ─────────────────────────────────────────

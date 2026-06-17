@@ -21,8 +21,7 @@ HLS_DIR="/var/iptv/hls"
 WEB_DIR="/var/www/iptv-panel"
 REPO_DIR="/tmp/mzeekobe"
 
-PANEL_DOMAIN="${PANEL_DOMAIN:-tv.example.com}"
-STREAM_DOMAIN="${STREAM_DOMAIN:-live.example.com}"
+PANEL_PORT_HTTP=8080   # dashboard / Xtream port advertised to users
 
 DB_NAME="iptvpanel"
 DB_USER="iptv"
@@ -33,14 +32,19 @@ step "System update"
 apt-get update -qq
 DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
 
+step "Enabling Python 3.11 (deadsnakes PPA)"
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    curl wget git unzip ca-certificates gnupg software-properties-common ufw
+add-apt-repository -y ppa:deadsnakes/ppa
+apt-get update -qq
+
 step "Installing dependencies"
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-    curl wget git unzip software-properties-common \
     build-essential \
     python3.11 python3.11-venv python3.11-dev \
     nginx postgresql postgresql-contrib redis-server \
     ffmpeg certbot python3-certbot-nginx \
-    openssl ufw
+    openssl
 
 step "Installing Node.js 20"
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
@@ -90,8 +94,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 REFRESH_TOKEN_EXPIRE_DAYS=30
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=admin
-SERVER_URL=https://$STREAM_DOMAIN
-PANEL_URL=https://$PANEL_DOMAIN
+SERVER_URL=
 PANEL_PORT=8000
 HLS_SEGMENT_TIME=2
 HLS_LIST_SIZE=6
@@ -109,17 +112,6 @@ cd "$REPO_DIR/frontend"
 npm install --silent
 npm run build
 cp -r dist/* "$WEB_DIR/"
-
-step "Generating SSL certificates (self-signed — replace with Let's Encrypt)"
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/ssl/iptv/tv-key.pem \
-    -out    /etc/ssl/iptv/tv-cert.pem \
-    -subj   "/CN=$PANEL_DOMAIN"  2>/dev/null
-
-openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-    -keyout /etc/ssl/iptv/live-key.pem \
-    -out    /etc/ssl/iptv/live-cert.pem \
-    -subj   "/CN=$STREAM_DOMAIN" 2>/dev/null
 
 step "Configuring Nginx"
 cp "$APP_DIR/nginx/iptv-panel.conf" /etc/nginx/sites-available/iptv-panel
@@ -175,9 +167,10 @@ modprobe tcp_bbr 2>/dev/null || true
 sysctl -p -q    2>/dev/null || true
 
 step "Firewall (UFW)"
-ufw allow 22/tcp  >/dev/null
-ufw allow 80/tcp  >/dev/null
-ufw allow 443/tcp >/dev/null
+ufw allow 22/tcp   >/dev/null
+ufw allow 80/tcp   >/dev/null
+ufw allow 443/tcp  >/dev/null
+ufw allow 8080/tcp >/dev/null
 ufw --force enable >/dev/null
 
 step "Starting IPTV Panel"
@@ -192,10 +185,10 @@ else
     warn "Backend may have failed — check: journalctl -u iptv-panel -n 50"
 fi
 
-# ── Let's Encrypt SSL ─────────────────────────────────────────
-echo ""
-echo -e "${YELLOW}To enable real SSL certificates run:${NC}"
-echo "  certbot --nginx -d $PANEL_DOMAIN -d $STREAM_DOMAIN --agree-tos -m your@email.com --non-interactive"
+# ── Detect public IP for the dashboard URL ────────────────────
+SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || true)
+[[ -z "$SERVER_IP" ]] && SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+[[ -z "$SERVER_IP" ]] && SERVER_IP="<your-vps-ip>"
 
 # ── Final output ──────────────────────────────────────────────
 echo ""
@@ -203,8 +196,8 @@ echo -e "${BOLD}${GREEN}══════════════════�
 echo -e "${BOLD}  IPTV Panel installed!${NC}"
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "  Dashboard:      ${CYAN}https://$PANEL_DOMAIN${NC}"
-echo -e "  Xtream server:  ${CYAN}https://$STREAM_DOMAIN${NC} (DNS only)"
+echo -e "  Dashboard:   ${CYAN}http://$SERVER_IP:$PANEL_PORT_HTTP${NC}"
+echo -e "               ${CYAN}http://$SERVER_IP${NC}  (port 80 also works)"
 echo ""
 echo -e "  Username:    ${BOLD}admin${NC}"
 echo -e "  Password:    ${BOLD}admin${NC}  ← you will be forced to change on first login"
@@ -213,6 +206,11 @@ echo -e "  DB password: ${BOLD}$DB_PASS${NC}"
 echo ""
 echo -e "${YELLOW}  SAVE THE DB PASSWORD — you will need it for backups!${NC}"
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "${YELLOW}Using a domain?${NC} Point its DNS to ${BOLD}$SERVER_IP${NC}, then set it under"
+echo -e "  ${CYAN}Settings → Public Server URL${NC} in the dashboard. It is then embedded"
+echo -e "  in all M3U playlists and Xtream links. For HTTPS on that domain run:"
+echo -e "  ${CYAN}certbot --nginx -d your.domain.com --agree-tos -m you@email.com --non-interactive${NC}"
 echo ""
 echo -e "Update anytime:  ${CYAN}bash $APP_DIR/scripts/update.sh${NC}"
 echo -e "Reset password:  ${CYAN}bash $APP_DIR/scripts/reset-password.sh${NC}"

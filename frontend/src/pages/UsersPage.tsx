@@ -116,6 +116,15 @@ export default function UsersPage() {
   );
 }
 
+function useServerBase() {
+  const { data } = useQuery({
+    queryKey: ["server-url"],
+    queryFn: async () => (await api.get("/settings")).data,
+    staleTime: 60_000,
+  });
+  return ((data?.server_url || window.location.origin) as string).replace(/\/+$/, "");
+}
+
 function UserRow({ user: u, onEdit, onDelete, onToggle }: {
   user: IUser;
   onEdit: () => void;
@@ -125,7 +134,7 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
   const [showPass, setShowPass] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
   
-  const streamBaseHttp = "http://tv.keitanyfrank.store";
+  const streamBaseHttp = useServerBase();
 
   function copy(key: string, text: string) {
     navigator.clipboard.writeText(text);
@@ -249,6 +258,7 @@ function UserModal({ user, onClose, onSaved }: {
   const [bouquetId, setBouquetId] = useState<number | "">(user?.bouquet_id ?? "");
   const [notes, setNotes] = useState(user?.notes ?? "");
   const [saving, setSaving] = useState(false);
+  const base = useServerBase();
 
   const { data: bouquets = [] } = useQuery<Bouquet[]>({
     queryKey: ["bouquets"],
@@ -395,13 +405,12 @@ function UserModal({ user, onClose, onSaved }: {
             <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1.5">
               <Key size={12} /> Xtream Credentials Preview
             </p>
-            <PreviewRow label="Server"   value="http://tv.keitanyfrank.store" />
-            <PreviewRow label="Port"     value="80" />
+            <PreviewRow label="Server"   value={base} />
             <PreviewRow label="Username" value={username} />
             <PreviewRow label="Password" value={password} />
             <PreviewRow
               label="M3U URL"
-              value={`http://tv.keitanyfrank.store/get.php?username=${username}&password=${password}&type=m3u_plus`}
+              value={`${base}/get.php?username=${username}&password=${password}&type=m3u_plus`}
             />
           </div>
         )}

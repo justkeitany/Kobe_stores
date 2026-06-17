@@ -21,7 +21,9 @@ class Settings(BaseSettings):
     ADMIN_PASSWORD: str = "changeme123"
 
     # Server
-    SERVER_URL: str = "https://tv.keitanyfrank.store"
+    # Leave empty to auto-derive the public URL from each request (IP:port).
+    # The dashboard's "Public Server URL" setting (stored in the DB) overrides this.
+    SERVER_URL: str = ""
     PANEL_PORT: int = 8000
 
     # HLS / FFmpeg

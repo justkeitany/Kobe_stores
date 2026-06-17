@@ -189,6 +189,13 @@ function MetricChart({ label, value, sub, dataKey, data, color }: {
 /* ── Quick Access Links ──────────────────────────────────────── */
 function QuickAccessLinks() {
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [serverUrl, setServerUrl] = useState(window.location.origin);
+
+  useEffect(() => {
+    api.get("/settings")
+      .then((r) => setServerUrl((r.data?.server_url || window.location.origin).replace(/\/+$/, "")))
+      .catch(() => {});
+  }, []);
 
   function copy(key: string, value: string) {
     navigator.clipboard.writeText(value);
@@ -197,11 +204,11 @@ function QuickAccessLinks() {
     setTimeout(() => setCopiedKey(null), 2000);
   }
 
-  const playerBase = "http://tv.keitanyfrank.store";
+  const playerBase = serverUrl;
 
   const links = [
-    { key: "panel",      label: "Admin Panel",       desc: "This dashboard",                               value: "https://tv.keitanyfrank.store" },
-    { key: "xtream",     label: "Xtream Server URL",  desc: "Enter in TiviMate / Smarters / GSE — Port: 80",  value: playerBase },
+    { key: "panel",      label: "Admin Panel",       desc: "This dashboard",                               value: window.location.origin },
+    { key: "xtream",     label: "Xtream Server URL",  desc: "Enter in TiviMate / Smarters / GSE",            value: playerBase },
     { key: "m3u",        label: "M3U Playlist",       desc: "Direct playlist URL for VLC, Kodi etc.",      value: `${playerBase}/get.php?username=admin&password=YOUR_PASS&type=m3u_plus` },
     { key: "xmltv",      label: "XMLTV / EPG",        desc: "Electronic programme guide URL",              value: `${playerBase}/xmltv.php?username=admin&password=YOUR_PASS` },
     { key: "player_api", label: "Player API",         desc: "Xtream Codes authentication endpoint",        value: `${playerBase}/player_api.php?username=admin&password=YOUR_PASS` },

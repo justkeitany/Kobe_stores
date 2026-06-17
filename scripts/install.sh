@@ -14,7 +14,7 @@ error() { echo -e "${RED}[ERROR]${NC} $1"; exit 1; }
 [[ $EUID -ne 0 ]] && error "Run as root: sudo bash install.sh"
 
 # ── Config ───────────────────────────────────────────────────
-DOMAIN="tv.keitanyfrank.store"
+PANEL_PORT_HTTP=8080   # dashboard / Xtream port advertised to users
 APP_DIR="/opt/iptv-panel"
 HLS_DIR="/var/iptv/hls"
 WEB_DIR="/var/www/iptv-panel"
@@ -25,13 +25,21 @@ JWT_SECRET=$(openssl rand -hex 32)
 ADMIN_PASS=$(openssl rand -base64 12)
 
 info "Starting IPTV Panel installation..."
-info "Domain: $DOMAIN"
 
 # ── System update ─────────────────────────────────────────────
 info "Updating system..."
 apt-get update -qq
-apt-get install -y -qq \
-    curl wget git unzip software-properties-common \
+DEBIAN_FRONTEND=noninteractive apt-get upgrade -y -qq
+
+# Tools needed to add the deadsnakes PPA (Python 3.11 is not in Ubuntu 22.04's
+# default repositories, so we must enable it before installing python3.11).
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+    curl wget git unzip ca-certificates gnupg software-properties-common
+add-apt-repository -y ppa:deadsnakes/ppa
+apt-get update -qq
+
+info "Installing dependencies..."
+DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
     build-essential python3.11 python3.11-venv python3.11-dev python3-pip \
     nginx postgresql postgresql-contrib redis-server \
     ffmpeg certbot python3-certbot-nginx \
@@ -82,6 +90,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 cp -r "$PROJECT_DIR/backend" "$APP_DIR/"
 cp -r "$PROJECT_DIR/nginx" "$APP_DIR/"
+cp -r "$PROJECT_DIR/scripts" "$APP_DIR/"
 
 # ── Python venv ───────────────────────────────────────────────
 info "Setting up Python 3.11 environment..."
@@ -100,7 +109,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=60
 REFRESH_TOKEN_EXPIRE_DAYS=30
 ADMIN_USERNAME=admin
 ADMIN_PASSWORD=$ADMIN_PASS
-SERVER_URL=https://$DOMAIN
+SERVER_URL=
 PANEL_PORT=8000
 HLS_SEGMENT_TIME=2
 HLS_LIST_SIZE=6
@@ -122,16 +131,7 @@ cp -r dist/* "$WEB_DIR/"
 # ── Nginx ─────────────────────────────────────────────────────
 info "Configuring Nginx..."
 
-# Self-signed cert for initial setup (replace with Let's Encrypt after DNS propagates)
-if [ ! -f /etc/ssl/iptv/cert.pem ]; then
-    openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
-        -keyout /etc/ssl/iptv/key.pem \
-        -out /etc/ssl/iptv/cert.pem \
-        -subj "/CN=$DOMAIN" 2>/dev/null
-fi
-
 cp "$APP_DIR/nginx/iptv-panel.conf" /etc/nginx/sites-available/iptv-panel
-cp "$APP_DIR/nginx/iptv-locations.conf" /etc/nginx/snippets/iptv-locations.conf
 ln -sf /etc/nginx/sites-available/iptv-panel /etc/nginx/sites-enabled/
 rm -f /etc/nginx/sites-enabled/default
 
@@ -194,6 +194,16 @@ sysctl -p -q 2>/dev/null || true
 # Enable BBR TCP congestion control (reduces buffering)
 modprobe tcp_bbr 2>/dev/null || true
 
+# ── Firewall ──────────────────────────────────────────────────
+if command -v ufw &>/dev/null; then
+    info "Configuring firewall (UFW)..."
+    ufw allow 22/tcp   >/dev/null 2>&1 || true
+    ufw allow 80/tcp   >/dev/null 2>&1 || true
+    ufw allow 443/tcp  >/dev/null 2>&1 || true
+    ufw allow 8080/tcp >/dev/null 2>&1 || true
+    ufw --force enable >/dev/null 2>&1 || true
+fi
+
 # ── Start services ────────────────────────────────────────────
 info "Starting services..."
 systemctl daemon-reload
@@ -207,29 +217,34 @@ else
     warn "Backend may not have started — check: journalctl -u iptv-panel -n 50"
 fi
 
-# ── SSL with Let's Encrypt (optional) ────────────────────────
-echo ""
-info "To get a free SSL certificate run:"
-echo "  certbot --nginx -d $DOMAIN --non-interactive --agree-tos -m your@email.com"
+# ── Detect public IP for the dashboard URL ────────────────────
+SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || true)
+[[ -z "$SERVER_IP" ]] && SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
+[[ -z "$SERVER_IP" ]] && SERVER_IP="<your-vps-ip>"
 
 # ── Print credentials ─────────────────────────────────────────
 echo ""
 echo "================================================================"
 echo " IPTV Panel installed successfully!"
 echo "================================================================"
-echo " Panel URL:     https://$DOMAIN"
+echo " Dashboard:     http://$SERVER_IP:$PANEL_PORT_HTTP"
+echo "                http://$SERVER_IP  (port 80 also works)"
 echo " Admin user:    admin"
 echo " Admin pass:    $ADMIN_PASS"
 echo ""
-echo " Xtream Server: https://$DOMAIN"
+echo " Xtream Server: http://$SERVER_IP:$PANEL_PORT_HTTP"
 echo " Username:      admin"
 echo " Password:      $ADMIN_PASS"
 echo ""
-echo " M3U URL:       https://$DOMAIN/get.php?username=admin&password=$ADMIN_PASS&type=m3u_plus"
-echo " XMLTV URL:     https://$DOMAIN/xmltv.php?username=admin&password=$ADMIN_PASS"
+echo " M3U URL:       http://$SERVER_IP:$PANEL_PORT_HTTP/get.php?username=admin&password=$ADMIN_PASS&type=m3u_plus"
+echo " XMLTV URL:     http://$SERVER_IP:$PANEL_PORT_HTTP/xmltv.php?username=admin&password=$ADMIN_PASS"
 echo ""
 echo " DB password:   $DB_PASS"
 echo " JWT secret:    (stored in $APP_DIR/backend/.env)"
 echo "================================================================"
 echo " SAVE THESE CREDENTIALS NOW!"
+echo ""
+echo " Using a domain? Point its DNS at $SERVER_IP, then set it under"
+echo " Settings -> Public Server URL in the dashboard. For HTTPS run:"
+echo "   certbot --nginx -d your.domain.com --agree-tos -m you@email.com --non-interactive"
 echo "================================================================"
