@@ -3,6 +3,7 @@ import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
   Server, Settings, LogOut, Menu, Users,
+  type LucideIcon,
 } from "lucide-react";
 import { logout, currentUsername } from "../lib/auth";
 import { useServerStats } from "../hooks/useServerStats";
@@ -10,10 +11,16 @@ import { useTheme } from "../lib/theme";
 import { MIcon } from "./MIcon";
 import clsx from "clsx";
 
-const nav = [
+const PLUTO_LOGO =
+  "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Pluto_TV_Logo.svg/1200px-Pluto_TV_Logo.svg.png";
+
+type NavItem = { label: string; path: string; icon?: LucideIcon; img?: string };
+
+const nav: NavItem[] = [
   { label: "Dashboard",  icon: LayoutDashboard, path: "/" },
   { label: "Users",      icon: Users,           path: "/users" },
   { label: "Streams",    icon: Tv,              path: "/streams" },
+  { label: "Pluto TV",   img: PLUTO_LOGO,       path: "/pluto" },
   { label: "Categories", icon: FolderOpen,      path: "/categories" },
   { label: "Bouquets",   icon: Package,         path: "/bouquets" },
   { label: "EPG",        icon: Radio,           path: "/epg" },
@@ -75,7 +82,7 @@ export default function Layout() {
 
         {/* Nav items (lucide icons — intentionally kept) */}
         <nav className="flex-1 px-sm py-1 overflow-y-auto space-y-0.5">
-          {nav.map(({ label, icon: Icon, path }) => (
+          {nav.map(({ label, icon: Icon, img, path }) => (
             <NavLink
               key={path}
               to={path}
@@ -91,7 +98,11 @@ export default function Layout() {
                 )
               }
             >
-              <Icon size={16} className="shrink-0" />
+              {img ? (
+                <img src={img} alt="" className="w-5 h-5 object-contain shrink-0" />
+              ) : Icon ? (
+                <Icon size={16} className="shrink-0" />
+              ) : null}
               {!collapsed && <span>{label}</span>}
             </NavLink>
           ))}

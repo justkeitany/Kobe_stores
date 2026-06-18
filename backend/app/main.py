@@ -17,6 +17,7 @@ from app.routers import auth, streams, categories, bouquets, epg, server, settin
 from app.routers.users import router as users_router
 from app.routers.xtream import router as xtream_router
 from app.routers.proxy import router as proxy_router
+from app.routers.pluto import router as pluto_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -87,6 +88,9 @@ app.include_router(xtream_router)
 
 # YouTube live-stream proxy (/proxy/stream)
 app.include_router(proxy_router)
+
+# Pluto TV channel directory passthrough (/api/pluto/channels)
+app.include_router(pluto_router)
 
 # ── WebSocket ──────────────────────────────────────────────────────────────
 @app.websocket("/ws/stats")
