@@ -88,8 +88,14 @@
 
   --color-primary: #e3e1ec;
   --color-on-primary: #16171d;
-  --color-primary-fixed-dim: #c6c6c6;
+  --color-primary-fixed-dim: #34d399;
   --color-error: #ffb4ab;
+
+  /* Green brand accent (matches reference design) */
+  --color-brand: #22c55e;
+
+  /* Card elevation — subtle in dark */
+  --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.28);
 }
 
 /* ── Light mode: re-point the variables ───────────────────────── */
@@ -127,8 +133,13 @@ html.light {
 
   --color-primary: #1a1b22;
   --color-on-primary: #ffffff;
-  --color-primary-fixed-dim: #45444d;
+  --color-primary-fixed-dim: #16a34a;
   --color-error: #b3261e;
+
+  --color-brand: #16a34a;
+
+  /* Card elevation — soft, clearly visible in light */
+  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 6px 16px rgba(16, 24, 40, 0.08);
 }
 
 @layer base {
@@ -223,11 +234,12 @@ html.light {
   }
   .input option { background: var(--color-surface-container); color: var(--color-on-surface); }
 
-  /* ── Cards (1px border, no shadow, sharp) ────────────────── */
+  /* ── Cards (1px border, soft shadow, rounded) ────────────── */
   .card {
     background: var(--color-surface-container-low);
     border: 1px solid var(--color-outline-variant);
     padding: 1.25rem;
+    box-shadow: var(--shadow-card);
   }
 
   /* ── Status dot ───────────────────────────────────────────── */
@@ -267,7 +279,7 @@ html.light {
   /* ── Global 6px corner radius on boxes & controls ────────── */
   .btn-primary, .btn-secondary, .btn-danger, .input, .card,
   .badge-green, .badge-red, .badge-yellow, .badge-gray, .badge-blue {
-    border-radius: 6px;
+    border-radius: 8px;
   }
 }
 
@@ -275,6 +287,7 @@ html.light {
    without having to touch each call site. */
 @layer utilities {
   [class*="bg-surface-container"][class*="border-outline-variant"]:not(aside):not(header) {
-    border-radius: 6px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-card);
   }
 }

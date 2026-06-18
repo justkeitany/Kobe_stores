@@ -46,8 +46,8 @@ export default function Layout() {
           "flex items-center h-16 px-md gap-2.5 shrink-0",
           collapsed && "justify-center px-0"
         )}>
-          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center shrink-0">
-            <Tv size={14} className="text-on-primary" />
+          <div className="w-7 h-7 rounded-md bg-brand flex items-center justify-center shrink-0">
+            <Tv size={14} className="text-[#ffffff]" />
           </div>
           {!collapsed && (
             <h1 className="font-bold text-on-surface text-base tracking-tighter leading-none">IPTV Admin</h1>
@@ -246,7 +246,6 @@ function TopHeader() {
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
             <div className="text-right hidden sm:block leading-tight">
-              <p className="font-code-label text-[10px] text-on-surface-variant">Welcome back</p>
               <p className="font-bold text-body-sm leading-tight">{username}</p>
             </div>
             <div className="w-7 h-7 bg-surface-container-highest border border-outline-variant rounded-md flex items-center justify-center">

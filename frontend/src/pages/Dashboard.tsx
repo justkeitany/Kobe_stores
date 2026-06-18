@@ -95,7 +95,7 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-        <button onClick={refreshCounts} className="btn-secondary">
+        <button onClick={() => window.location.reload()} className="btn-secondary">
           <MIcon name="refresh" size={18} /> Refresh
         </button>
       </div>
