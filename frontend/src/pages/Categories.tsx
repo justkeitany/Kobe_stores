@@ -116,7 +116,7 @@ function CategoryModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 rounded-[10px] w-full max-w-sm shadow-xl p-6 space-y-4">
+      <div className="bg-white border border-gray-200 rounded-[10px] w-full max-w-[24rem] shadow-xl p-6 space-y-4">
         <h2 className="text-lg font-semibold text-gray-900">
           {cat ? "Edit Category" : "New Category"}
         </h2>

@@ -188,7 +188,7 @@ export default function PlutoTV() {
 
       {/* Filters */}
       <div className="flex gap-md flex-wrap items-center">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
+        <div className="relative flex-1 min-w-[200px] max-w-[20rem]">
           <MIcon name="search" size={18}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
           <input

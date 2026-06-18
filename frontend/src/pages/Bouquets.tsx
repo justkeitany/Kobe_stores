@@ -132,7 +132,7 @@ function BouquetModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 rounded-[10px] w-full max-w-md shadow-xl p-6 space-y-4">
+      <div className="bg-white border border-gray-200 rounded-[10px] w-full max-w-[28rem] shadow-xl p-6 space-y-4">
 
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Name *</label>

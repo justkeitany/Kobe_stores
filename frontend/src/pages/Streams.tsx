@@ -118,7 +118,7 @@ export default function Streams() {
 
       {/* Filters */}
       <div className="flex gap-md flex-wrap">
-        <div className="relative flex-1 min-w-[200px] max-w-xs">
+        <div className="relative flex-1 min-w-[200px] max-w-[20rem]">
           <MIcon name="search" size={18}
             className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
           <input
@@ -200,7 +200,7 @@ export default function Streams() {
                               </span>
                             )}
                           </div>
-                          <p className="text-[11px] font-code-label text-on-surface-variant/70 truncate max-w-xs">{s.stream_url}</p>
+                          <p className="text-[11px] font-code-label text-on-surface-variant/70 truncate max-w-[20rem]">{s.stream_url}</p>
                         </div>
                       </div>
                     </td>
@@ -375,7 +375,7 @@ function StreamModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 rounded-md w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white border border-gray-300 rounded-md w-full max-w-[28rem] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900">
           {stream ? "Edit Stream" : "Add Stream"}
         </h2>

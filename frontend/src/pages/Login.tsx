@@ -34,7 +34,7 @@ export default function Login() {
     <div className="min-h-screen flex bg-white">
       {/* ── Left panel — form ─────────────────────────────────────── */}
       <div className="flex flex-col w-full lg:w-1/2 px-8 sm:px-16 justify-center">
-        <div className="max-w-sm w-full mx-auto">
+        <div className="max-w-[24rem] w-full mx-auto">
           <h1 className="text-3xl font-bold text-gray-900 mb-1">Sign In</h1>
           <p className="text-sm text-gray-500 mb-8">
             Enter your username and password to sign in.
@@ -119,7 +119,7 @@ export default function Login() {
           <Tv size={30} className="text-gray-900" />
         </div>
         <h2 className="text-2xl font-bold mb-3 text-center">IPTV Panel</h2>
-        <p className="text-gray-400 text-sm text-center max-w-xs leading-relaxed">
+        <p className="text-gray-400 text-sm text-center max-w-[20rem] leading-relaxed">
           Personal IPTV dashboard — manage streams, categories, EPG, and monitor your server in real time.
         </p>
         <div className="mt-12 grid grid-cols-6 gap-3 opacity-20">
