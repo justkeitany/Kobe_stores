@@ -16,6 +16,12 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
+# How long (seconds) a stream may go without a playlist request before it is
+# considered idle and stopped. HLS players reload the live playlist roughly
+# every segment duration (~2s), so this tolerates a few missed polls while
+# still stopping promptly once the viewer leaves.
+STREAM_IDLE_TIMEOUT = 8
+
 
 class StreamProcess:
     def __init__(self, stream_id: int, stream_url: str, stream_name: str):
@@ -23,14 +29,14 @@ class StreamProcess:
         self.stream_url = stream_url
         self.stream_name = stream_name
         self.process: Optional[asyncio.subprocess.Process] = None
-        self.viewer_count: int = 0
+        # client_key -> last time we saw a playlist request from that viewer
+        self.viewers: Dict[str, datetime] = {}
         self.retry_count: int = 0
         self.started_at: Optional[datetime] = None
         self.last_error: Optional[str] = None
         self.status: str = "idle"
         self._lock = asyncio.Lock()
         self._health_task: Optional[asyncio.Task] = None
-        self._viewer_dropped = asyncio.Event()
 
     @property
     def hls_dir(self) -> str:
@@ -121,20 +127,14 @@ class StreamProcess:
             logger.info(f"Stream {self.stream_id} stopped")
 
     async def _health_monitor(self):
-        """Monitor process health and restart if it crashes."""
+        """Restart FFmpeg if it crashes while viewers are still watching.
+
+        Idle stopping (no viewers) is handled by the manager-level reaper, not
+        here — so this task never stops its own stream and never cancels itself.
+        """
         while True:
             try:
-                # Wait max 5s OR until a viewer drops — whichever comes first
-                try:
-                    await asyncio.wait_for(self._viewer_dropped.wait(), timeout=5)
-                    self._viewer_dropped.clear()
-                except asyncio.TimeoutError:
-                    pass
-
-                if self.viewer_count == 0:
-                    logger.info(f"Stream {self.stream_id} has no viewers, stopping")
-                    await self.stop()
-                    break
+                await asyncio.sleep(3)
 
                 if self.process and self.process.returncode is not None:
                     returncode = self.process.returncode
@@ -168,20 +168,52 @@ class StreamProcess:
                 logger.error(f"Health monitor error for stream {self.stream_id}: {e}")
                 await asyncio.sleep(5)
 
-    def add_viewer(self):
-        self.viewer_count += 1
+    def heartbeat(self, client_key: str):
+        """Record that a viewer just requested the playlist (keeps stream alive)."""
+        self.viewers[client_key] = datetime.now(timezone.utc)
 
-    def remove_viewer(self):
-        self.viewer_count = max(0, self.viewer_count - 1)
-        if self.viewer_count == 0:
-            # Signal health monitor to wake up immediately
-            self._viewer_dropped.set()
+    def active_viewers(self) -> int:
+        """Number of viewers seen within the idle window (prunes stale ones)."""
+        now = datetime.now(timezone.utc)
+        self.viewers = {
+            k: v for k, v in self.viewers.items()
+            if (now - v).total_seconds() <= STREAM_IDLE_TIMEOUT
+        }
+        return len(self.viewers)
 
 
 class FFmpegManager:
     def __init__(self):
         self._streams: Dict[int, StreamProcess] = {}
         self._lock = asyncio.Lock()
+        self._reaper_task: Optional[asyncio.Task] = None
+
+    def _ensure_reaper(self):
+        if self._reaper_task is None or self._reaper_task.done():
+            self._reaper_task = asyncio.create_task(self._reaper())
+
+    async def _reaper(self):
+        """Stop streams that have had no viewer heartbeat within the idle window."""
+        while True:
+            try:
+                await asyncio.sleep(2)
+                async with self._lock:
+                    ids = list(self._streams.keys())
+                for sid in ids:
+                    async with self._lock:
+                        sp = self._streams.get(sid)
+                    if (
+                        sp
+                        and sp.status in ("running", "starting")
+                        and sp.active_viewers() == 0
+                    ):
+                        logger.info(f"Stream {sid} idle (no viewers) — stopping")
+                        await self.stop_stream(sid)
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Reaper error: {e}")
+                await asyncio.sleep(2)
 
     async def get_or_create(self, stream_id: int, stream_url: str, stream_name: str) -> StreamProcess:
         async with self._lock:
@@ -189,18 +221,15 @@ class FFmpegManager:
                 self._streams[stream_id] = StreamProcess(stream_id, stream_url, stream_name)
             return self._streams[stream_id]
 
-    async def start_stream(self, stream_id: int, stream_url: str, stream_name: str) -> StreamProcess:
+    async def start_stream(
+        self, stream_id: int, stream_url: str, stream_name: str, client_key: str = "viewer"
+    ) -> StreamProcess:
+        self._ensure_reaper()
         sp = await self.get_or_create(stream_id, stream_url, stream_name)
-        sp.add_viewer()
+        sp.heartbeat(client_key)
         if sp.status not in ("running", "starting"):
             await sp.start()
         return sp
-
-    async def viewer_left(self, stream_id: int):
-        async with self._lock:
-            sp = self._streams.get(stream_id)
-        if sp:
-            sp.remove_viewer()
 
     async def stop_stream(self, stream_id: int):
         async with self._lock:
@@ -225,7 +254,7 @@ class FFmpegManager:
         return {
             "stream_id": stream_id,
             "status": sp.status,
-            "viewer_count": sp.viewer_count,
+            "viewer_count": sp.active_viewers(),
             "retry_count": sp.retry_count,
             "last_error": sp.last_error,
             "started_at": sp.started_at.isoformat() if sp.started_at else None,

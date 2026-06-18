@@ -31,7 +31,9 @@ async def stats_sender(websocket: WebSocket):
                 prev_net = net
 
                 active  = await ffmpeg_manager.get_all_statuses()
-                running = [s for s in active if s["status"] in ("running", "starting")]
+                # A stream counts as "active" only while it has a live viewer,
+                # so the dashboard drops within ~8s of the viewer leaving.
+                watched = [s for s in active if s["viewer_count"] > 0]
 
                 payload = {
                     "type": "stats",
@@ -41,7 +43,7 @@ async def stats_sender(websocket: WebSocket):
                     "ram_total_mb": round(ram.total / 1024 / 1024),
                     "bw_out_kbps":  round(bw_out * 8 / 1024, 1),
                     "bw_in_kbps":   round(bw_in  * 8 / 1024, 1),
-                    "active_streams": len(running),
+                    "active_streams": len(watched),
                     "streams": [
                         {
                             "id":      s["stream_id"],

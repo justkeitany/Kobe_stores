@@ -9,6 +9,7 @@ Supported endpoints:
   GET       /xmltv.php               — XMLTV EPG data
 """
 import os
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Optional
@@ -330,6 +331,28 @@ async def get_playlist(
 
 # ── /live/{user}/{pass}/{id} — stream delivery ────────────────────────────
 
+def _client_key(request: Request) -> str:
+    """Stable per-viewer key used to count concurrent viewers."""
+    return (
+        request.headers.get("x-real-ip")
+        or request.headers.get("x-forwarded-for", "").split(",")[0].strip()
+        or (request.client.host if request.client else "unknown")
+    )
+
+
+def _rewrite_playlist(path: str, stream_id: int) -> str:
+    """Read FFmpeg's HLS playlist and point segment lines at Nginx (/hls/<id>/)."""
+    with open(path) as f:
+        lines = f.read().splitlines()
+    out = []
+    for line in lines:
+        if line and not line.startswith("#"):
+            out.append(f"/hls/{stream_id}/{line.split('/')[-1]}")
+        else:
+            out.append(line)
+    return "\n".join(out) + "\n"
+
+
 @router.get("/live/{username}/{password}/{stream_file}")
 async def serve_live(username: str, password: str, stream_file: str, request: Request):
     user_data = await _check_credentials(username, password)
@@ -342,6 +365,7 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
         stream_id = int(stream_id_str)
     except ValueError:
         raise HTTPException(400, "Invalid stream ID")
+    ext = stream_file.rsplit(".", 1)[-1].lower() if "." in stream_file else ""
 
     async with AsyncSessionLocal() as db:
         result = await db.execute(select(Stream).where(Stream.id == stream_id))
@@ -350,21 +374,35 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
     if not stream or not stream.is_enabled:
         raise HTTPException(404, "Stream not found")
 
-    # Start FFmpeg if not already running
-    sp = await ffmpeg_manager.start_stream(stream_id, stream.stream_url, stream.name)
+    # Start FFmpeg if needed and record this viewer's heartbeat. The player keeps
+    # polling the .m3u8 below (~every 2s), so each poll refreshes the heartbeat;
+    # when it stops polling, the manager's reaper stops FFmpeg within ~8s.
+    sp = await ffmpeg_manager.start_stream(
+        stream_id, stream.stream_url, stream.name, _client_key(request)
+    )
 
-    # Wait up to 10s for the HLS playlist to be ready
-    playlist_path = sp.hls_playlist
-    for _ in range(20):
-        if os.path.exists(playlist_path):
-            break
-        import asyncio
-        await asyncio.sleep(0.5)
+    if ext == "m3u8":
+        # Serve the live playlist from the backend so every poll is a heartbeat.
+        playlist_path = sp.hls_playlist
+        for _ in range(20):
+            if os.path.exists(playlist_path):
+                break
+            await asyncio.sleep(0.5)
+        try:
+            content = _rewrite_playlist(playlist_path, stream_id)
+        except FileNotFoundError:
+            raise HTTPException(503, "Stream is starting, please retry")
+        return Response(
+            content=content,
+            media_type="application/vnd.apple.mpegurl",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
 
-    # Redirect to the HLS playlist served by Nginx (both .m3u8 and .ts players)
-    base_url = await _base_url(request)
-    hls_url = f"{base_url}/hls/{stream_id}/index.m3u8"
-    return RedirectResponse(url=hls_url, status_code=302)
+    # .ts (or extensionless) — send the player to the heartbeat-tracked playlist.
+    # Relative redirect keeps the player on the same host:port it connected to.
+    return RedirectResponse(
+        url=f"/live/{username}/{password}/{stream_id}.m3u8", status_code=302
+    )
 
 
 # ── /xmltv.php — XMLTV EPG output ─────────────────────────────────────────

@@ -30,8 +30,13 @@ export default function Dashboard() {
   }, [stats]);
 
   useEffect(() => {
-    api.get("/streams/count").then((r) => setStreamCount(r.data.count)).catch(() => {});
-    api.get("/categories").then((r) => setCategoryCount(r.data.length)).catch(() => {});
+    function refreshCounts() {
+      api.get("/streams/count").then((r) => setStreamCount(r.data.count)).catch(() => {});
+      api.get("/categories").then((r) => setCategoryCount(r.data.length)).catch(() => {});
+    }
+    refreshCounts();
+    const id = setInterval(refreshCounts, 7000);
+    return () => clearInterval(id);
   }, []);
 
   return (
