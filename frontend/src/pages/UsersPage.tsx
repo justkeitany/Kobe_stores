@@ -95,7 +95,7 @@ export default function UsersPage() {
       <div className="bg-surface-container-low border border-outline-variant overflow-hidden">
         {/* Controls */}
         <div className="px-md py-sm border-b border-outline-variant flex items-center justify-between bg-surface-container gap-md flex-wrap">
-          <div className="flex border border-outline-variant overflow-hidden">
+          <div className="flex border border-outline-variant overflow-hidden rounded-md">
             {tabs.map((t, i) => (
               <button
                 key={t.key}
@@ -365,7 +365,7 @@ function UserModal({ user, onClose, onSaved }: {
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 w-full max-w-md p-6 space-y-4">
+      <div className="bg-white border border-gray-300 rounded-md w-full max-w-md p-6 space-y-4">
         <h2 className="text-lg font-semibold text-gray-900">
           {user ? "Edit User" : "Add User"}
         </h2>

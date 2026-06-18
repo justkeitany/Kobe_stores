@@ -143,17 +143,17 @@ function StatCard({ label, value, unit, sub, icon }: {
   label: string; value: number | string; unit?: string; sub?: string; icon: string;
 }) {
   return (
-    <div className="bg-surface-container-low border border-outline-variant p-md flex flex-col justify-between h-32 hover:bg-surface-container transition-colors">
-      <span className="font-code-label text-code-label text-on-surface-variant uppercase tracking-tighter">{label}</span>
+    <div className="bg-surface-container-low border border-outline-variant p-md flex flex-col justify-between h-24 hover:bg-surface-container transition-colors">
+      <span className="font-code-label text-[10px] text-on-surface-variant uppercase tracking-tighter">{label}</span>
       <div className="flex items-end justify-between">
         <div className="flex flex-col min-w-0">
-          <span className="font-display-lg text-display-lg leading-none">
-            {value}{unit && <span className="text-xl font-normal opacity-40 ml-0.5">{unit}</span>}
+          <span className="text-[26px] font-bold leading-none tracking-tight">
+            {value}{unit && <span className="text-sm font-normal opacity-40 ml-0.5">{unit}</span>}
           </span>
           {sub && <span className="font-code-label text-[10px] text-on-surface-variant mt-1">{sub}</span>}
         </div>
-        <div className="w-10 h-10 flex items-center justify-center bg-surface-variant text-primary-fixed-dim shrink-0">
-          <MIcon name={icon} fill size={22} />
+        <div className="w-9 h-9 rounded-md flex items-center justify-center bg-surface-variant text-primary-fixed-dim shrink-0">
+          <MIcon name={icon} fill size={20} />
         </div>
       </div>
     </div>
@@ -164,7 +164,7 @@ function StatCard({ label, value, unit, sub, icon }: {
 function FooterCard({ label, value, icon }: { label: string; value: string; icon: string }) {
   return (
     <div className="bg-surface-container border border-outline-variant p-md flex items-center gap-md">
-      <div className="w-10 h-10 flex items-center justify-center bg-surface-variant text-primary-fixed-dim shrink-0">
+      <div className="w-10 h-10 rounded-md flex items-center justify-center bg-surface-variant text-primary-fixed-dim shrink-0">
         <MIcon name={icon} size={22} />
       </div>
       <div>
@@ -183,7 +183,7 @@ function ChartCard({ label, dataKey, data }: { label: string; dataKey: string; d
         <span className="w-2 h-2 rounded-full bg-primary-fixed-dim" />
         <h4 className="font-code-label text-code-label uppercase tracking-widest text-on-surface">{label}</h4>
       </div>
-      <ResponsiveContainer width="100%" height={128}>
+      <ResponsiveContainer width="100%" height={100}>
         <AreaChart data={data} margin={{ top: 4, right: 0, left: -30, bottom: 0 }}>
           <defs>
             <linearGradient id={`gs-${dataKey}`} x1="0" y1="0" x2="0" y2="1">

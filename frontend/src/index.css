@@ -149,6 +149,24 @@ html.light {
     user-select: none;
   }
 
+  /* Every interactive element gets a hand cursor; disabled gets not-allowed */
+  button:not(:disabled),
+  [role="button"]:not([aria-disabled="true"]),
+  a[href],
+  label[for],
+  select:not(:disabled),
+  summary,
+  input[type="checkbox"]:not(:disabled),
+  input[type="radio"]:not(:disabled),
+  input[type="file"]:not(:disabled) {
+    cursor: pointer;
+  }
+  button:disabled,
+  select:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 10px; }
@@ -245,4 +263,18 @@ html.light {
   /* ── Table ───────────────────────────────────────────────── */
   .table-row-hover { transition: background-color .15s; }
   .table-row-hover:hover { background: var(--color-surface-container-high); }
+
+  /* ── Global 6px corner radius on boxes & controls ────────── */
+  .btn-primary, .btn-secondary, .btn-danger, .input, .card,
+  .badge-green, .badge-red, .badge-yellow, .badge-gray, .badge-blue {
+    border-radius: 6px;
+  }
+}
+
+/* Round every Stitch surface box (stat cards, tables, panels, chips, etc.)
+   without having to touch each call site. */
+@layer utilities {
+  [class*="bg-surface-container"][class*="border-outline-variant"]:not(aside):not(header) {
+    border-radius: 6px;
+  }
 }

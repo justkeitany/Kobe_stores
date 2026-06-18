@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, Loader2, TestTube } from "lucide-react";
 import toast from "react-hot-toast";
@@ -27,8 +28,15 @@ interface Category {
 
 export default function Streams() {
   const qc = useQueryClient();
-  const [search, setSearch] = useState("");
+  const [searchParams] = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get("q") ?? "");
   const [filterCat, setFilterCat] = useState<number | "">("");
+
+  // Sync with the global header search (?q=…) on navigation.
+  useEffect(() => {
+    const q = searchParams.get("q");
+    if (q !== null) setSearch(q);
+  }, [searchParams]);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Stream | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -367,7 +375,7 @@ function StreamModal({
 
   return (
     <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white border border-gray-300 rounded-md w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900">
           {stream ? "Edit Stream" : "Add Stream"}
         </h2>

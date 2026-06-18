@@ -140,14 +140,14 @@ function StatCard({ label, value, icon, sub, subGreen, accent, className }: {
 }) {
   return (
     <div className={clsx("bg-surface-container-low border border-outline-variant p-md", className)}>
-      <div className="flex justify-between items-start mb-sm">
-        <span className="font-code-label text-code-label text-on-surface-variant uppercase">{label}</span>
-        <MIcon name={icon} className="text-primary-fixed-dim" size={22} />
+      <div className="flex justify-between items-start mb-2">
+        <span className="font-code-label text-[10px] text-on-surface-variant uppercase">{label}</span>
+        <MIcon name={icon} className="text-primary-fixed-dim" size={18} />
       </div>
-      <div className={clsx("text-display-lg font-display-lg leading-tight", accent && "text-primary")}>
+      <div className={clsx("text-[28px] font-bold leading-none tracking-tight", accent && "text-primary")}>
         {value}
       </div>
-      <div className={clsx("mt-base text-body-sm text-on-surface-variant", subGreen && "text-green-400")}>
+      <div className={clsx("mt-1.5 text-[12px] text-on-surface-variant", subGreen && "text-green-400")}>
         {sub}
       </div>
     </div>
@@ -160,11 +160,11 @@ function MetricChart({ label, value, dataKey, data, className }: {
 }) {
   return (
     <div className={clsx("bg-surface-container-low border border-outline-variant p-md", className)}>
-      <div className="flex justify-between items-center mb-md">
-        <h3 className="font-code-label text-code-label uppercase font-bold tracking-widest">{label}</h3>
-        <span className="text-body-sm text-primary-fixed-dim font-bold">{value}</span>
+      <div className="flex justify-between items-center mb-sm">
+        <h3 className="font-code-label text-[10px] uppercase font-bold tracking-widest">{label}</h3>
+        <span className="text-[12px] text-primary-fixed-dim font-bold">{value}</span>
       </div>
-      <ResponsiveContainer width="100%" height={128}>
+      <ResponsiveContainer width="100%" height={96}>
         <AreaChart data={data} margin={{ top: 4, right: 0, left: -28, bottom: 0 }}>
           <defs>
             <linearGradient id={`g-${dataKey}`} x1="0" y1="0" x2="0" y2="1">

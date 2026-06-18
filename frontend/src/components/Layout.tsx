@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { useState, useRef, useEffect } from "react";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
   Server, Settings, LogOut, Menu, Users,
@@ -18,12 +18,19 @@ const nav = [
   { label: "Bouquets",   icon: Package,         path: "/bouquets" },
   { label: "EPG",        icon: Radio,           path: "/epg" },
   { label: "Server",     icon: Server,          path: "/server" },
-  { label: "Settings",   icon: Settings,        path: "/settings" },
 ];
 
 export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
-  const { stats, connected } = useServerStats();
+
+  const footerLink = (active: boolean) =>
+    clsx(
+      "w-full flex items-center gap-3 px-md py-sm text-body-sm font-medium transition-colors",
+      collapsed && "justify-center px-0",
+      active
+        ? "bg-surface-variant text-on-surface"
+        : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+    );
 
   return (
     <div className="flex h-screen bg-surface overflow-hidden">
@@ -39,14 +46,11 @@ export default function Layout() {
           "flex items-center h-16 px-md gap-2.5 shrink-0",
           collapsed && "justify-center px-0"
         )}>
-          <div className="w-7 h-7 bg-primary flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center shrink-0">
             <Tv size={14} className="text-on-primary" />
           </div>
           {!collapsed && (
-            <div className="min-w-0">
-              <h1 className="font-bold text-on-surface text-base tracking-tighter leading-none">IPTV Admin</h1>
-              <p className="font-code-label text-[10px] text-on-surface-variant opacity-60 mt-1">V2.4.1-Stable</p>
-            </div>
+            <h1 className="font-bold text-on-surface text-base tracking-tighter leading-none">IPTV Admin</h1>
           )}
           <button
             onClick={() => setCollapsed(!collapsed)}
@@ -79,7 +83,7 @@ export default function Layout() {
               title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 clsx(
-                  "flex items-center gap-3 px-md py-sm text-body-sm font-medium transition-colors border-r-2",
+                  "flex items-center gap-3 px-md py-sm text-body-sm font-medium transition-colors border-r-2 rounded-l-md",
                   collapsed && "justify-center px-0",
                   isActive
                     ? "bg-surface-variant text-on-surface font-bold border-primary"
@@ -93,23 +97,13 @@ export default function Layout() {
           ))}
         </nav>
 
-        {/* Footer: CPU pill + Logout */}
-        <div className="px-sm pt-md pb-3 space-y-1 shrink-0">
-          {!collapsed && (
-            <div className="px-md mb-sm">
-              <div className="bg-surface-container-high px-3 py-2 border border-outline-variant flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <span className={clsx(
-                    "w-2 h-2 rounded-full",
-                    connected ? "bg-green-500 animate-pulse" : "bg-gray-400"
-                  )} />
-                  <span className="font-code-label text-[10px] text-on-surface-variant">
-                    {connected ? `CPU ${stats?.cpu_percent ?? 0}%` : "OFFLINE"}
-                  </span>
-                </span>
-              </div>
-            </div>
-          )}
+        {/* Footer: Settings + Logout */}
+        <div className="px-sm pt-md pb-3 space-y-0.5 shrink-0 border-t border-outline-variant/40">
+          <NavLink to="/settings" title={collapsed ? "Settings" : undefined}
+            className={({ isActive }) => footerLink(isActive)}>
+            <Settings size={16} className="shrink-0" />
+            {!collapsed && <span>Settings</span>}
+          </NavLink>
           <button
             onClick={() => logout()}
             title={collapsed ? "Logout" : undefined}
@@ -136,35 +130,50 @@ export default function Layout() {
   );
 }
 
-/* ── Top header bar (Stitch chrome) ──────────────────────────── */
+/* ── Top header bar (functional) ─────────────────────────────── */
 function TopHeader() {
   const { theme, setTheme } = useTheme();
+  const navigate = useNavigate();
+  const { stats, connected } = useServerStats();
   const [q, setQ] = useState("");
+  const [menu, setMenu] = useState<null | "bell" | "account">(null);
+
+  const closeMenu = () => setMenu(null);
+
+  // Live alerts: any stream currently in an error state.
+  const alerts = (stats?.streams ?? []).filter((s) => s.status === "error");
+
+  function submitSearch(e: React.FormEvent) {
+    e.preventDefault();
+    const term = q.trim();
+    if (!term) return;
+    navigate(`/streams?q=${encodeURIComponent(term)}`);
+  }
 
   return (
     <header className="h-16 shrink-0 border-b border-outline-variant bg-surface flex items-center justify-between px-lg gap-lg z-30">
       {/* Search */}
-      <div className="relative w-full max-w-md">
+      <form onSubmit={submitSearch} className="relative w-full max-w-md">
         <MIcon name="search" size={18}
           className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
           className="input pl-10 pr-4 text-body-sm"
-          placeholder="Search..."
+          placeholder="Search streams…  (press Enter)"
           type="text"
         />
-      </div>
+      </form>
 
       {/* Right cluster */}
       <div className="flex items-center gap-md shrink-0">
         {/* Theme toggle (segmented) */}
-        <div className="flex items-center bg-surface-container p-1 border border-outline-variant">
+        <div className="flex items-center bg-surface-container p-1 border border-outline-variant rounded-md">
           <button
             onClick={() => setTheme("dark")}
             title="Dark mode"
             className={clsx(
-              "p-1 px-2 transition-colors",
+              "p-1 px-2 rounded transition-colors",
               theme === "dark" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface"
             )}
           >
@@ -174,7 +183,7 @@ function TopHeader() {
             onClick={() => setTheme("light")}
             title="Light mode"
             className={clsx(
-              "p-1 px-2 transition-colors",
+              "p-1 px-2 rounded transition-colors",
               theme === "light" ? "bg-primary text-on-primary" : "text-on-surface-variant hover:text-on-surface"
             )}
           >
@@ -182,23 +191,105 @@ function TopHeader() {
           </button>
         </div>
 
-        <button className="relative p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors" title="Notifications">
-          <MIcon name="notifications" size={22} />
-          <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-primary rounded-full" />
-        </button>
+        {/* Notifications */}
+        <div className="relative">
+          <button
+            onClick={() => setMenu(menu === "bell" ? null : "bell")}
+            className="relative p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-md transition-colors"
+            title="Notifications"
+          >
+            <MIcon name="notifications" size={22} />
+            {alerts.length > 0 && (
+              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-error rounded-full" />
+            )}
+          </button>
+          {menu === "bell" && (
+            <Dropdown onClose={closeMenu}>
+              <div className="px-3 py-2 border-b border-outline-variant flex items-center justify-between">
+                <span className="font-bold text-body-sm">Notifications</span>
+                <span className="font-code-label text-[10px] text-on-surface-variant uppercase">
+                  {connected ? "Live" : "Offline"}
+                </span>
+              </div>
+              {alerts.length === 0 ? (
+                <p className="px-3 py-4 text-body-sm text-on-surface-variant">
+                  {connected ? "All systems operational." : "Connecting to server…"}
+                </p>
+              ) : (
+                <ul className="max-h-64 overflow-y-auto">
+                  {alerts.map((s) => (
+                    <li key={s.id}>
+                      <button
+                        onClick={() => { closeMenu(); navigate("/streams"); }}
+                        className="w-full text-left px-3 py-2 hover:bg-surface-container-high transition-colors flex items-start gap-2"
+                      >
+                        <MIcon name="error" size={16} className="text-error mt-0.5" />
+                        <span className="text-body-sm">
+                          Stream <span className="font-bold">#{s.id}</span> is in an error state
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Dropdown>
+          )}
+        </div>
 
         <div className="w-px h-6 bg-outline-variant" />
 
-        <div className="flex items-center gap-2">
-          <div className="text-right hidden sm:block">
-            <p className="font-bold text-body-sm leading-tight">Admin User</p>
-            <p className="font-code-label text-[10px] text-on-surface-variant uppercase tracking-widest">Superadmin</p>
-          </div>
-          <div className="w-8 h-8 bg-surface-container-highest border border-outline-variant flex items-center justify-center">
-            <MIcon name="account_circle" size={22} className="text-on-surface-variant" />
-          </div>
+        {/* Account */}
+        <div className="relative">
+          <button
+            onClick={() => setMenu(menu === "account" ? null : "account")}
+            className="flex items-center gap-2 hover:opacity-80 transition-opacity"
+          >
+            <div className="text-right hidden sm:block">
+              <p className="font-bold text-body-sm leading-tight">Admin User</p>
+              <p className="font-code-label text-[10px] text-on-surface-variant uppercase tracking-widest">Superadmin</p>
+            </div>
+            <div className="w-8 h-8 bg-surface-container-highest border border-outline-variant rounded-md flex items-center justify-center">
+              <MIcon name="account_circle" size={22} className="text-on-surface-variant" />
+            </div>
+          </button>
+          {menu === "account" && (
+            <Dropdown onClose={closeMenu}>
+              <NavLink to="/change-password" onClick={closeMenu}
+                className="flex items-center gap-2 px-3 py-2.5 text-body-sm hover:bg-surface-container-high transition-colors">
+                <MIcon name="password" size={18} className="text-on-surface-variant" /> Change Password
+              </NavLink>
+              <NavLink to="/settings" onClick={closeMenu}
+                className="flex items-center gap-2 px-3 py-2.5 text-body-sm hover:bg-surface-container-high transition-colors">
+                <MIcon name="settings" size={18} className="text-on-surface-variant" /> Settings
+              </NavLink>
+              <button onClick={() => { closeMenu(); logout(); }}
+                className="w-full text-left flex items-center gap-2 px-3 py-2.5 text-body-sm text-error hover:bg-surface-container-high transition-colors border-t border-outline-variant">
+                <MIcon name="logout" size={18} /> Logout
+              </button>
+            </Dropdown>
+          )}
         </div>
       </div>
     </header>
+  );
+}
+
+/* Small dropdown with click-away backdrop. */
+function Dropdown({ children, onClose }: { children: React.ReactNode; onClose: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") onClose(); }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  return (
+    <>
+      <div className="fixed inset-0 z-40" onClick={onClose} />
+      <div ref={ref}
+        className="absolute right-0 mt-2 w-56 bg-surface-container border border-outline-variant rounded-md shadow-xl z-50 overflow-hidden">
+        {children}
+      </div>
+    </>
   );
 }
