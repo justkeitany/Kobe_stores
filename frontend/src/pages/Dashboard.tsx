@@ -74,7 +74,7 @@ export default function Dashboard() {
           value={`${stats?.cpu_percent ?? 0}%`}
           dataKey="cpu"
           data={history}
-          color="#111827"
+          color="#c6c6c6"
         />
         <MetricChart
           label="RAM %"
@@ -82,14 +82,14 @@ export default function Dashboard() {
           sub={stats ? `${stats.ram_used_mb} / ${stats.ram_total_mb} MB` : undefined}
           dataKey="ram"
           data={history}
-          color="#111827"
+          color="#c6c6c6"
         />
         <MetricChart
           label="Bandwidth Out"
           value={`${stats?.bw_out_kbps ?? 0} kbps`}
           dataKey="bw"
           data={history}
-          color="#111827"
+          color="#c6c6c6"
         />
       </div>
 
@@ -134,10 +134,10 @@ function StatCard({ label, value, icon }: {
   return (
     <div className="card flex items-start justify-between">
       <div>
-        <p className="text-xs font-medium text-gray-500 mb-1.5">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 tracking-tight">{value}</p>
+        <p className="text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">{label}</p>
+        <p className="text-2xl font-bold text-gray-900 tracking-tight font-mono">{value}</p>
       </div>
-      <div className="w-9 h-9 rounded-lg border border-gray-200 bg-gray-50 flex items-center justify-center text-gray-500 shrink-0">
+      <div className="w-9 h-9 border border-gray-200 bg-gray-50 flex items-center justify-center text-gray-500 shrink-0">
         {icon}
       </div>
     </div>
@@ -152,10 +152,10 @@ function MetricChart({ label, value, sub, dataKey, data, color }: {
   return (
     <div className="card">
       <div className="flex items-start justify-between mb-4">
-        <p className="text-xs font-medium text-gray-500">{label}</p>
+        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
         <div className="text-right">
-          <p className="text-lg font-bold text-gray-900 tracking-tight">{value}</p>
-          {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
+          <p className="text-lg font-bold text-gray-900 tracking-tight font-mono">{value}</p>
+          {sub && <p className="text-xs text-gray-400 mt-0.5 font-mono">{sub}</p>}
         </div>
       </div>
       <ResponsiveContainer width="100%" height={72}>
@@ -166,15 +166,15 @@ function MetricChart({ label, value, sub, dataKey, data, color }: {
               <stop offset="100%" stopColor={color} stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f3f4f6" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="#2a2b33" vertical={false} />
           <XAxis dataKey="t" hide />
-          <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: "#6f6c79" }} tickLine={false} axisLine={false} />
           <Tooltip
             contentStyle={{
-              background: "#fff", border: "1px solid #e5e7eb",
-              borderRadius: 8, fontSize: 12, color: "#111827",
+              background: "#1a1b22", border: "1px solid #33343c",
+              borderRadius: 0, fontSize: 12, color: "#e3e1ec",
             }}
-            labelStyle={{ color: "#6b7280" }}
+            labelStyle={{ color: "#9c99a8" }}
           />
           <Area
             type="monotone"
@@ -231,7 +231,7 @@ function QuickAccessLinks() {
         {links.map((link) => (
           <div
             key={link.key}
-            className="flex items-start justify-between gap-3 px-4 py-3 rounded-lg border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 transition-colors"
+            className="flex items-start justify-between gap-3 px-4 py-3 border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 transition-colors"
           >
             <div className="min-w-0">
               <p className="text-xs font-semibold text-gray-800">{link.label}</p>
@@ -240,7 +240,7 @@ function QuickAccessLinks() {
             </div>
             <button
               onClick={() => copy(link.key, link.value)}
-              className="shrink-0 mt-0.5 p-1.5 rounded-md text-gray-400 hover:text-gray-900 hover:bg-gray-200 transition-colors"
+              className="shrink-0 mt-0.5 p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-200 transition-colors"
               title="Copy"
             >
               {copiedKey === link.key
@@ -252,7 +252,7 @@ function QuickAccessLinks() {
       </div>
 
       <p className="mt-4 text-xs text-gray-400">
-        Replace <code className="font-mono text-gray-600 bg-gray-100 px-1 py-0.5 rounded">YOUR_PASS</code> with your admin password.{" "}
+        Replace <code className="font-mono text-gray-600 bg-gray-100 px-1 py-0.5">YOUR_PASS</code> with your admin password.{" "}
         <a href="/settings" className="text-gray-700 underline underline-offset-2 hover:text-gray-900">
           Update server URL in Settings →
         </a>

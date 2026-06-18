@@ -37,7 +37,7 @@ export default function Layout() {
           "flex items-center border-b border-gray-200 h-14 px-3 gap-2.5",
           collapsed && "justify-center"
         )}>
-          <div className="w-7 h-7 bg-gray-900 rounded-lg flex items-center justify-center shrink-0">
+          <div className="w-7 h-7 bg-gray-900 flex items-center justify-center shrink-0">
             <Tv size={13} className="text-white" />
           </div>
           {!collapsed && (
@@ -76,10 +76,10 @@ export default function Layout() {
               title={collapsed ? label : undefined}
               className={({ isActive }) =>
                 clsx(
-                  "flex items-center gap-3 px-3 py-2.5 mx-2 my-0.5 rounded-[10px] text-sm font-medium transition-colors",
+                  "flex items-center gap-3 px-3 py-2.5 mx-2 my-0.5 text-sm font-medium transition-colors border-l-2",
                   isActive
-                    ? "bg-gray-900 text-white"
-                    : "text-gray-500 hover:text-gray-900 hover:bg-gray-100"
+                    ? "bg-gray-100 text-gray-900 border-gray-900"
+                    : "text-gray-500 border-transparent hover:text-gray-900 hover:bg-gray-100"
                 )
               }
             >
@@ -93,10 +93,10 @@ export default function Layout() {
         {!collapsed && (
           <div className="px-4 py-2 border-t border-gray-200">
             <div className={clsx(
-              "inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full",
+              "inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 border font-mono",
               connected
-                ? "bg-green-50 text-green-700 border border-green-200"
-                : "bg-gray-100 text-gray-500 border border-gray-200"
+                ? "bg-gray-100 text-gray-700 border-gray-200"
+                : "bg-gray-100 text-gray-500 border-gray-200"
             )}>
               <span className={clsx(
                 "w-1.5 h-1.5 rounded-full",
@@ -112,8 +112,8 @@ export default function Layout() {
           onClick={() => logout()}
           title={collapsed ? "Logout" : undefined}
           className={clsx(
-            "flex items-center gap-3 px-3 py-2.5 mx-2 mb-3 mt-1 rounded-lg text-sm font-medium",
-            "text-gray-500 hover:text-red-600 hover:bg-red-50 transition-colors"
+            "flex items-center gap-3 px-3 py-2.5 mx-2 mb-3 mt-1 text-sm font-medium",
+            "text-gray-500 hover:text-red-400 hover:bg-gray-100 transition-colors"
           )}
         >
           <LogOut size={16} className="shrink-0" />

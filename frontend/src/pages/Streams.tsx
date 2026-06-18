@@ -165,11 +165,11 @@ export default function Streams() {
                           <img
                             src={s.logo_url}
                             alt=""
-                            className="w-8 h-8 rounded object-contain bg-gray-100 border border-gray-200"
+                            className="w-8 h-8 object-contain bg-gray-100 border border-gray-200"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
                         ) : (
-                          <div className="w-8 h-8 rounded bg-gray-100 border border-gray-200 flex items-center justify-center">
+                          <div className="w-8 h-8 bg-gray-100 border border-gray-200 flex items-center justify-center">
                             <Play size={12} className="text-gray-400" />
                           </div>
                         )}
@@ -185,7 +185,7 @@ export default function Streams() {
                               </span>
                             )}
                           </div>
-                          <p className="text-gray-400 text-xs truncate max-w-xs">{s.stream_url}</p>
+                          <p className="text-gray-400 text-xs truncate max-w-xs font-mono">{s.stream_url}</p>
                         </div>
                       </div>
                     </td>
@@ -207,22 +207,22 @@ export default function Streams() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1">
                         <button title="Test URL"
-                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                           onClick={() => testMutation.mutate(s.id)}>
                           <TestTube size={14} />
                         </button>
                         <button title="Restart"
-                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                           onClick={() => restartMutation.mutate(s.id)}>
                           <RefreshCw size={14} />
                         </button>
                         <button title="Edit"
-                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
                           onClick={() => { setEditing(s); setShowModal(true); }}>
                           <Edit2 size={14} />
                         </button>
                         <button title="Delete"
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-100 transition-colors"
                           onClick={() => { if (confirm(`Delete "${s.name}"?`)) deleteMutation.mutate(s.id); }}>
                           <Trash2 size={14} />
                         </button>
@@ -347,8 +347,8 @@ function StreamModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 rounded-[10px] w-full max-w-md shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-gray-300 w-full max-w-md p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900">
           {stream ? "Edit Stream" : "Add Stream"}
         </h2>
@@ -374,7 +374,7 @@ function StreamModal({
                   placeholder={i === 0 ? "http://primary..." : "http://backup mirror..."}
                 />
                 <button type="button" title="Test" disabled={testing === i}
-                  className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded"
+                  className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100"
                   onClick={() => testSource(i)}>
                   {testing === i ? <Loader2 size={14} className="animate-spin" /> : <TestTube size={14} />}
                 </button>
@@ -385,7 +385,7 @@ function StreamModal({
                   className="p-1 text-gray-300 hover:text-gray-700 disabled:opacity-30"
                   onClick={() => moveSource(i, 1)}>↓</button>
                 <button type="button" title="Remove" disabled={sources.length <= 1}
-                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-30"
+                  className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-100 disabled:opacity-30"
                   onClick={() => removeSource(i)}>
                   <Trash2 size={13} />
                 </button>

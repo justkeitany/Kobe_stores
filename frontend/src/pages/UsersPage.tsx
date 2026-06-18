@@ -152,10 +152,10 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
     <tr className="border-b border-gray-100 table-row-hover">
       <td className="px-4 py-3">
         <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-[10px] bg-gray-100 border border-gray-200 flex items-center justify-center">
+          <div className="w-7 h-7 bg-gray-100 border border-gray-200 flex items-center justify-center">
             <Users size={12} className="text-gray-500" />
           </div>
-          <span className="font-medium text-gray-900">{u.username}</span>
+          <span className="font-medium text-gray-900 font-mono">{u.username}</span>
         </div>
       </td>
       <td className="px-4 py-3">
@@ -191,10 +191,10 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
       <td className="px-4 py-3">
         <button onClick={onToggle}>
           <span className={clsx(
-            "text-xs font-medium px-2 py-0.5 rounded-full border",
+            "text-xs font-medium px-2 py-0.5 border",
             u.is_active && !isExpired
-              ? "bg-green-50 text-green-700 border-green-200"
-              : "bg-gray-100 text-gray-500 border-gray-200"
+              ? "badge-green"
+              : "badge-gray"
           )}>
             {u.is_active && !isExpired ? "Active" : isExpired ? "Expired" : "Suspended"}
           </span>
@@ -205,7 +205,7 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
           <button
             onClick={() => copy("xtream-" + u.id, xtreamUrl)}
             title="Copy Xtream API URL"
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-[10px] border border-gray-200 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition-colors"
           >
             <Key size={11} />
             Xtream
@@ -214,7 +214,7 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
           <button
             onClick={() => copy("m3u-" + u.id, m3uUrl)}
             title="Copy M3U URL"
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-[10px] border border-gray-200 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition-colors"
           >
             M3U
             {copiedKey === "m3u-" + u.id ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
@@ -225,14 +225,14 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
         <div className="flex items-center gap-1">
           <button
             title="Edit"
-            className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+            className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
             onClick={onEdit}
           >
             <Edit2 size={14} />
           </button>
           <button
             title="Delete"
-            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-100 transition-colors"
             onClick={onDelete}
           >
             <Trash2 size={14} />
@@ -299,8 +299,8 @@ function UserModal({ user, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 rounded-[10px] w-full max-w-md shadow-xl p-6 space-y-4">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white border border-gray-300 w-full max-w-md p-6 space-y-4">
         <h2 className="text-lg font-semibold text-gray-900">
           {user ? "Edit User" : "Add User"}
         </h2>
@@ -401,7 +401,7 @@ function UserModal({ user, onClose, onSaved }: {
 
         {/* Xtream preview */}
         {username && password && (
-          <div className="bg-gray-50 border border-gray-200 rounded-[10px] p-3 space-y-1.5">
+          <div className="bg-gray-50 border border-gray-200 p-3 space-y-1.5">
             <p className="text-xs font-medium text-gray-600 mb-2 flex items-center gap-1.5">
               <Key size={12} /> Xtream Credentials Preview
             </p>
