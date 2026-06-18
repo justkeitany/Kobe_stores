@@ -8,6 +8,7 @@ import { MIcon } from "../components/MIcon";
 import api, { xtreamBaseUrl } from "../lib/api";
 import { currentUsername } from "../lib/auth";
 import { formatUptime } from "../lib/format";
+import { copyToClipboard } from "../lib/clipboard";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
@@ -289,8 +290,9 @@ function QuickAccessLinks() {
       .catch(() => {});
   }, []);
 
-  function copy(key: string, value: string) {
-    navigator.clipboard.writeText(value);
+  async function copy(key: string, value: string) {
+    const ok = await copyToClipboard(value);
+    if (!ok) { toast.error("Copy failed"); return; }
     setCopiedKey(key);
     toast.success("Copied");
     setTimeout(() => setCopiedKey(null), 2000);

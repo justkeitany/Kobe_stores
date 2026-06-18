@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Users, Key, Eye, EyeOff, RefreshCw, Copy } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { xtreamBaseUrl } from "../lib/api";
+import { copyToClipboard } from "../lib/clipboard";
 import { MIcon } from "../components/MIcon";
 import clsx from "clsx";
 
@@ -216,8 +217,9 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
   
   const streamBaseHttp = useServerBase();
 
-  function copy(key: string, text: string) {
-    navigator.clipboard.writeText(text);
+  async function copy(key: string, text: string) {
+    const ok = await copyToClipboard(text);
+    if (!ok) { toast.error("Copy failed"); return; }
     setCopiedKey(key);
     toast.success("Copied");
     setTimeout(() => setCopiedKey(null), 2000);
@@ -501,7 +503,10 @@ function PreviewRow({ label, value }: { label: string; value: string }) {
       <span className="text-gray-500 w-20 shrink-0">{label}</span>
       <code className="flex-1 text-gray-700 font-mono truncate">{value}</code>
       <button
-        onClick={() => { navigator.clipboard.writeText(value); toast.success("Copied"); }}
+        onClick={async () => {
+          const ok = await copyToClipboard(value);
+          ok ? toast.success("Copied") : toast.error("Copy failed");
+        }}
         className="shrink-0 text-gray-400 hover:text-gray-700"
       >
         <Copy size={11} />

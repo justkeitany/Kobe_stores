@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { xtreamBaseUrl } from "../lib/api";
+import { copyToClipboard } from "../lib/clipboard";
 
 type SslStatus = "none" | "pending" | "active" | "failed";
 
@@ -122,9 +123,9 @@ export default function SettingsPage() {
     }
   }
 
-  function copy(text: string) {
-    navigator.clipboard.writeText(text);
-    toast.success("Copied");
+  async function copy(text: string) {
+    const ok = await copyToClipboard(text);
+    ok ? toast.success("Copied") : toast.error("Copy failed");
   }
 
   // Xtream links use the dedicated player port (8080) in IP mode, or the domain if set.

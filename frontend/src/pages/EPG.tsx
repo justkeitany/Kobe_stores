@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Plus, Trash2, RefreshCw, Radio } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
+import { copyToClipboard } from "../lib/clipboard";
 
 interface EpgSource {
   id: number;
@@ -95,11 +96,11 @@ export default function EPG() {
           </code>
           <button
             className="btn-secondary text-xs"
-            onClick={() => {
-              navigator.clipboard.writeText(
+            onClick={async () => {
+              const ok = await copyToClipboard(
                 `${window.location.origin}/xmltv.php?username=admin&password=YOUR_PASS`
               );
-              toast.success("Copied");
+              ok ? toast.success("Copied") : toast.error("Copy failed");
             }}
           >
             Copy
