@@ -27,6 +27,24 @@ step "Pulling latest code"
 git clone --depth=1 "$REPO_URL" "$TMP_DIR"
 info "Cloned latest version"
 
+step "Ensuring yt-dlp is installed (YouTube live resolver)"
+if [[ ! -x /usr/local/bin/yt-dlp ]]; then
+    curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+        -o /usr/local/bin/yt-dlp
+    chmod a+rx /usr/local/bin/yt-dlp
+    info "yt-dlp installed"
+else
+    info "yt-dlp already present"
+fi
+# Nightly self-update cron (idempotent)
+if [[ ! -f /etc/cron.d/iptv-ytdlp ]]; then
+    cat > /etc/cron.d/iptv-ytdlp <<'CRONEOF'
+0 3 * * * root /usr/local/bin/yt-dlp -U >/dev/null 2>&1
+CRONEOF
+    chmod 0644 /etc/cron.d/iptv-ytdlp
+    info "yt-dlp nightly update cron added"
+fi
+
 step "Updating backend"
 # Copy new app code but preserve .env
 cp -r "$TMP_DIR/backend/app" "$APP_DIR/backend/"

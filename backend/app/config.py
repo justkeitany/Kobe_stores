@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     HLS_OUTPUT_DIR: str = "/var/iptv/hls"
     FFMPEG_PATH: str = "/usr/bin/ffmpeg"
 
+    # yt-dlp — resolves fresh HLS manifests for YouTube live streams
+    YTDLP_PATH: str = "/usr/local/bin/yt-dlp"
+
     # Stream health
     MAX_RETRY_ATTEMPTS: int = 5
     HEALTH_CHECK_INTERVAL: int = 30

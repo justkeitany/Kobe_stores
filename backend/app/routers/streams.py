@@ -10,6 +10,7 @@ from app.auth import get_current_admin
 from app.database import get_db
 from app.models import Stream, StreamCategory
 from app.ffmpeg_manager import ffmpeg_manager
+from app.youtube import is_youtube_url, clean_youtube_url, proxy_resolve
 
 router = APIRouter(prefix="/api/streams", tags=["streams"])
 
@@ -38,6 +39,13 @@ class StreamUpdate(BaseModel):
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
+
+def _normalize_url(url: Optional[str]) -> Optional[str]:
+    """Strip tracking params from YouTube URLs so we store a clean canonical URL."""
+    if url and is_youtube_url(url):
+        return clean_youtube_url(url)
+    return url
+
 
 def parse_m3u(content: str) -> list[dict]:
     """Parse M3U/M3U8 playlist into list of channel dicts."""
@@ -129,7 +137,10 @@ async def create_stream(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_admin),
 ):
-    stream = Stream(**data.model_dump())
+    payload = data.model_dump()
+    payload["stream_url"] = _normalize_url(payload.get("stream_url"))
+    payload["backup_url"] = _normalize_url(payload.get("backup_url"))
+    stream = Stream(**payload)
     db.add(stream)
     await db.commit()
     await db.refresh(stream)
@@ -162,6 +173,10 @@ async def update_stream(
         raise HTTPException(404, "Stream not found")
 
     updates = data.model_dump(exclude_none=True)
+    if "stream_url" in updates:
+        updates["stream_url"] = _normalize_url(updates["stream_url"])
+    if "backup_url" in updates:
+        updates["backup_url"] = _normalize_url(updates["backup_url"])
     for k, v in updates.items():
         setattr(stream, k, v)
     await db.commit()
@@ -195,6 +210,15 @@ async def test_stream(
     stream = result.scalar_one_or_none()
     if not stream:
         raise HTTPException(404, "Stream not found")
+
+    # For YouTube streams, the raw URL isn't directly playable — follow the proxy
+    # (resolve a fresh manifest via yt-dlp) and test that, never the raw URL.
+    if is_youtube_url(stream.stream_url):
+        resolved = await proxy_resolve(stream.stream_url)
+        if not resolved:
+            return {"alive": False, "message": "yt-dlp could not resolve the YouTube stream"}
+        return await ffmpeg_manager.test_stream_url(resolved)
+
     return await ffmpeg_manager.test_stream_url(stream.stream_url)
 
 
@@ -271,15 +295,17 @@ async def import_m3u(
 
         cat_id = category_map[group_key]
 
+        stream_url = _normalize_url(ch["url"])
+
         # Skip duplicate URLs
-        dup = await db.execute(select(Stream).where(Stream.stream_url == ch["url"]))
+        dup = await db.execute(select(Stream).where(Stream.stream_url == stream_url))
         if dup.scalar_one_or_none():
             skipped += 1
             continue
 
         stream = Stream(
             name=ch["name"],
-            stream_url=ch["url"],
+            stream_url=stream_url,
             logo_url=ch.get("logo") or None,
             category_id=cat_id,
             epg_channel_id=ch.get("tvg_id") or None,

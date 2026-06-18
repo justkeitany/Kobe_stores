@@ -57,6 +57,18 @@ step "Installing Node.js 20"
 curl -fsSL https://deb.nodesource.com/setup_20.x | bash - >/dev/null 2>&1
 apt-get install -y -qq "${APT_OPTS[@]}" nodejs
 
+step "Installing yt-dlp (YouTube live resolver)"
+# Latest static binary; kept up to date by a nightly `yt-dlp -U` cron job below.
+curl -fsSL https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+    -o /usr/local/bin/yt-dlp
+chmod a+rx /usr/local/bin/yt-dlp
+# Nightly self-update at 03:00 so YouTube extractor changes never break streams.
+cat > /etc/cron.d/iptv-ytdlp <<'CRONEOF'
+0 3 * * * root /usr/local/bin/yt-dlp -U >/dev/null 2>&1
+CRONEOF
+chmod 0644 /etc/cron.d/iptv-ytdlp
+/usr/local/bin/yt-dlp --version >/dev/null 2>&1 && info "yt-dlp $(/usr/local/bin/yt-dlp --version) installed" || warn "yt-dlp install may have failed"
+
 step "Creating directories"
 mkdir -p "$APP_DIR" "$HLS_DIR" "$WEB_DIR"
 mkdir -p /etc/ssl/iptv /etc/nginx/snippets
@@ -107,6 +119,7 @@ HLS_SEGMENT_TIME=2
 HLS_LIST_SIZE=6
 HLS_OUTPUT_DIR=$HLS_DIR
 FFMPEG_PATH=/usr/bin/ffmpeg
+YTDLP_PATH=/usr/local/bin/yt-dlp
 MAX_RETRY_ATTEMPTS=5
 HEALTH_CHECK_INTERVAL=30
 ADMIN_IP_WHITELIST=

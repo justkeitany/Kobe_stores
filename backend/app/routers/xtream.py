@@ -20,6 +20,8 @@ from app.database import AsyncSessionLocal
 from app.models import Stream, StreamCategory, EpgData, Settings as SettingsModel
 from app.ffmpeg_manager import ffmpeg_manager
 from app.config import settings
+from app.youtube import is_youtube_url, proxy_resolve
+from urllib.parse import quote
 
 router = APIRouter(tags=["xtream"])
 logger = logging.getLogger(__name__)
@@ -307,11 +309,16 @@ async def get_playlist(
     lines = ["#EXTM3U"]
     for stream, cat in rows:
         cat_name = cat.name if cat else "Uncategorized"
-        stream_url = f"{base_url}/live/{username}/{password}/{stream.id}"
-        if output == "ts":
-            stream_url += ".ts"
-        elif output == "m3u8":
-            stream_url += ".m3u8"
+        if is_youtube_url(stream.stream_url):
+            # YouTube streams are served through the proxy, which resolves a fresh
+            # HLS manifest on demand (and re-resolves when it expires).
+            stream_url = f"{base_url}/proxy/stream?url={quote(stream.stream_url, safe='')}"
+        else:
+            stream_url = f"{base_url}/live/{username}/{password}/{stream.id}"
+            if output == "ts":
+                stream_url += ".ts"
+            elif output == "m3u8":
+                stream_url += ".m3u8"
 
         lines.append(
             f'#EXTINF:-1 tvg-id="{stream.epg_channel_id or ""}" '
@@ -373,6 +380,14 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
 
     if not stream or not stream.is_enabled:
         raise HTTPException(404, "Stream not found")
+
+    # YouTube streams don't go through FFmpeg — send the player to the proxy,
+    # which resolves a fresh HLS manifest and redirects there.
+    if is_youtube_url(stream.stream_url):
+        return RedirectResponse(
+            url=f"/proxy/stream?url={quote(stream.stream_url, safe='')}",
+            status_code=302,
+        )
 
     # Start FFmpeg if needed and record this viewer's heartbeat. The player keeps
     # polling the .m3u8 below (~every 2s), so each poll refreshes the heartbeat;

@@ -16,6 +16,7 @@ from app.websocket import stats_sender
 from app.routers import auth, streams, categories, bouquets, epg, server, settings as settings_router, domain as domain_router
 from app.routers.users import router as users_router
 from app.routers.xtream import router as xtream_router
+from app.routers.proxy import router as proxy_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -77,6 +78,9 @@ app.include_router(domain_router.router)
 
 # Xtream Codes API (no PHP — pure FastAPI)
 app.include_router(xtream_router)
+
+# YouTube live-stream proxy (/proxy/stream)
+app.include_router(proxy_router)
 
 # ── WebSocket ──────────────────────────────────────────────────────────────
 @app.websocket("/ws/stats")
