@@ -252,7 +252,7 @@ export default function PlutoTV() {
                       )
                 )}
               >
-                <ChannelLogo logo={c.logo} />
+                <ChannelLogo logo={c.logo} name={c.name} />
                 <div className="flex-1 min-w-0">
                   <p className="font-bold text-body-sm truncate" title={c.name}>{c.name}</p>
                   <span className="inline-block mt-1.5 border border-outline-variant px-2 py-0.5 text-[10px] font-code-label uppercase tracking-wider text-on-surface-variant">
@@ -281,12 +281,17 @@ export default function PlutoTV() {
   );
 }
 
-function ChannelLogo({ logo }: { logo: string }) {
+function ChannelLogo({ logo, name }: { logo: string; name: string }) {
   const [failed, setFailed] = useState(false);
+  const fallbackLetter = (name.trim()[0] || "?").toUpperCase();
+
   if (!logo || failed) {
     return (
-      <div className="w-12 h-12 shrink-0 bg-surface-container border border-outline-variant rounded flex items-center justify-center">
-        <MIcon name="live_tv" size={18} className="text-on-surface-variant opacity-50" />
+      <div
+        className="w-12 h-12 shrink-0 border border-outline-variant rounded flex items-center justify-center text-on-surface font-bold text-body-sm"
+        style={{ backgroundColor: "#2a2a2a" }}
+      >
+        {fallbackLetter}
       </div>
     );
   }
@@ -295,7 +300,8 @@ function ChannelLogo({ logo }: { logo: string }) {
       src={logo}
       alt=""
       onError={() => setFailed(true)}
-      className="w-12 h-12 shrink-0 object-contain bg-surface-container-highest border border-outline-variant rounded p-1"
+      className="w-12 h-12 shrink-0 object-contain border border-outline-variant rounded p-1"
+      style={{ backgroundColor: "#2a2a2a" }}
     />
   );
 }

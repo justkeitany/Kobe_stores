@@ -11,8 +11,7 @@ import { useTheme } from "../lib/theme";
 import { MIcon } from "./MIcon";
 import clsx from "clsx";
 
-const PLUTO_LOGO =
-  "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b4/Pluto_TV_Logo.svg/1200px-Pluto_TV_Logo.svg.png";
+const PLUTO_LOGO = "https://logo.keitanyfrank.store/Pluto-TV-Logo.png";
 
 type NavItem = { label: string; path: string; icon?: LucideIcon; img?: string };
 

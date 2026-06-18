@@ -12,6 +12,7 @@ from app.database import get_db
 from app.models import Stream, StreamCategory, StreamSource
 from app.ffmpeg_manager import ffmpeg_manager
 from app.youtube import is_youtube_url, clean_youtube_url, proxy_resolve
+from app.pluto_stream import resolve as resolve_pluto_url
 from app.sources import source_refs, source_urls
 
 router = APIRouter(prefix="/api/streams", tags=["streams"])
@@ -269,7 +270,7 @@ async def test_source(
         if not resolved:
             return {"alive": False, "message": "yt-dlp could not resolve the YouTube stream"}
         return await ffmpeg_manager.test_stream_url(resolved)
-    return await ffmpeg_manager.test_stream_url(url)
+    return await ffmpeg_manager.test_stream_url(resolve_pluto_url(url))
 
 
 @router.put("/{stream_id}")
@@ -338,7 +339,7 @@ async def test_stream(
             return {"alive": False, "message": "yt-dlp could not resolve the YouTube stream"}
         return await ffmpeg_manager.test_stream_url(resolved)
 
-    return await ffmpeg_manager.test_stream_url(stream.stream_url)
+    return await ffmpeg_manager.test_stream_url(resolve_pluto_url(stream.stream_url))
 
 
 @router.post("/{stream_id}/restart")

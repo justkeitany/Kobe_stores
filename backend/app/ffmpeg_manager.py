@@ -13,6 +13,7 @@ import logging
 from datetime import datetime, timezone
 from typing import Dict, Optional
 from app.config import settings
+from app.pluto_stream import resolve as resolve_pluto_url
 
 logger = logging.getLogger(__name__)
 
@@ -75,7 +76,10 @@ class StreamProcess:
             "-hide_banner",
             "-loglevel", "warning",
             "-re",
-            "-i", self.current_url,
+            # Pluto stitch URLs need fresh session params (deviceId/sid) per
+            # FFmpeg start, or the stitcher returns 400. Non-Pluto URLs pass
+            # through unchanged.
+            "-i", resolve_pluto_url(self.current_url),
             # Reconnect options for resilience
             "-reconnect", "1",
             "-reconnect_streamed", "1",
