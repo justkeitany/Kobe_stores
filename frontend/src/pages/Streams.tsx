@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Plus, Upload, Search, Play, Trash2, Edit2,
@@ -17,6 +17,8 @@ interface Stream {
   status: string;
   viewer_count: number;
   last_error?: string;
+  delivery_mode?: "restream" | "balanced";
+  source_count?: number;
 }
 
 interface Category {
@@ -172,7 +174,17 @@ export default function Streams() {
                           </div>
                         )}
                         <div>
-                          <p className="text-gray-900 font-medium">{s.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-gray-900 font-medium">{s.name}</p>
+                            {s.delivery_mode === "balanced" && (
+                              <span className="badge-blue text-[10px]" title="Load-balanced across source mirrors">balanced</span>
+                            )}
+                            {(s.source_count ?? 0) > 1 && (
+                              <span className="text-[10px] text-gray-400" title="Failover sources">
+                                {s.source_count} sources
+                              </span>
+                            )}
+                          </div>
                           <p className="text-gray-400 text-xs truncate max-w-xs">{s.stream_url}</p>
                         </div>
                       </div>
@@ -256,16 +268,68 @@ function StreamModal({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(stream?.name ?? "");
-  const [url, setUrl] = useState(stream?.stream_url ?? "");
+  const [sources, setSources] = useState<string[]>([stream?.stream_url ?? ""]);
   const [logo, setLogo] = useState(stream?.logo_url ?? "");
   const [catId, setCatId] = useState<number | "">(stream?.category_id ?? "");
+  const [deliveryMode, setDeliveryMode] = useState<"restream" | "balanced">(
+    stream?.delivery_mode ?? "restream"
+  );
   const [saving, setSaving] = useState(false);
+  const [testing, setTesting] = useState<number | null>(null);
+
+  // Load the full source pool when editing an existing stream.
+  useEffect(() => {
+    if (!stream) return;
+    api.get(`/streams/${stream.id}`).then((r) => {
+      const urls = (r.data.sources ?? []).map((s: any) => s.url);
+      setSources(urls.length ? urls : [r.data.stream_url ?? ""]);
+      setDeliveryMode(r.data.delivery_mode ?? "restream");
+    }).catch(() => {});
+  }, [stream]);
+
+  function setSourceAt(i: number, val: string) {
+    setSources((prev) => prev.map((u, idx) => (idx === i ? val : u)));
+  }
+  function addSource() { setSources((prev) => [...prev, ""]); }
+  function removeSource(i: number) {
+    setSources((prev) => (prev.length > 1 ? prev.filter((_, idx) => idx !== i) : prev));
+  }
+  function moveSource(i: number, dir: -1 | 1) {
+    setSources((prev) => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+  }
+
+  async function testSource(i: number) {
+    const url = sources[i]?.trim();
+    if (!url) return;
+    setTesting(i);
+    try {
+      const r = await api.post("/streams/sources/test", { url });
+      if (r.data.alive) toast.success(`Source OK: ${r.data.message}`);
+      else toast.error(`Source dead: ${r.data.message}`);
+    } catch (err: any) {
+      toast.error(err?.response?.data?.detail || "Test failed");
+    } finally {
+      setTesting(null);
+    }
+  }
 
   async function save() {
+    const cleaned = sources.map((u) => u.trim()).filter(Boolean);
+    if (!cleaned.length) { toast.error("Add at least one source URL"); return; }
     setSaving(true);
     try {
       const payload = {
-        name, stream_url: url, logo_url: logo || null,
+        name,
+        stream_url: cleaned[0],
+        sources: cleaned,
+        delivery_mode: deliveryMode,
+        logo_url: logo || null,
         category_id: catId || null,
       };
       if (stream) {
@@ -284,7 +348,7 @@ function StreamModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-200 rounded-[10px] w-full max-w-md shadow-xl p-6 space-y-4">
+      <div className="bg-white border border-gray-200 rounded-[10px] w-full max-w-md shadow-xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900">
           {stream ? "Edit Stream" : "Add Stream"}
         </h2>
@@ -293,10 +357,62 @@ function StreamModal({
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Channel Name *</label>
           <input className="input" value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. BBC News" />
         </div>
+
+        {/* Sources / failover pool */}
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1.5">Stream URL *</label>
-          <input className="input" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://..." />
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">
+            Source URLs * <span className="text-gray-400 font-normal">(first = primary)</span>
+          </label>
+          <div className="space-y-2">
+            {sources.map((u, i) => (
+              <div key={i} className="flex gap-1.5 items-center">
+                <span className="text-xs text-gray-400 w-4 text-right">{i + 1}</span>
+                <input
+                  className="input flex-1"
+                  value={u}
+                  onChange={(e) => setSourceAt(i, e.target.value)}
+                  placeholder={i === 0 ? "http://primary..." : "http://backup mirror..."}
+                />
+                <button type="button" title="Test" disabled={testing === i}
+                  className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded"
+                  onClick={() => testSource(i)}>
+                  {testing === i ? <Loader2 size={14} className="animate-spin" /> : <TestTube size={14} />}
+                </button>
+                <button type="button" title="Move up" disabled={i === 0}
+                  className="p-1 text-gray-300 hover:text-gray-700 disabled:opacity-30"
+                  onClick={() => moveSource(i, -1)}>↑</button>
+                <button type="button" title="Move down" disabled={i === sources.length - 1}
+                  className="p-1 text-gray-300 hover:text-gray-700 disabled:opacity-30"
+                  onClick={() => moveSource(i, 1)}>↓</button>
+                <button type="button" title="Remove" disabled={sources.length <= 1}
+                  className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded disabled:opacity-30"
+                  onClick={() => removeSource(i)}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
+            ))}
+          </div>
+          <button type="button" onClick={addSource}
+            className="mt-2 text-xs text-gray-600 hover:text-gray-900 inline-flex items-center gap-1">
+            <Plus size={12} /> Add source
+          </button>
         </div>
+
+        {/* Delivery mode */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1.5">Delivery mode</label>
+          <select className="input" value={deliveryMode}
+            onChange={(e) => setDeliveryMode(e.target.value as "restream" | "balanced")}>
+            <option value="restream">Restream (FFmpeg) — sources used as failover chain</option>
+            <option value="balanced">Balanced — spread viewers across source mirrors</option>
+          </select>
+          <p className="text-xs text-gray-400 mt-1">
+            {deliveryMode === "balanced"
+              ? "Players are sent directly to a healthy mirror, picked per user. Best for offloading many viewers across equivalent origins."
+              : "One FFmpeg process restreams the channel; on failure it fails over to the next source."}
+          </p>
+        </div>
+
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Logo URL</label>
           <input className="input" value={logo} onChange={(e) => setLogo(e.target.value)} placeholder="https://..." />
@@ -313,7 +429,8 @@ function StreamModal({
 
         <div className="flex gap-3 pt-1">
           <button className="btn-secondary flex-1 justify-center" onClick={onClose}>Cancel</button>
-          <button className="btn-primary flex-1 justify-center" onClick={save} disabled={saving || !name || !url}>
+          <button className="btn-primary flex-1 justify-center" onClick={save}
+            disabled={saving || !name || !sources.some((u) => u.trim())}>
             {saving ? "Saving..." : "Save"}
           </button>
         </div>

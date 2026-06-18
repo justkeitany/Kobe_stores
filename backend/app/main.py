@@ -35,9 +35,15 @@ async def lifespan(app: FastAPI):
     await init_db()
     await get_redis()
     logger.info("Database and Redis initialized")
+
+    import asyncio
+    from app.source_health import health_loop
+    health_task = asyncio.create_task(health_loop())
+
     yield
     # Shutdown
     logger.info("Shutting down...")
+    health_task.cancel()
     from app.ffmpeg_manager import ffmpeg_manager
     await ffmpeg_manager.stop_all()
     await close_redis()

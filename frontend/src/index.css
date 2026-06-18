@@ -63,6 +63,10 @@
     @apply inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 text-gray-600
            text-xs font-medium rounded-full border border-gray-200;
   }
+  .badge-blue {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 bg-blue-50 text-blue-700
+           text-xs font-medium rounded-full border border-blue-200;
+  }
 
   /* ── Table ───────────────────────────────────────────────── */
   .table-row-hover { @apply hover:bg-gray-50 transition-colors; }

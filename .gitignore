@@ -1,6 +1,10 @@
 # ── Secrets ───────────────────────────────────────────────────
 backend/.env
 backend/.env.local
+# YouTube cookie exports contain live session credentials — never commit them.
+yt_cookies.txt
+cookies.txt
+**/cookies.txt
 
 # ── Python ────────────────────────────────────────────────────
 backend/.venv/

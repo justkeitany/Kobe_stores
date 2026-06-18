@@ -26,7 +26,9 @@ APT_OPTS=(-o Dpkg::Options::=--force-confold -o Dpkg::Options::=--force-confdef)
 APP_DIR="/opt/iptv-panel"
 HLS_DIR="/var/iptv/hls"
 WEB_DIR="/var/www/iptv-panel"
-REPO_DIR="/tmp/mzeekobe"
+# Source checkout: the directory this script lives in (works from a manual clone
+# or from /tmp/mzeekobe when piped through bootstrap.sh).
+REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
 PANEL_PORT_HTTP=25461   # dashboard / Xtream port advertised to users (Xtream Codes default)
 

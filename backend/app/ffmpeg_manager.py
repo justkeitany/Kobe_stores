@@ -24,9 +24,12 @@ STREAM_IDLE_TIMEOUT = 8
 
 
 class StreamProcess:
-    def __init__(self, stream_id: int, stream_url: str, stream_name: str):
+    def __init__(self, stream_id: int, sources: list[str], stream_name: str):
         self.stream_id = stream_id
-        self.stream_url = stream_url
+        # Ordered failover chain. FFmpeg pulls one source at a time; on crash the
+        # health monitor advances to the next entry (wrapping around).
+        self.sources: list[str] = [s for s in sources if s] or [""]
+        self.source_index: int = 0
         self.stream_name = stream_name
         self.process: Optional[asyncio.subprocess.Process] = None
         # client_key -> last time we saw a playlist request from that viewer
@@ -37,6 +40,19 @@ class StreamProcess:
         self.status: str = "idle"
         self._lock = asyncio.Lock()
         self._health_task: Optional[asyncio.Task] = None
+
+    @property
+    def current_url(self) -> str:
+        return self.sources[self.source_index % len(self.sources)]
+
+    def _advance_source(self) -> None:
+        """Rotate to the next source in the failover chain (wraps around)."""
+        if len(self.sources) > 1:
+            self.source_index = (self.source_index + 1) % len(self.sources)
+            logger.info(
+                f"Stream {self.stream_id} failing over to source "
+                f"{self.source_index + 1}/{len(self.sources)}: {self.current_url}"
+            )
 
     @property
     def hls_dir(self) -> str:
@@ -59,7 +75,7 @@ class StreamProcess:
             "-hide_banner",
             "-loglevel", "warning",
             "-re",
-            "-i", self.stream_url,
+            "-i", self.current_url,
             # Reconnect options for resilience
             "-reconnect", "1",
             "-reconnect_streamed", "1",
@@ -158,6 +174,9 @@ class StreamProcess:
                         logger.error(f"Stream {self.stream_id} exceeded max retries, giving up")
                         break
 
+                    # Fail over to the next source before retrying, so a dead
+                    # primary is abandoned immediately rather than retried in place.
+                    self._advance_source()
                     self.status = "starting"
                     await asyncio.sleep(min(self.retry_count * 2, 30))
                     await self.start()
@@ -215,17 +234,23 @@ class FFmpegManager:
                 logger.error(f"Reaper error: {e}")
                 await asyncio.sleep(2)
 
-    async def get_or_create(self, stream_id: int, stream_url: str, stream_name: str) -> StreamProcess:
+    async def get_or_create(self, stream_id: int, sources: list[str], stream_name: str) -> StreamProcess:
         async with self._lock:
-            if stream_id not in self._streams:
-                self._streams[stream_id] = StreamProcess(stream_id, stream_url, stream_name)
-            return self._streams[stream_id]
+            sp = self._streams.get(stream_id)
+            if sp is None:
+                sp = StreamProcess(stream_id, sources, stream_name)
+                self._streams[stream_id] = sp
+            elif sources and sp.status not in ("running", "starting"):
+                # Pick up edited source pools the next time the stream (re)starts.
+                sp.sources = [s for s in sources if s] or [""]
+                sp.source_index = 0
+            return sp
 
     async def start_stream(
-        self, stream_id: int, stream_url: str, stream_name: str, client_key: str = "viewer"
+        self, stream_id: int, sources: list[str], stream_name: str, client_key: str = "viewer"
     ) -> StreamProcess:
         self._ensure_reaper()
-        sp = await self.get_or_create(stream_id, stream_url, stream_name)
+        sp = await self.get_or_create(stream_id, sources, stream_name)
         sp.heartbeat(client_key)
         if sp.status not in ("running", "starting"):
             await sp.start()
@@ -237,12 +262,15 @@ class FFmpegManager:
         if sp:
             await sp.stop()
 
-    async def restart_stream(self, stream_id: int) -> bool:
+    async def restart_stream(self, stream_id: int, sources: Optional[list[str]] = None) -> bool:
         async with self._lock:
             sp = self._streams.get(stream_id)
         if not sp:
             return False
         await sp.stop()
+        if sources:
+            sp.sources = [s for s in sources if s] or [""]
+        sp.source_index = 0
         await asyncio.sleep(1)
         return await sp.start()
 
@@ -258,6 +286,9 @@ class FFmpegManager:
             "retry_count": sp.retry_count,
             "last_error": sp.last_error,
             "started_at": sp.started_at.isoformat() if sp.started_at else None,
+            "active_source": sp.current_url,
+            "active_source_index": sp.source_index,
+            "source_count": len(sp.sources),
         }
 
     async def get_all_statuses(self) -> list[dict]:

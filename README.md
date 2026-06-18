@@ -5,6 +5,11 @@ Works with TiviMate, IPTV Smarters, GSE, VLC, Kodi and any Xtream-compatible pla
 
 - ⚡ FastAPI backend · React dashboard · PostgreSQL · Redis · Nginx
 - 📺 Xtream Codes API (`player_api.php`, `get.php`, `xmltv.php`, live streams)
+- 🔁 **Failover** — give a channel multiple source URLs; FFmpeg fails over to the
+  next one automatically when a source dies
+- ⚖️ **Load balancing** — in *balanced* mode, viewers are spread across a channel's
+  equivalent source mirrors (sticky per user, skips unhealthy mirrors)
+- 🎚️ Per-user **bouquets** (channel packages) and **max-connection** limits enforced
 - 🔐 JWT auth with forced first-login password change
 - 🌐 **No domain required** — install, open `http://YOUR_VPS_IP:25461`, then optionally
   add your own domain from the dashboard with **automatic HTTPS**. The chosen address is
@@ -75,6 +80,24 @@ Open **Settings → Access & Domain** and pick one. You can switch at any time.
 
 ---
 
+## Failover & load balancing
+
+Each channel has an ordered **pool of source URLs** (edit a stream → *Source URLs*).
+The first entry is the primary; the rest are backups. Pick a **delivery mode**:
+
+- **Restream (default):** one FFmpeg process pulls the channel and serves HLS to
+  every viewer. If the active source crashes, it **fails over** to the next URL in
+  the pool automatically (and keeps retrying down the list).
+- **Balanced:** players are handed a source URL **directly**, chosen consistently
+  per username across the pool's mirrors. This **spreads viewers over equivalent
+  origin servers** so no single source is hammered. A background health check
+  marks dead mirrors so users are steered onto healthy ones (failover + balancing
+  in one). Use this when you have several equivalent origins for the same channel.
+
+> Balanced mode bypasses restreaming, so the panel's `max_connections` limit and
+> viewer counts don't apply to those channels — the load is deliberately offloaded
+> to the origin mirrors.
+
 ## Maintenance
 
 Update to the latest version:
@@ -108,7 +131,9 @@ Add `KEEP_DB=1` before the uninstall command to keep your streams/users/settings
 ## Notes
 
 - The backend listens on `127.0.0.1:8000`; Nginx serves the panel + API + Xtream + HLS
-  on ports **80** and **25461** (and **443** once a domain's HTTPS is enabled).
+  on ports **80**, **25461** and **8080** (and **443** once a domain's HTTPS is enabled).
+  All three are catch-all, so players work on any of them; the dashboard advertises the
+  dedicated Xtream player port **8080** in IP mode, while **25461** is the panel port.
 - Each install is **single-admin** (one operator per VPS).
 - An advanced Cloudflare-proxied HTTPS Nginx config is included as
   `nginx/iptv-panel-cloudflare.conf.example`.

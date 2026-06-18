@@ -1,3 +1,4 @@
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 from sqlalchemy.orm import DeclarativeBase
 from app.config import settings
@@ -34,6 +35,17 @@ async def get_db() -> AsyncSession:
             await session.close()
 
 
+# Lightweight, idempotent column additions for upgrades on an existing DB.
+# create_all() creates new *tables* but never alters existing ones, so columns
+# added to a model after first install must be backfilled here. Postgres
+# supports "ADD COLUMN IF NOT EXISTS", so each statement is safe to re-run.
+_COLUMN_MIGRATIONS = (
+    "ALTER TABLE streams ADD COLUMN IF NOT EXISTS delivery_mode VARCHAR(20) NOT NULL DEFAULT 'restream'",
+)
+
+
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        for stmt in _COLUMN_MIGRATIONS:
+            await conn.execute(text(stmt))

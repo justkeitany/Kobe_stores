@@ -44,9 +44,10 @@ done
 sed -i "s/^ADMIN_PASSWORD=.*/ADMIN_PASSWORD=$NEW_PASS/" "$ENV_FILE"
 echo -e "${GREEN}✓ .env updated${NC}"
 
-# Clear the Redis "password_changed" flag so force-change prompt is reset
+# Clear the force-change flag so the operator is prompted to set a new password
+# on next login. The backend uses the key "credentials_changed" (app/auth.py).
 if command -v redis-cli &>/dev/null; then
-    redis-cli DEL password_changed >/dev/null 2>&1 && \
+    redis-cli DEL credentials_changed >/dev/null 2>&1 && \
         echo -e "${GREEN}✓ Redis flag cleared${NC}" || \
         echo -e "${YELLOW}⚠ Could not clear Redis flag (Redis may not be running)${NC}"
 fi
@@ -60,11 +61,15 @@ SERVER_IP=$(curl -s --max-time 5 https://api.ipify.org 2>/dev/null || true)
 [[ -z "$SERVER_IP" ]] && SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
 [[ -z "$SERVER_IP" ]] && SERVER_IP="<your-vps-ip>"
 
+# Show the actual configured username (it may have been changed from "admin").
+CUR_USER=$(grep -E '^ADMIN_USERNAME=' "$ENV_FILE" | head -1 | cut -d= -f2-)
+[[ -z "$CUR_USER" ]] && CUR_USER="admin"
+
 echo ""
 echo -e "${GREEN}================================================${NC}"
 echo -e "${GREEN} Password reset complete!${NC}"
 echo -e "${GREEN} Login at:  http://$SERVER_IP:25461${NC}"
-echo -e "${GREEN} Username:  admin${NC}"
+echo -e "${GREEN} Username:  $CUR_USER${NC}"
 echo -e "${GREEN} Password:  $NEW_PASS${NC}"
 echo -e "${GREEN}================================================${NC}"
 echo -e "${YELLOW} You will be prompted to set a new password on first login.${NC}"

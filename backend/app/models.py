@@ -32,6 +32,13 @@ class Stream(Base):
     sort_order = Column(Integer, default=0)
     epg_channel_id = Column(String(255), nullable=True)
 
+    # How viewers are served:
+    #   "restream" — FFmpeg pulls one source and fans out HLS; the source pool
+    #                acts as an ordered failover chain.
+    #   "balanced" — players are handed a source URL directly, picked sticky by
+    #                username across healthy mirrors (load balancing + failover).
+    delivery_mode = Column(String(20), default="restream", nullable=False)
+
     # Stream status
     status = Column(String(50), default="idle")  # idle, running, error, stopped
     last_error = Column(Text, nullable=True)
@@ -43,6 +50,33 @@ class Stream(Base):
 
     category = relationship("StreamCategory", back_populates="streams")
     connections = relationship("Connection", back_populates="stream")
+    sources = relationship(
+        "StreamSource",
+        back_populates="stream",
+        cascade="all, delete-orphan",
+        order_by="StreamSource.priority, StreamSource.id",
+    )
+
+
+class StreamSource(Base):
+    """An ordered pool of equivalent source URLs for one channel.
+
+    Used as a failover chain in restream mode and as the mirror set that viewers
+    are load-balanced across in balanced mode. `priority` is ascending (0 first).
+    """
+    __tablename__ = "stream_sources"
+
+    id = Column(Integer, primary_key=True, index=True)
+    stream_id = Column(Integer, ForeignKey("streams.id", ondelete="CASCADE"), nullable=False, index=True)
+    url = Column(Text, nullable=False)
+    priority = Column(Integer, default=0)
+    is_enabled = Column(Boolean, default=True)
+    status = Column(String(20), default="unknown")  # unknown, ok, error
+    last_checked = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    stream = relationship("Stream", back_populates="sources")
 
 
 class Bouquet(Base):

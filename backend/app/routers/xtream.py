@@ -16,15 +16,60 @@ from typing import Optional
 from fastapi import APIRouter, Request, Response, HTTPException, Query
 from fastapi.responses import StreamingResponse, RedirectResponse, PlainTextResponse
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from app.database import AsyncSessionLocal
-from app.models import Stream, StreamCategory, EpgData, Settings as SettingsModel
+from app.models import Stream, StreamCategory, EpgData, BouquetCategory, Settings as SettingsModel
 from app.ffmpeg_manager import ffmpeg_manager
 from app.config import settings
 from app.youtube import is_youtube_url, proxy_resolve
+from app.sources import source_refs, source_urls, pick_source_for_user
+from app.redis_client import get_redis
 from urllib.parse import quote
 
 router = APIRouter(tags=["xtream"])
 logger = logging.getLogger(__name__)
+
+# How long (seconds) since a viewer's last playlist poll before their slot frees
+# up, for the per-user max_connections limit. Players reload the live playlist
+# every couple of seconds, so this tolerates brief gaps without leaking slots.
+CONNECTION_IDLE_TIMEOUT = 45
+
+
+async def _allowed_category_ids(db, bouquet_id: Optional[int]) -> Optional[set[int]]:
+    """Category IDs a user may see, or None when unrestricted (no bouquet/admin)."""
+    if not bouquet_id:
+        return None
+    rows = await db.execute(
+        select(BouquetCategory.category_id).where(BouquetCategory.bouquet_id == bouquet_id)
+    )
+    return {cid for (cid,) in rows.all()}
+
+
+async def _enforce_connection_limit(username: str, max_connections: int, client_key: str) -> bool:
+    """Track concurrent viewers per IPTV user in Redis; return False if over limit.
+
+    Each distinct client_key (viewer) heartbeats on every /live poll. A new
+    viewer is rejected once `max_connections` distinct keys are already active
+    within the idle window. Only meaningful for restream delivery — balanced
+    streams hand the player a mirror URL directly and are intentionally not
+    counted (offloading them is the whole point).
+    """
+    if max_connections <= 0:
+        return True
+    try:
+        redis = await get_redis()
+        key = f"conns:{username}"
+        now = datetime.now(timezone.utc).timestamp()
+        cutoff = now - CONNECTION_IDLE_TIMEOUT
+        await redis.zremrangebyscore(key, 0, cutoff)
+        active = await redis.zrange(key, 0, -1)
+        if client_key not in active and len(active) >= max_connections:
+            return False
+        await redis.zadd(key, {client_key: now})
+        await redis.expire(key, CONNECTION_IDLE_TIMEOUT * 2)
+    except Exception as e:  # Redis hiccup must not block legitimate viewers.
+        logger.warning("Connection-limit check failed for %s: %s", username, e)
+    return True
 
 
 async def _configured_server_url() -> Optional[str]:
@@ -77,6 +122,8 @@ async def _check_credentials(username: str, password: str):
             "status": "Active",
             "exp_date": None,
             "max_connections": "999",
+            "max_connections_int": 0,  # 0 = unlimited
+            "bouquet_id": None,        # admin sees every channel
             "is_trial": "0",
         }
 
@@ -107,6 +154,8 @@ async def _check_credentials(username: str, password: str):
         "status": "Active",
         "exp_date": exp_ts,
         "max_connections": str(user.max_connections),
+        "max_connections_int": int(user.max_connections or 0),
+        "bouquet_id": user.bouquet_id,
         "is_trial": "0",
     }
 
@@ -121,11 +170,12 @@ def _server_info(base_url: str) -> dict:
         port = str(parsed.port)
     else:
         port = "443" if protocol == "https" else "80"
+    https_port = port if protocol == "https" else "443"
 
     return {
         "url": host,
         "port": port,
-        "https_port": "443",
+        "https_port": https_port,
         "server_protocol": protocol,
         "rtmp_port": "1935",
         "timezone": "UTC",
@@ -183,6 +233,8 @@ async def player_api(
         return {"user_info": {"auth": 0}}
 
     async with AsyncSessionLocal() as db:
+        allowed_cats = await _allowed_category_ids(db, user_data.get("bouquet_id"))
+
         # Authentication / handshake
         if not action:
             return {
@@ -203,12 +255,15 @@ async def player_api(
                     "parent_id": 0,
                 }
                 for c in cats
+                if allowed_cats is None or c.id in allowed_cats
             ]
 
         if action == "get_live_streams":
             q = select(Stream).where(Stream.is_enabled == True)
             if category_id:
                 q = q.where(Stream.category_id == int(category_id))
+            if allowed_cats is not None:
+                q = q.where(Stream.category_id.in_(allowed_cats))
             q = q.order_by(Stream.sort_order, Stream.id)
             result = await db.execute(q)
             streams = result.scalars().all()
@@ -298,21 +353,34 @@ async def get_playlist(
     base_url = await _base_url(request)
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(
+        allowed_cats = await _allowed_category_ids(db, user_data.get("bouquet_id"))
+        q = (
             select(Stream, StreamCategory)
             .outerjoin(StreamCategory, Stream.category_id == StreamCategory.id)
+            .options(selectinload(Stream.sources))
             .where(Stream.is_enabled == True)
-            .order_by(StreamCategory.sort_order, Stream.sort_order, Stream.id)
         )
+        if allowed_cats is not None:
+            q = q.where(Stream.category_id.in_(allowed_cats))
+        q = q.order_by(StreamCategory.sort_order, Stream.sort_order, Stream.id)
+        result = await db.execute(q)
         rows = result.all()
 
     lines = ["#EXTM3U"]
     for stream, cat in rows:
         cat_name = cat.name if cat else "Uncategorized"
-        if is_youtube_url(stream.stream_url):
+        refs = source_refs(stream, stream.sources)
+        primary_url = refs[0].url if refs else stream.stream_url
+
+        if is_youtube_url(primary_url):
             # YouTube streams are served through the proxy, which resolves a fresh
             # HLS manifest on demand (and re-resolves when it expires).
-            stream_url = f"{base_url}/proxy/stream?url={quote(stream.stream_url, safe='')}"
+            stream_url = f"{base_url}/proxy/stream?url={quote(primary_url, safe='')}"
+        elif stream.delivery_mode == "balanced":
+            # Balanced: hand the player a mirror directly (sticky by username),
+            # spreading viewers across origins instead of restreaming.
+            chosen = pick_source_for_user(refs, username)
+            stream_url = chosen.url if chosen else primary_url
         else:
             stream_url = f"{base_url}/live/{username}/{password}/{stream.id}"
             if output == "ts":
@@ -375,25 +443,51 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
     ext = stream_file.rsplit(".", 1)[-1].lower() if "." in stream_file else ""
 
     async with AsyncSessionLocal() as db:
-        result = await db.execute(select(Stream).where(Stream.id == stream_id))
+        result = await db.execute(
+            select(Stream).options(selectinload(Stream.sources)).where(Stream.id == stream_id)
+        )
         stream = result.scalar_one_or_none()
 
-    if not stream or not stream.is_enabled:
-        raise HTTPException(404, "Stream not found")
+        if not stream or not stream.is_enabled:
+            raise HTTPException(404, "Stream not found")
+
+        # Bouquet restriction: a user may only open channels in their package.
+        allowed_cats = await _allowed_category_ids(db, user_data.get("bouquet_id"))
+        if allowed_cats is not None and stream.category_id not in allowed_cats:
+            raise HTTPException(403, "Channel not in your package")
+
+        refs = source_refs(stream, stream.sources)
+
+    client_key = _client_key(request)
+
+    # Per-user concurrent connection limit (restream delivery only).
+    if not await _enforce_connection_limit(
+        username, user_data.get("max_connections_int", 0), client_key
+    ):
+        raise HTTPException(429, "Connection limit reached")
+
+    primary_url = refs[0].url if refs else stream.stream_url
 
     # YouTube streams don't go through FFmpeg — send the player to the proxy,
     # which resolves a fresh HLS manifest and redirects there.
-    if is_youtube_url(stream.stream_url):
+    if is_youtube_url(primary_url):
         return RedirectResponse(
-            url=f"/proxy/stream?url={quote(stream.stream_url, safe='')}",
+            url=f"/proxy/stream?url={quote(primary_url, safe='')}",
             status_code=302,
         )
+
+    # Balanced delivery: redirect straight to a healthy mirror (sticky by user).
+    if stream.delivery_mode == "balanced":
+        chosen = pick_source_for_user(refs, username)
+        if not chosen:
+            raise HTTPException(503, "No healthy source available")
+        return RedirectResponse(url=chosen.url, status_code=302)
 
     # Start FFmpeg if needed and record this viewer's heartbeat. The player keeps
     # polling the .m3u8 below (~every 2s), so each poll refreshes the heartbeat;
     # when it stops polling, the manager's reaper stops FFmpeg within ~8s.
     sp = await ffmpeg_manager.start_stream(
-        stream_id, stream.stream_url, stream.name, _client_key(request)
+        stream_id, [r.url for r in refs], stream.name, client_key
     )
 
     if ext == "m3u8":
@@ -432,10 +526,15 @@ async def xmltv(
         raise HTTPException(401, "Unauthorized")
 
     async with AsyncSessionLocal() as db:
-        streams_res = await db.execute(
-            select(Stream).where(Stream.epg_channel_id != None, Stream.is_enabled == True)
-        )
+        allowed_cats = await _allowed_category_ids(db, user_data.get("bouquet_id"))
+        q = select(Stream).where(Stream.epg_channel_id != None, Stream.is_enabled == True)
+        if allowed_cats is not None:
+            q = q.where(Stream.category_id.in_(allowed_cats))
+        streams_res = await db.execute(q)
         streams = streams_res.scalars().all()
+
+        # Only emit programmes for channels this user can actually see.
+        allowed_channel_ids = {s.epg_channel_id for s in streams if s.epg_channel_id}
 
         now = datetime.now(timezone.utc)
         epg_res = await db.execute(
@@ -444,7 +543,7 @@ async def xmltv(
             .order_by(EpgData.channel_id, EpgData.start_time)
             .limit(50000)
         )
-        programmes = epg_res.scalars().all()
+        programmes = [p for p in epg_res.scalars().all() if p.channel_id in allowed_channel_ids]
 
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<!DOCTYPE tv SYSTEM "xmltv.dtd">', '<tv>']
 

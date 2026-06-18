@@ -6,13 +6,17 @@ from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel
 from sqlalchemy import select, func, update, delete
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models import Stream, StreamCategory
+from app.models import Stream, StreamCategory, StreamSource
 from app.ffmpeg_manager import ffmpeg_manager
 from app.youtube import is_youtube_url, clean_youtube_url, proxy_resolve
+from app.sources import source_refs, source_urls
 
 router = APIRouter(prefix="/api/streams", tags=["streams"])
+
+VALID_DELIVERY_MODES = {"restream", "balanced"}
 
 
 # ── Schemas ────────────────────────────────────────────────────────────────
@@ -25,6 +29,10 @@ class StreamCreate(BaseModel):
     category_id: Optional[int] = None
     sort_order: int = 0
     epg_channel_id: Optional[str] = None
+    delivery_mode: Optional[str] = None
+    # Ordered source pool. When given it is authoritative; otherwise the pool is
+    # derived from stream_url (+ backup_url).
+    sources: Optional[list[str]] = None
 
 
 class StreamUpdate(BaseModel):
@@ -36,6 +44,32 @@ class StreamUpdate(BaseModel):
     is_enabled: Optional[bool] = None
     sort_order: Optional[int] = None
     epg_channel_id: Optional[str] = None
+    delivery_mode: Optional[str] = None
+    sources: Optional[list[str]] = None
+
+
+class SourceTest(BaseModel):
+    url: str
+
+
+def _clean_source_list(urls: Optional[list[str]]) -> list[str]:
+    """Trim, normalise (YouTube) and de-dupe an incoming source URL list."""
+    out: list[str] = []
+    for u in urls or []:
+        u = _normalize_url((u or "").strip())
+        if u and u not in out:
+            out.append(u)
+    return out
+
+
+async def _replace_sources(db: AsyncSession, stream: Stream, urls: list[str]) -> None:
+    """Rebuild a stream's source pool and keep stream_url/backup_url mirrored."""
+    await db.execute(delete(StreamSource).where(StreamSource.stream_id == stream.id))
+    for i, url in enumerate(urls):
+        db.add(StreamSource(stream_id=stream.id, url=url, priority=i))
+    if urls:
+        stream.stream_url = urls[0]
+        stream.backup_url = urls[1] if len(urls) > 1 else None
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────
@@ -90,7 +124,7 @@ async def list_streams(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_admin),
 ):
-    q = select(Stream)
+    q = select(Stream).options(selectinload(Stream.sources))
     if search:
         q = q.where(Stream.name.ilike(f"%{search}%"))
     if category_id is not None:
@@ -116,8 +150,11 @@ async def list_streams(
             "is_enabled": s.is_enabled,
             "sort_order": s.sort_order,
             "epg_channel_id": s.epg_channel_id,
+            "delivery_mode": s.delivery_mode,
+            "source_count": len(source_refs(s, s.sources)),
             "status": statuses.get(s.id, {}).get("status", s.status),
             "viewer_count": statuses.get(s.id, {}).get("viewer_count", 0),
+            "active_source_index": statuses.get(s.id, {}).get("active_source_index", 0),
             "last_error": s.last_error,
             "created_at": s.created_at,
         }
@@ -138,10 +175,24 @@ async def create_stream(
     _=Depends(get_current_admin),
 ):
     payload = data.model_dump()
+    sources_in = payload.pop("sources", None)
+    delivery_mode = payload.pop("delivery_mode", None) or "restream"
+    if delivery_mode not in VALID_DELIVERY_MODES:
+        raise HTTPException(400, "delivery_mode must be 'restream' or 'balanced'")
+
     payload["stream_url"] = _normalize_url(payload.get("stream_url"))
     payload["backup_url"] = _normalize_url(payload.get("backup_url"))
+    payload["delivery_mode"] = delivery_mode
+
     stream = Stream(**payload)
     db.add(stream)
+    await db.flush()  # assign stream.id before adding sources
+
+    pool = _clean_source_list(sources_in) if sources_in is not None else _clean_source_list(
+        [stream.stream_url, stream.backup_url]
+    )
+    await _replace_sources(db, stream, pool)
+
     await db.commit()
     await db.refresh(stream)
     return stream
@@ -153,11 +204,72 @@ async def get_stream(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_admin),
 ):
-    result = await db.execute(select(Stream).where(Stream.id == stream_id))
+    result = await db.execute(
+        select(Stream).options(selectinload(Stream.sources)).where(Stream.id == stream_id)
+    )
     stream = result.scalar_one_or_none()
     if not stream:
         raise HTTPException(404, "Stream not found")
-    return stream
+    refs = source_refs(stream, stream.sources)
+    return {
+        "id": stream.id,
+        "name": stream.name,
+        "stream_url": stream.stream_url,
+        "backup_url": stream.backup_url,
+        "logo_url": stream.logo_url,
+        "category_id": stream.category_id,
+        "is_enabled": stream.is_enabled,
+        "sort_order": stream.sort_order,
+        "epg_channel_id": stream.epg_channel_id,
+        "delivery_mode": stream.delivery_mode,
+        "sources": [
+            {"url": r.url, "id": r.id, "status": r.status, "priority": r.priority}
+            for r in refs
+        ],
+        "status": stream.status,
+        "created_at": stream.created_at,
+    }
+
+
+@router.get("/{stream_id}/sources")
+async def list_sources(
+    stream_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_admin),
+):
+    result = await db.execute(
+        select(StreamSource)
+        .where(StreamSource.stream_id == stream_id)
+        .order_by(StreamSource.priority, StreamSource.id)
+    )
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "url": r.url,
+            "priority": r.priority,
+            "is_enabled": r.is_enabled,
+            "status": r.status,
+            "last_checked": r.last_checked,
+            "last_error": r.last_error,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/sources/test")
+async def test_source(
+    data: SourceTest,
+    _=Depends(get_current_admin),
+):
+    """Probe a single source URL (used by the source editor before saving)."""
+    url = _normalize_url(data.url.strip())
+    if is_youtube_url(url):
+        resolved = await proxy_resolve(url)
+        if not resolved:
+            return {"alive": False, "message": "yt-dlp could not resolve the YouTube stream"}
+        return await ffmpeg_manager.test_stream_url(resolved)
+    return await ffmpeg_manager.test_stream_url(url)
 
 
 @router.put("/{stream_id}")
@@ -173,12 +285,19 @@ async def update_stream(
         raise HTTPException(404, "Stream not found")
 
     updates = data.model_dump(exclude_none=True)
+    sources_in = updates.pop("sources", None)
+    if "delivery_mode" in updates and updates["delivery_mode"] not in VALID_DELIVERY_MODES:
+        raise HTTPException(400, "delivery_mode must be 'restream' or 'balanced'")
     if "stream_url" in updates:
         updates["stream_url"] = _normalize_url(updates["stream_url"])
     if "backup_url" in updates:
         updates["backup_url"] = _normalize_url(updates["backup_url"])
     for k, v in updates.items():
         setattr(stream, k, v)
+
+    if sources_in is not None:
+        await _replace_sources(db, stream, _clean_source_list(sources_in))
+
     await db.commit()
     await db.refresh(stream)
     return stream
@@ -228,14 +347,17 @@ async def restart_stream(
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_admin),
 ):
-    result = await db.execute(select(Stream).where(Stream.id == stream_id))
+    result = await db.execute(
+        select(Stream).options(selectinload(Stream.sources)).where(Stream.id == stream_id)
+    )
     stream = result.scalar_one_or_none()
     if not stream:
         raise HTTPException(404, "Stream not found")
-    ok = await ffmpeg_manager.restart_stream(stream_id)
+    urls = source_urls(stream, stream.sources)
+    ok = await ffmpeg_manager.restart_stream(stream_id, urls)
     if not ok:
         # Not running yet, start it
-        sp = await ffmpeg_manager.start_stream(stream_id, stream.stream_url, stream.name)
+        sp = await ffmpeg_manager.start_stream(stream_id, urls, stream.name)
         return {"restarted": True, "status": sp.status}
     return {"restarted": True}
 
