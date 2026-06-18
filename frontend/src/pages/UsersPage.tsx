@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Plus, Trash2, Edit2, Copy, Check, Loader2,
-  Search, Users, Key, Eye, EyeOff, RefreshCw,
-} from "lucide-react";
+import { Loader2, Users, Key, Eye, EyeOff, RefreshCw, Copy } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { xtreamBaseUrl } from "../lib/api";
+import { MIcon } from "../components/MIcon";
 import clsx from "clsx";
+
+type UserTab = "all" | "active" | "expired";
+
+function isUserExpired(u: { expires_at: string | null }) {
+  return u.expires_at ? new Date(u.expires_at) < new Date() : false;
+}
 
 interface IUser {
   id: number;
@@ -25,6 +29,7 @@ interface Bouquet { id: number; name: string; }
 export default function UsersPage() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [tab, setTab] = useState<UserTab>("all");
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<IUser | null>(null);
 
@@ -44,54 +49,111 @@ export default function UsersPage() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["users"] }),
   });
 
+  // Derived stats
+  const total = users.length;
+  const activeCount = users.filter((u) => u.is_active && !isUserExpired(u)).length;
+  const expiringSoon = users.filter((u) => {
+    if (!u.expires_at || isUserExpired(u)) return false;
+    const days = (new Date(u.expires_at).getTime() - Date.now()) / 86_400_000;
+    return days <= 7;
+  }).length;
+  const disabled = users.filter((u) => !u.is_active).length;
+
+  const visible = users.filter((u) => {
+    if (tab === "active") return u.is_active && !isUserExpired(u);
+    if (tab === "expired") return isUserExpired(u);
+    return true;
+  });
+
+  const tabs: { key: UserTab; label: string }[] = [
+    { key: "all", label: "All" },
+    { key: "active", label: "Active" },
+    { key: "expired", label: "Expired" },
+  ];
+
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Users</h1>
+    <div className="p-lg space-y-lg">
+      <div className="flex items-end justify-between flex-wrap gap-md">
+        <div>
+          <h2 className="font-headline-md text-headline-md font-bold tracking-tight mb-1">Users Management</h2>
+          <p className="text-on-surface-variant text-body-sm">Monitor and control individual stream access accounts.</p>
+        </div>
         <button className="btn-primary" onClick={() => { setEditing(null); setShowModal(true); }}>
-          <Plus size={15} /> Add User
+          <MIcon name="person_add" size={20} /> Add User
         </button>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-xs">
-        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input
-          className="input pl-9"
-          placeholder="Search users..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+      {/* Stat cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-gutter">
+        <UserStat label="Total Users" value={total} />
+        <UserStat label="Active Connections" value={activeCount} valueClass="text-green-500" />
+        <UserStat label="Expiring Soon" value={expiringSoon} valueClass="text-orange-500" />
+        <UserStat label="Disabled" value={disabled} valueClass="opacity-50" />
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden p-0">
+      <div className="bg-surface-container-low border border-outline-variant overflow-hidden">
+        {/* Controls */}
+        <div className="px-md py-sm border-b border-outline-variant flex items-center justify-between bg-surface-container gap-md flex-wrap">
+          <div className="flex border border-outline-variant overflow-hidden">
+            {tabs.map((t, i) => (
+              <button
+                key={t.key}
+                onClick={() => setTab(t.key)}
+                className={clsx(
+                  "px-md py-xs font-code-label text-[12px] transition-colors",
+                  i > 0 && "border-l border-outline-variant",
+                  tab === t.key
+                    ? "bg-surface-variant text-on-surface"
+                    : "text-on-surface-variant hover:bg-surface-container-high"
+                )}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+          <div className="relative w-full max-w-xs">
+            <MIcon name="filter_list" size={18}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+            <input
+              className="input pl-10 py-1.5 text-[13px]"
+              placeholder="Filter users..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+        </div>
+
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-left border-collapse text-body-sm">
             <thead>
-              <tr className="text-left text-gray-500 border-b border-gray-200 bg-gray-50 text-xs">
-                <th className="px-4 py-3 font-medium">Username</th>
-                <th className="px-4 py-3 font-medium">Password</th>
-                <th className="px-4 py-3 font-medium">Max Conn.</th>
-                <th className="px-4 py-3 font-medium">Expires</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Xtream URL</th>
-                <th className="px-4 py-3 font-medium w-28">Actions</th>
+              <tr className="bg-surface-container/50 border-b border-outline-variant">
+                <th className="px-md py-sm font-code-label text-[10px] uppercase text-on-surface-variant tracking-wider">Username</th>
+                <th className="px-md py-sm font-code-label text-[10px] uppercase text-on-surface-variant tracking-wider">Password</th>
+                <th className="px-md py-sm font-code-label text-[10px] uppercase text-on-surface-variant tracking-wider">Max Conn.</th>
+                <th className="px-md py-sm font-code-label text-[10px] uppercase text-on-surface-variant tracking-wider">Expires</th>
+                <th className="px-md py-sm font-code-label text-[10px] uppercase text-on-surface-variant tracking-wider text-center">Status</th>
+                <th className="px-md py-sm font-code-label text-[10px] uppercase text-on-surface-variant tracking-wider">Xtream URL</th>
+                <th className="px-md py-sm font-code-label text-[10px] uppercase text-on-surface-variant tracking-wider text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-outline-variant/30">
               {isLoading && (
-                <tr><td colSpan={7} className="px-4 py-8 text-center text-gray-400">
+                <tr><td colSpan={7} className="px-md py-8 text-center text-on-surface-variant">
                   <Loader2 size={18} className="animate-spin mx-auto" />
                 </td></tr>
               )}
-              {!isLoading && users.length === 0 && (
-                <tr><td colSpan={7} className="px-4 py-10 text-center">
-                  <Users size={28} className="mx-auto mb-2 text-gray-300" />
-                  <p className="text-gray-400 text-sm">No users yet. Add one to generate Xtream credentials.</p>
+              {!isLoading && visible.length === 0 && (
+                <tr><td colSpan={7} className="px-md py-10 text-center">
+                  <Users size={28} className="mx-auto mb-2 text-on-surface-variant/40" />
+                  <p className="text-on-surface-variant text-body-sm">
+                    {users.length === 0
+                      ? "No users yet. Add one to generate Xtream credentials."
+                      : "No users match this filter."}
+                  </p>
                 </td></tr>
               )}
-              {users.map((u) => (
+              {visible.map((u) => (
                 <UserRow
                   key={u.id}
                   user={u}
@@ -103,6 +165,13 @@ export default function UsersPage() {
             </tbody>
           </table>
         </div>
+        {!isLoading && users.length > 0 && (
+          <div className="px-md py-3 bg-surface-container border-t border-outline-variant">
+            <p className="text-on-surface-variant text-[12px]">
+              Showing {visible.length.toLocaleString()} of {total.toLocaleString()} users
+            </p>
+          </div>
+        )}
       </div>
 
       {showModal && (
@@ -112,6 +181,17 @@ export default function UsersPage() {
           onSaved={() => { setShowModal(false); qc.invalidateQueries({ queryKey: ["users"] }); }}
         />
       )}
+    </div>
+  );
+}
+
+function UserStat({ label, value, valueClass }: {
+  label: string; value: number; valueClass?: string;
+}) {
+  return (
+    <div className="bg-surface-container-low border border-outline-variant p-md">
+      <p className="font-code-label text-[10px] uppercase text-on-surface-variant mb-base">{label}</p>
+      <p className={clsx("text-headline-md font-headline-md font-bold", valueClass)}>{value.toLocaleString()}</p>
     </div>
   );
 }
@@ -147,95 +227,80 @@ function UserRow({ user: u, onEdit, onDelete, onToggle }: {
   const m3uUrl = `${streamBaseHttp}/get.php?username=${u.username}&password=${u.password}&type=m3u_plus`;
 
   const isExpired = u.expires_at ? new Date(u.expires_at) < new Date() : false;
+  const state = u.is_active && !isExpired ? "active" : isExpired ? "expired" : "suspended";
+  const stateCfg = {
+    active:    "border-green-900/50 bg-green-900/10 text-green-500",
+    expired:   "border-red-900/50 bg-red-900/10 text-red-400",
+    suspended: "border-outline-variant bg-surface-container text-on-surface-variant",
+  } as const;
 
   return (
-    <tr className="border-b border-gray-100 table-row-hover">
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 bg-gray-100 border border-gray-200 flex items-center justify-center">
-            <Users size={12} className="text-gray-500" />
-          </div>
-          <span className="font-medium text-gray-900 font-mono">{u.username}</span>
+    <tr className="hover:bg-surface-container-high transition-colors group">
+      <td className="px-md py-sm">
+        <div className="flex items-center gap-sm">
+          <MIcon name="person" size={20} className="text-on-surface-variant/50" />
+          <span className="font-bold">{u.username}</span>
         </div>
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1.5">
-          <code className="text-xs text-gray-600 font-mono">
+      <td className="px-md py-sm">
+        <div className="flex items-center gap-sm font-code-label text-[14px]">
+          <span className={clsx(!showPass && "tracking-[0.2em] opacity-40")}>
             {showPass ? u.password : "••••••••"}
-          </code>
-          <button
-            onClick={() => setShowPass(!showPass)}
-            className="p-1 text-gray-300 hover:text-gray-600 transition-colors"
-          >
-            {showPass ? <EyeOff size={12} /> : <Eye size={12} />}
+          </span>
+          <button onClick={() => setShowPass(!showPass)}
+            className="text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
+            <MIcon name={showPass ? "visibility_off" : "visibility"} size={16} />
           </button>
-          <button
-            onClick={() => copy("pass-" + u.id, u.password)}
-            className="p-1 text-gray-300 hover:text-gray-600 transition-colors"
-          >
-            {copiedKey === "pass-" + u.id ? <Check size={12} className="text-green-600" /> : <Copy size={12} />}
+          <button onClick={() => copy("pass-" + u.id, u.password)}
+            className="text-on-surface-variant hover:text-primary-fixed-dim transition-colors">
+            <MIcon name={copiedKey === "pass-" + u.id ? "check" : "content_copy"} size={16}
+              className={copiedKey === "pass-" + u.id ? "text-green-400" : undefined} />
           </button>
         </div>
       </td>
-      <td className="px-4 py-3 text-gray-600">{u.max_connections}</td>
-      <td className="px-4 py-3">
+      <td className="px-md py-sm font-code-label">{u.max_connections}</td>
+      <td className="px-md py-sm font-code-label">
         {u.expires_at ? (
-          <span className={clsx("text-xs", isExpired ? "text-red-600 font-medium" : "text-gray-600")}>
+          <span className={isExpired ? "text-red-400" : undefined}>
             {new Date(u.expires_at).toLocaleDateString()}
-            {isExpired && " (expired)"}
           </span>
         ) : (
-          <span className="text-gray-400 text-xs">Never</span>
+          <span className="text-on-surface-variant/50">Never</span>
         )}
       </td>
-      <td className="px-4 py-3">
-        <button onClick={onToggle}>
+      <td className="px-md py-sm text-center">
+        <button onClick={onToggle} title="Toggle active">
           <span className={clsx(
-            "text-xs font-medium px-2 py-0.5 border",
-            u.is_active && !isExpired
-              ? "badge-green"
-              : "badge-gray"
+            "inline-flex items-center gap-xs px-sm py-[2px] border rounded-sm font-code-label text-[11px] uppercase",
+            stateCfg[state]
           )}>
-            {u.is_active && !isExpired ? "Active" : isExpired ? "Expired" : "Suspended"}
+            <span className={clsx("w-1.5 h-1.5 rounded-full",
+              state === "active" ? "bg-green-500" : state === "expired" ? "bg-red-400" : "bg-on-surface-variant")} />
+            {state}
           </span>
         </button>
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1">
-          <button
-            onClick={() => copy("xtream-" + u.id, xtreamUrl)}
-            title="Copy Xtream API URL"
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition-colors"
-          >
-            <Key size={11} />
-            Xtream
-            {copiedKey === "xtream-" + u.id ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
+      <td className="px-md py-sm">
+        <div className="flex gap-sm">
+          <button onClick={() => copy("xtream-" + u.id, xtreamUrl)} title="Copy Xtream API URL"
+            className="flex items-center gap-xs px-sm py-[2px] border border-outline-variant hover:bg-surface-container-highest transition-colors font-code-label text-[11px]">
+            <MIcon name={copiedKey === "xtream-" + u.id ? "check" : "link"} size={14}
+              className={copiedKey === "xtream-" + u.id ? "text-green-400" : undefined} /> Xtream
           </button>
-          <button
-            onClick={() => copy("m3u-" + u.id, m3uUrl)}
-            title="Copy M3U URL"
-            className="flex items-center gap-1 px-2 py-1 text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 border border-gray-200 transition-colors"
-          >
-            M3U
-            {copiedKey === "m3u-" + u.id ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
+          <button onClick={() => copy("m3u-" + u.id, m3uUrl)} title="Copy M3U URL"
+            className="flex items-center gap-xs px-sm py-[2px] border border-outline-variant hover:bg-surface-container-highest transition-colors font-code-label text-[11px]">
+            <MIcon name={copiedKey === "m3u-" + u.id ? "check" : "description"} size={14}
+              className={copiedKey === "m3u-" + u.id ? "text-green-400" : undefined} /> M3U
           </button>
         </div>
       </td>
-      <td className="px-4 py-3">
-        <div className="flex items-center gap-1">
-          <button
-            title="Edit"
-            className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
-            onClick={onEdit}
-          >
-            <Edit2 size={14} />
+      <td className="px-md py-sm text-right">
+        <div className="flex items-center justify-end gap-sm opacity-40 group-hover:opacity-100 transition-opacity">
+          <button title="Edit" className="p-1 hover:text-primary-fixed-dim transition-colors" onClick={onEdit}>
+            <MIcon name="edit" size={18} />
           </button>
-          <button
-            title="Delete"
-            className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-100 transition-colors"
-            onClick={onDelete}
-          >
-            <Trash2 size={14} />
+          <button title="Delete" className="p-1 hover:text-red-400 transition-colors" onClick={onDelete}>
+            <MIcon name="delete" size={18} />
           </button>
         </div>
       </td>

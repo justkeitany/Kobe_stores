@@ -1,11 +1,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import {
-  Plus, Upload, Search, Play, Trash2, Edit2,
-  RefreshCw, CheckCircle, XCircle, Loader2, TestTube,
-} from "lucide-react";
+import { Plus, Trash2, Loader2, TestTube } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
+import { MIcon } from "../components/MIcon";
+import clsx from "clsx";
 
 interface Stream {
   id: number;
@@ -89,26 +88,33 @@ export default function Streams() {
   }
 
   return (
-    <div className="p-6 space-y-5">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Streams</h1>
-        <div className="flex gap-2">
+    <div className="p-lg space-y-lg">
+      {/* Header */}
+      <div className="flex justify-between items-end flex-wrap gap-md">
+        <div>
+          <h2 className="font-headline-md text-headline-md font-bold mb-1">Streams</h2>
+          <p className="text-on-surface-variant text-body-sm">
+            Managing {streams.length.toLocaleString()} broadcast endpoint{streams.length === 1 ? "" : "s"}
+          </p>
+        </div>
+        <div className="flex gap-md">
           <input ref={fileRef} type="file" accept=".m3u,.m3u8" className="hidden" onChange={handleM3UUpload} />
           <button className="btn-secondary" onClick={() => fileRef.current?.click()}>
-            <Upload size={15} /> Import M3U
+            <MIcon name="file_upload" size={18} /> Import M3U
           </button>
           <button className="btn-primary" onClick={() => { setEditing(null); setShowModal(true); }}>
-            <Plus size={15} /> Add Stream
+            <MIcon name="add" size={18} /> Add Stream
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex gap-3">
-        <div className="relative flex-1 max-w-xs">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="flex gap-md flex-wrap">
+        <div className="relative flex-1 min-w-[200px] max-w-xs">
+          <MIcon name="search" size={18}
+            className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
           <input
-            className="input pl-9"
+            className="input pl-10"
             placeholder="Search streams..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -127,104 +133,102 @@ export default function Streams() {
       </div>
 
       {/* Table */}
-      <div className="card overflow-hidden p-0">
+      <div className="bg-surface-container-low border border-outline-variant overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-left text-body-sm border-collapse">
             <thead>
-              <tr className="text-left text-gray-500 border-b border-gray-200 bg-gray-50 text-xs">
-                <th className="px-4 py-3 font-medium">Stream</th>
-                <th className="px-4 py-3 font-medium">Category</th>
-                <th className="px-4 py-3 font-medium">Status</th>
-                <th className="px-4 py-3 font-medium">Viewers</th>
-                <th className="px-4 py-3 font-medium">Enabled</th>
-                <th className="px-4 py-3 font-medium w-32">Actions</th>
+              <tr className="border-b border-outline-variant bg-surface-container-high/30">
+                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant">Stream</th>
+                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant">Category</th>
+                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant">Status</th>
+                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant text-right">Viewers</th>
+                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant text-center">Enabled</th>
+                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant text-right">Actions</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-outline-variant/50">
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={6} className="px-md py-8 text-center text-on-surface-variant">
                     <Loader2 size={20} className="animate-spin mx-auto" />
                   </td>
                 </tr>
               )}
               {!isLoading && streams.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-gray-400">
+                  <td colSpan={6} className="px-md py-8 text-center text-on-surface-variant">
                     No streams found. Add one or import an M3U file.
                   </td>
                 </tr>
               )}
               {streams.map((s) => {
                 const cat = categories.find((c) => c.id === s.category_id);
+                const offline = !s.is_enabled || s.status === "error";
                 return (
-                  <tr key={s.id} className="border-b border-gray-100 table-row-hover">
-                    <td className="px-4 py-3">
+                  <tr key={s.id} className={clsx("table-row-hover group", offline && "opacity-60")}>
+                    <td className="px-md py-4">
                       <div className="flex items-center gap-3">
                         {s.logo_url ? (
                           <img
                             src={s.logo_url}
                             alt=""
-                            className="w-8 h-8 object-contain bg-gray-100 border border-gray-200"
+                            className="w-10 h-10 object-cover bg-surface-container border border-outline-variant"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
                         ) : (
-                          <div className="w-8 h-8 bg-gray-100 border border-gray-200 flex items-center justify-center">
-                            <Play size={12} className="text-gray-400" />
+                          <div className="w-10 h-10 bg-surface-container border border-outline-variant flex items-center justify-center">
+                            <MIcon name="live_tv" size={18} className="text-on-surface-variant opacity-50" />
                           </div>
                         )}
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-1.5">
-                            <p className="text-gray-900 font-medium">{s.name}</p>
+                            <p className="font-bold truncate">{s.name}</p>
                             {s.delivery_mode === "balanced" && (
                               <span className="badge-blue text-[10px]" title="Load-balanced across source mirrors">balanced</span>
                             )}
                             {(s.source_count ?? 0) > 1 && (
-                              <span className="text-[10px] text-gray-400" title="Failover sources">
+                              <span className="text-[10px] text-on-surface-variant" title="Failover sources">
                                 {s.source_count} sources
                               </span>
                             )}
                           </div>
-                          <p className="text-gray-400 text-xs truncate max-w-xs font-mono">{s.stream_url}</p>
+                          <p className="text-[11px] font-code-label text-on-surface-variant/70 truncate max-w-xs">{s.stream_url}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-gray-500 text-xs">
-                      {cat?.name ?? <span className="text-gray-300">Uncategorized</span>}
+                    <td className="px-md py-4">
+                      {cat?.name
+                        ? <span className="border border-outline-variant px-2 py-0.5 text-[11px] font-code-label">{cat.name}</span>
+                        : <span className="text-on-surface-variant/50 text-[11px]">Uncategorized</span>}
                     </td>
-                    <td className="px-4 py-3">
-                      <StatusBadge status={s.status} />
+                    <td className="px-md py-4"><StatusCell status={s.status} enabled={s.is_enabled} /></td>
+                    <td className={clsx("px-md py-4 text-right font-code-label", s.viewer_count > 0 && "font-bold text-primary-fixed-dim")}>
+                      {s.viewer_count}
                     </td>
-                    <td className="px-4 py-3 text-gray-600">{s.viewer_count}</td>
-                    <td className="px-4 py-3">
-                      <button
-                        onClick={() => toggleMutation.mutate(s.id)}
-                        className={s.is_enabled ? "text-green-600 hover:text-green-700" : "text-gray-300 hover:text-gray-500"}
-                      >
-                        {s.is_enabled ? <CheckCircle size={16} /> : <XCircle size={16} />}
+                    <td className="px-md py-4 text-center">
+                      <button onClick={() => toggleMutation.mutate(s.id)} title={s.is_enabled ? "Disable" : "Enable"}>
+                        {s.is_enabled
+                          ? <MIcon name="check_circle" fill size={20} className="text-green-500" />
+                          : <MIcon name="cancel" size={20} className="text-outline" />}
                       </button>
                     </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <button title="Test URL"
-                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                    <td className="px-md py-4 text-right">
+                      <div className="flex justify-end gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
+                        <button title="Test URL" className="p-1 hover:text-primary-fixed-dim transition-colors"
                           onClick={() => testMutation.mutate(s.id)}>
-                          <TestTube size={14} />
+                          <MIcon name="science" size={20} />
                         </button>
-                        <button title="Restart"
-                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                        <button title="Restart" className="p-1 hover:text-primary-fixed-dim transition-colors"
                           onClick={() => restartMutation.mutate(s.id)}>
-                          <RefreshCw size={14} />
+                          <MIcon name="refresh" size={20} />
                         </button>
-                        <button title="Edit"
-                          className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 transition-colors"
+                        <button title="Edit" className="p-1 hover:text-primary-fixed-dim transition-colors"
                           onClick={() => { setEditing(s); setShowModal(true); }}>
-                          <Edit2 size={14} />
+                          <MIcon name="edit" size={20} />
                         </button>
-                        <button title="Delete"
-                          className="p-1.5 text-gray-400 hover:text-red-400 hover:bg-gray-100 transition-colors"
+                        <button title="Delete" className="p-1 hover:text-red-400 transition-colors"
                           onClick={() => { if (confirm(`Delete "${s.name}"?`)) deleteMutation.mutate(s.id); }}>
-                          <Trash2 size={14} />
+                          <MIcon name="delete" size={20} />
                         </button>
                       </div>
                     </td>
@@ -234,6 +238,13 @@ export default function Streams() {
             </tbody>
           </table>
         </div>
+        {!isLoading && streams.length > 0 && (
+          <div className="px-md py-4 bg-surface-container flex items-center justify-between border-t border-outline-variant">
+            <p className="text-on-surface-variant text-[12px]">
+              Showing {streams.length.toLocaleString()} stream{streams.length === 1 ? "" : "s"}
+            </p>
+          </div>
+        )}
       </div>
 
       {showModal && (
@@ -248,15 +259,23 @@ export default function Streams() {
   );
 }
 
-function StatusBadge({ status }: { status: string }) {
-  const map: Record<string, string> = {
-    running: "badge-green",
-    starting: "badge-yellow",
-    error: "badge-red",
-    stopped: "badge-gray",
-    idle: "badge-gray",
+function StatusCell({ status, enabled }: { status: string; enabled: boolean }) {
+  const display = !enabled ? "offline" : status;
+  const cfg: Record<string, { dot: string; text: string }> = {
+    running:  { dot: "bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.5)]", text: "text-green-500" },
+    starting: { dot: "bg-yellow-500", text: "text-yellow-500" },
+    error:    { dot: "bg-red-500", text: "text-red-500" },
+    offline:  { dot: "bg-red-500", text: "text-red-500" },
+    idle:     { dot: "bg-outline opacity-40", text: "opacity-60" },
+    stopped:  { dot: "bg-outline opacity-40", text: "opacity-60" },
   };
-  return <span className={map[status] || "badge-gray"}>{status}</span>;
+  const c = cfg[display] ?? cfg.idle;
+  return (
+    <div className="flex items-center gap-2">
+      <span className={clsx("w-2 h-2 rounded-full", c.dot)} />
+      <span className={clsx("text-[12px] uppercase font-bold tracking-widest", c.text)}>{display}</span>
+    </div>
+  );
 }
 
 function StreamModal({

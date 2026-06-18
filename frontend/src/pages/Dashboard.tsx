@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Tv, Activity, Server, Radio, Link2, Copy, Check, Zap } from "lucide-react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
 } from "recharts";
 import { useServerStats } from "../hooks/useServerStats";
+import { MIcon } from "../components/MIcon";
 import api, { xtreamBaseUrl } from "../lib/api";
+import { formatUptime } from "../lib/format";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
@@ -29,161 +30,161 @@ export default function Dashboard() {
     ]);
   }, [stats]);
 
+  function refreshCounts() {
+    api.get("/streams/count").then((r) => setStreamCount(r.data.count)).catch(() => {});
+    api.get("/categories").then((r) => setCategoryCount(r.data.length)).catch(() => {});
+  }
+
   useEffect(() => {
-    function refreshCounts() {
-      api.get("/streams/count").then((r) => setStreamCount(r.data.count)).catch(() => {});
-      api.get("/categories").then((r) => setCategoryCount(r.data.length)).catch(() => {});
-    }
     refreshCounts();
     const id = setInterval(refreshCounts, 7000);
     return () => clearInterval(id);
   }, []);
 
+  const utilization = streamCount > 0
+    ? Math.round(((stats?.active_streams ?? 0) / streamCount) * 100)
+    : 0;
+
   return (
-    <div className="p-6 space-y-5 max-w-[1400px]">
+    <div className="p-lg space-y-lg max-w-[1400px]">
 
       {/* ── Page header ─────────────────────────────────────── */}
-      <div className="flex items-center justify-between h-10">
-        <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Dashboard</h1>
-        <span className={clsx(
-          "inline-flex items-center gap-1.5 text-xs font-semibold px-3 py-1 rounded-full border",
-          connected
-            ? "bg-green-50 text-green-700 border-green-200"
-            : "bg-gray-100 text-gray-500 border-gray-200"
-        )}>
-          <span className={clsx(
-            "w-1.5 h-1.5 rounded-full",
-            connected ? "bg-green-500 animate-pulse" : "bg-gray-400"
-          )} />
-          {connected ? "Live" : "Disconnected"}
-        </span>
+      <div className="flex items-center justify-between flex-wrap gap-md">
+        <div>
+          <h2 className="font-headline-md text-headline-md font-bold mb-1">Dashboard</h2>
+          <div className="flex items-center gap-md text-body-sm text-on-surface-variant">
+            <span className="flex items-center">
+              <span className={clsx("status-dot", connected ? "status-active" : "status-error")} />
+              {connected ? "Server Online" : "Disconnected"}
+            </span>
+            {stats?.uptime_seconds != null && (
+              <span className="border-l border-outline-variant pl-md">
+                Uptime: {formatUptime(stats.uptime_seconds)}
+              </span>
+            )}
+          </div>
+        </div>
+        <button onClick={refreshCounts} className="btn-secondary">
+          <MIcon name="refresh" size={18} /> Refresh
+        </button>
       </div>
 
-      {/* ── Stat cards ──────────────────────────────────────── */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard label="Total Streams"  value={streamCount}                   icon={<Tv size={17} />} />
-        <StatCard label="Active Streams" value={stats?.active_streams ?? 0}    icon={<Activity size={17} />} />
-        <StatCard label="CPU Usage"      value={`${stats?.cpu_percent ?? 0}%`} icon={<Server size={17} />} />
-        <StatCard label="Categories"     value={categoryCount}                 icon={<Radio size={17} />} />
+      {/* ── Bento stat cards ────────────────────────────────── */}
+      <div className="bento-grid">
+        <StatCard className="col-span-6 lg:col-span-3"
+          label="Total Streams" icon="live_tv" value={streamCount}
+          sub="All resources operational" />
+        <StatCard className="col-span-6 lg:col-span-3"
+          label="Active Streams" icon="sensors" value={stats?.active_streams ?? 0}
+          accent sub={`${utilization}% utilization`} />
+        <StatCard className="col-span-6 lg:col-span-3"
+          label="CPU Usage" icon="memory" value={`${stats?.cpu_percent ?? 0}%`}
+          sub="Normal workload" subGreen />
+        <StatCard className="col-span-6 lg:col-span-3"
+          label="Categories" icon="folder_zip" value={categoryCount}
+          sub="Unified structure" />
       </div>
 
       {/* ── Charts row ──────────────────────────────────────── */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        <MetricChart
-          label="CPU %"
-          value={`${stats?.cpu_percent ?? 0}%`}
-          dataKey="cpu"
-          data={history}
-          color="#c6c6c6"
-        />
-        <MetricChart
-          label="RAM %"
-          value={`${stats?.ram_percent ?? 0}%`}
-          sub={stats ? `${stats.ram_used_mb} / ${stats.ram_total_mb} MB` : undefined}
-          dataKey="ram"
-          data={history}
-          color="#c6c6c6"
-        />
-        <MetricChart
-          label="Bandwidth Out"
-          value={`${stats?.bw_out_kbps ?? 0} kbps`}
-          dataKey="bw"
-          data={history}
-          color="#c6c6c6"
-        />
+      <div className="bento-grid">
+        <MetricChart className="col-span-12 lg:col-span-4"
+          label="CPU LOAD %" value={`${stats?.cpu_percent ?? 0}% AVG`}
+          dataKey="cpu" data={history} />
+        <MetricChart className="col-span-12 lg:col-span-4"
+          label="RAM USAGE %"
+          value={stats ? `${stats.ram_used_mb} / ${stats.ram_total_mb} MB` : "—"}
+          dataKey="ram" data={history} />
+        <MetricChart className="col-span-12 lg:col-span-4"
+          label="BANDWIDTH OUT" value={`${stats?.bw_out_kbps ?? 0} KBPS`}
+          dataKey="bw" data={history} />
       </div>
 
-      {/* ── Quick Access Links ───────────────────────────────── */}
+      {/* ── Quick Access Links ──────────────────────────────── */}
       <QuickAccessLinks />
 
-      {/* ── Active FFmpeg processes ──────────────────────────── */}
+      {/* ── Active FFmpeg processes ─────────────────────────── */}
       {stats && stats.streams.length > 0 && (
-        <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <Zap size={15} className="text-gray-400" />
-            <h2 className="text-sm font-semibold text-gray-900">Active FFmpeg Processes</h2>
+        <section className="bg-surface-container border border-outline-variant p-lg">
+          <div className="flex items-center gap-sm mb-md border-b border-outline-variant pb-md">
+            <MIcon name="bolt" className="text-primary-fixed-dim" size={20} />
+            <h3 className="font-headline-md text-headline-md font-bold">Active FFmpeg Processes</h3>
           </div>
-          <table className="w-full text-sm">
+          <table className="w-full text-body-sm">
             <thead>
-              <tr className="border-b border-gray-200 text-left">
-                <th className="pb-2 text-xs font-medium text-gray-500">Stream</th>
-                <th className="pb-2 text-xs font-medium text-gray-500">Status</th>
-                <th className="pb-2 text-xs font-medium text-gray-500">Viewers</th>
+              <tr className="text-left border-b border-outline-variant">
+                <th className="pb-sm font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant">Stream</th>
+                <th className="pb-sm font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant">Status</th>
+                <th className="pb-sm font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant text-right">Viewers</th>
               </tr>
             </thead>
-            <tbody>
+            <tbody className="divide-y divide-outline-variant/50">
               {stats.streams.map((s) => (
-                <tr key={s.id} className="border-b border-gray-100 table-row-hover">
-                  <td className="py-2 text-gray-700 font-medium">#{s.id}</td>
-                  <td className="py-2"><StatusBadge status={s.status} /></td>
-                  <td className="py-2 text-gray-600">{s.viewers}</td>
+                <tr key={s.id} className="table-row-hover">
+                  <td className="py-sm font-medium font-mono">#{s.id}</td>
+                  <td className="py-sm"><StatusBadge status={s.status} /></td>
+                  <td className="py-sm text-right font-code-label">{s.viewers}</td>
                 </tr>
               ))}
             </tbody>
           </table>
-        </div>
+        </section>
       )}
     </div>
   );
 }
 
 /* ── Stat Card ───────────────────────────────────────────────── */
-function StatCard({ label, value, icon }: {
-  label: string; value: string | number; icon: React.ReactNode;
+function StatCard({ label, value, icon, sub, subGreen, accent, className }: {
+  label: string; value: string | number; icon: string;
+  sub?: string; subGreen?: boolean; accent?: boolean; className?: string;
 }) {
   return (
-    <div className="card flex items-start justify-between">
-      <div>
-        <p className="text-xs font-medium text-gray-500 mb-1.5 uppercase tracking-wide">{label}</p>
-        <p className="text-2xl font-bold text-gray-900 tracking-tight font-mono">{value}</p>
+    <div className={clsx("bg-surface-container-low border border-outline-variant p-md", className)}>
+      <div className="flex justify-between items-start mb-sm">
+        <span className="font-code-label text-code-label text-on-surface-variant uppercase">{label}</span>
+        <MIcon name={icon} className="text-primary-fixed-dim" size={22} />
       </div>
-      <div className="w-9 h-9 border border-gray-200 bg-gray-50 flex items-center justify-center text-gray-500 shrink-0">
-        {icon}
+      <div className={clsx("text-display-lg font-display-lg leading-tight", accent && "text-primary")}>
+        {value}
+      </div>
+      <div className={clsx("mt-base text-body-sm text-on-surface-variant", subGreen && "text-green-400")}>
+        {sub}
       </div>
     </div>
   );
 }
 
 /* ── Metric Chart ────────────────────────────────────────────── */
-function MetricChart({ label, value, sub, dataKey, data, color }: {
-  label: string; value: string; sub?: string;
-  dataKey: string; data: StatPoint[]; color: string;
+function MetricChart({ label, value, dataKey, data, className }: {
+  label: string; value: string; dataKey: string; data: StatPoint[]; className?: string;
 }) {
   return (
-    <div className="card">
-      <div className="flex items-start justify-between mb-4">
-        <p className="text-xs font-medium text-gray-500 uppercase tracking-wide">{label}</p>
-        <div className="text-right">
-          <p className="text-lg font-bold text-gray-900 tracking-tight font-mono">{value}</p>
-          {sub && <p className="text-xs text-gray-400 mt-0.5 font-mono">{sub}</p>}
-        </div>
+    <div className={clsx("bg-surface-container-low border border-outline-variant p-md", className)}>
+      <div className="flex justify-between items-center mb-md">
+        <h3 className="font-code-label text-code-label uppercase font-bold tracking-widest">{label}</h3>
+        <span className="text-body-sm text-primary-fixed-dim font-bold">{value}</span>
       </div>
-      <ResponsiveContainer width="100%" height={72}>
-        <AreaChart data={data} margin={{ top: 0, right: 0, left: -28, bottom: 0 }}>
+      <ResponsiveContainer width="100%" height={128}>
+        <AreaChart data={data} margin={{ top: 4, right: 0, left: -28, bottom: 0 }}>
           <defs>
             <linearGradient id={`g-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%"   stopColor={color} stopOpacity={0.12} />
-              <stop offset="100%" stopColor={color} stopOpacity={0} />
+              <stop offset="0%"   stopColor="#c6c6c6" stopOpacity={0.18} />
+              <stop offset="100%" stopColor="#c6c6c6" stopOpacity={0} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#2a2b33" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant)" vertical={false} />
           <XAxis dataKey="t" hide />
-          <YAxis tick={{ fontSize: 10, fill: "#6f6c79" }} tickLine={false} axisLine={false} />
+          <YAxis tick={{ fontSize: 10, fill: "var(--color-on-surface-variant)" }} tickLine={false} axisLine={false} />
           <Tooltip
             contentStyle={{
-              background: "#1a1b22", border: "1px solid #33343c",
-              borderRadius: 0, fontSize: 12, color: "#e3e1ec",
+              background: "var(--color-surface-container)", border: "1px solid var(--color-outline-variant)",
+              borderRadius: 0, fontSize: 12, color: "var(--color-on-surface)",
             }}
-            labelStyle={{ color: "#9c99a8" }}
+            labelStyle={{ color: "var(--color-on-surface-variant)" }}
           />
           <Area
-            type="monotone"
-            dataKey={dataKey}
-            stroke={color}
-            strokeWidth={1.5}
-            fill={`url(#g-${dataKey})`}
-            dot={false}
-            isAnimationActive={false}
+            type="monotone" dataKey={dataKey} stroke="#c6c6c6" strokeWidth={1.5}
+            fill={`url(#g-${dataKey})`} dot={false} isAnimationActive={false}
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -210,54 +211,56 @@ function QuickAccessLinks() {
   }
 
   const playerBase = serverUrl;
-
   const links = [
-    { key: "panel",      label: "Admin Panel",       desc: "This dashboard",                               value: window.location.origin },
-    { key: "xtream",     label: "Xtream Server URL",  desc: "Enter in TiviMate / Smarters / GSE",            value: playerBase },
-    { key: "m3u",        label: "M3U Playlist",       desc: "Direct playlist URL for VLC, Kodi etc.",      value: `${playerBase}/get.php?username=admin&password=YOUR_PASS&type=m3u_plus` },
-    { key: "xmltv",      label: "XMLTV / EPG",        desc: "Electronic programme guide URL",              value: `${playerBase}/xmltv.php?username=admin&password=YOUR_PASS` },
-    { key: "player_api", label: "Player API",         desc: "Xtream Codes authentication endpoint",        value: `${playerBase}/player_api.php?username=admin&password=YOUR_PASS` },
-    { key: "live",       label: "Live Stream",        desc: "Stream delivery URL pattern",                 value: `${playerBase}/live/admin/YOUR_PASS/{stream_id}.m3u8` },
+    { key: "panel",      label: "Admin Panel",       desc: "Direct dashboard entry point",          value: window.location.origin },
+    { key: "xtream",     label: "Xtream Server URL",  desc: "TiviMate / Smarters / GSE config",       value: playerBase },
+    { key: "m3u",        label: "M3U Playlist",       desc: "Direct VLC / Kodi link",                 value: `${playerBase}/get.php?username=admin&password=YOUR_PASS&type=m3u_plus` },
+    { key: "xmltv",      label: "XMLTV / EPG",        desc: "TV Program guide URL",                   value: `${playerBase}/xmltv.php?username=admin&password=YOUR_PASS` },
+    { key: "player_api", label: "Player API",         desc: "Auth endpoint for apps",                 value: `${playerBase}/player_api.php?username=admin&password=YOUR_PASS` },
+    { key: "live",       label: "Live Stream",        desc: "Stream delivery URL pattern",            value: `${playerBase}/live/admin/YOUR_PASS/{stream_id}.m3u8` },
   ];
 
   return (
-    <div className="card">
-      <div className="flex items-center gap-2 mb-4">
-        <Link2 size={15} className="text-gray-400" />
-        <h2 className="text-sm font-semibold text-gray-900">Quick Access Links</h2>
+    <section className="bg-surface-container border border-outline-variant p-lg">
+      <div className="flex items-center gap-sm mb-lg border-b border-outline-variant pb-md">
+        <MIcon name="link" className="text-primary-fixed-dim" size={20} />
+        <h3 className="font-headline-md text-headline-md font-bold">Quick Access Links</h3>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-gutter">
         {links.map((link) => (
           <div
             key={link.key}
-            className="flex items-start justify-between gap-3 px-4 py-3 border border-gray-200 bg-gray-50 hover:bg-white hover:border-gray-300 transition-colors"
+            className="group bg-surface-container-low border border-outline-variant p-md hover:border-primary transition-all"
           >
-            <div className="min-w-0">
-              <p className="text-xs font-semibold text-gray-800">{link.label}</p>
-              <p className="text-xs text-gray-400 mt-0.5 mb-1.5">{link.desc}</p>
-              <code className="text-xs text-gray-600 break-all font-mono">{link.value}</code>
+            <div className="flex justify-between items-start mb-sm">
+              <div className="min-w-0">
+                <h4 className="font-body-sm font-bold text-on-surface">{link.label}</h4>
+                <p className="text-[12px] text-on-surface-variant">{link.desc}</p>
+              </div>
+              <button
+                onClick={() => copy(link.key, link.value)}
+                className="shrink-0 ml-2 text-on-surface-variant hover:text-primary transition-colors"
+                title="Copy"
+              >
+                <MIcon name={copiedKey === link.key ? "check" : "content_copy"} size={18}
+                  className={copiedKey === link.key ? "text-green-400" : undefined} />
+              </button>
             </div>
-            <button
-              onClick={() => copy(link.key, link.value)}
-              className="shrink-0 mt-0.5 p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-200 transition-colors"
-              title="Copy"
-            >
-              {copiedKey === link.key
-                ? <Check size={13} className="text-green-600" />
-                : <Copy size={13} />}
-            </button>
+            <code className="block font-code-label text-[11px] bg-surface-container-lowest p-2 text-primary-fixed-dim border border-outline-variant/30 overflow-x-auto whitespace-nowrap">
+              {link.value}
+            </code>
           </div>
         ))}
       </div>
 
-      <p className="mt-4 text-xs text-gray-400">
-        Replace <code className="font-mono text-gray-600 bg-gray-100 px-1 py-0.5">YOUR_PASS</code> with your admin password.{" "}
-        <a href="/settings" className="text-gray-700 underline underline-offset-2 hover:text-gray-900">
-          Update server URL in Settings →
+      <div className="mt-lg pt-md border-t border-outline-variant/30 flex flex-col md:flex-row justify-between items-center text-on-surface-variant font-code-label text-[12px] gap-sm">
+        <p>Replace <span className="bg-surface-variant px-1.5 py-0.5 text-primary-fixed-dim">YOUR_PASS</span> with your administrative password.</p>
+        <a href="/settings" className="text-primary-fixed-dim hover:underline flex items-center gap-xs">
+          Update server URL in Settings <MIcon name="arrow_forward" size={14} />
         </a>
-      </p>
-    </div>
+      </div>
+    </section>
   );
 }
 

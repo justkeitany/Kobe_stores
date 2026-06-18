@@ -7,6 +7,7 @@ export interface ServerStats {
   ram_total_mb: number;
   bw_out_kbps: number;
   bw_in_kbps: number;
+  uptime_seconds?: number;
   active_streams: number;
   streams: Array<{ id: number; status: string; viewers: number }>;
 }

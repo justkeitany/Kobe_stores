@@ -6,6 +6,7 @@ Single worker only — ffmpeg_manager state is in-process.
 import asyncio
 import json
 import logging
+import time
 import psutil
 from fastapi import WebSocket, WebSocketDisconnect
 from app.ffmpeg_manager import ffmpeg_manager
@@ -43,6 +44,7 @@ async def stats_sender(websocket: WebSocket):
                     "ram_total_mb": round(ram.total / 1024 / 1024),
                     "bw_out_kbps":  round(bw_out * 8 / 1024, 1),
                     "bw_in_kbps":   round(bw_in  * 8 / 1024, 1),
+                    "uptime_seconds": round(time.time() - psutil.boot_time()),
                     "active_streams": len(watched),
                     "streams": [
                         {

@@ -1,18 +1,58 @@
 @import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap");
 @import "tailwindcss";
 
 /* ────────────────────────────────────────────────────────────────
-   Obsidian Flux — high-contrast monochrome dark theme.
+   Obsidian Flux — high-contrast monochrome theme, Stitch-aligned.
 
-   The gray ramp + `white` are *inverted* here so the app's existing
-   light-mode utilities (bg-white, text-gray-900, border-gray-200…)
-   render as dark monochrome without rewriting every component.
+   Dark is the default. Semantic surface/on-surface/outline tokens are
+   added on top of the inverted gray ramp so component markup can use
+   the same vocabulary as the Stitch designs (bg-surface-container-low,
+   text-on-surface-variant, border-outline-variant, font-headline-md…).
+
+   Light mode flips the CSS variables under `html.light`; because
+   Tailwind v4 emits every @theme token as a CSS custom property that
+   utilities reference via var(), overriding them re-themes the app.
    ──────────────────────────────────────────────────────────────── */
 @theme {
   --font-sans: "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
-  /* `white` is used for card/surface fills → darkest-but-elevated tone */
+  /* Stitch font-family aliases (all Geist except the mono code label) */
+  --font-display-lg:  "Geist", sans-serif;
+  --font-headline-md: "Geist", sans-serif;
+  --font-body-base:   "Geist", sans-serif;
+  --font-body-sm:     "Geist", sans-serif;
+  --font-code-label:  "JetBrains Mono", ui-monospace, monospace;
+
+  /* Stitch type scale */
+  --text-display-lg: 48px;
+  --text-display-lg--line-height: 1.1;
+  --text-display-lg--letter-spacing: -0.04em;
+  --text-display-lg--font-weight: 700;
+  --text-headline-md: 24px;
+  --text-headline-md--line-height: 1.2;
+  --text-headline-md--letter-spacing: -0.02em;
+  --text-headline-md--font-weight: 600;
+  --text-body-base: 16px;
+  --text-body-base--line-height: 1.6;
+  --text-body-sm: 14px;
+  --text-body-sm--line-height: 1.5;
+  --text-code-label: 12px;
+  --text-code-label--line-height: 1;
+  --text-code-label--letter-spacing: 0.05em;
+
+  /* Stitch named spacing — enables p-md, gap-gutter, mb-lg, etc. */
+  --spacing-base: 4px;
+  --spacing-xs: 4px;
+  --spacing-sm: 8px;
+  --spacing-md: 16px;
+  --spacing-gutter: 16px;
+  --spacing-lg: 24px;
+  --spacing-margin: 24px;
+  --spacing-xl: 48px;
+
+  /* `white` = card/surface fill → darkest-but-elevated tone */
   --color-white: #1a1b22;
 
   /* Inverted neutral ramp: 50 = darkest surface … 900 = lightest ink */
@@ -27,22 +67,92 @@
   --color-gray-800: #d8d6e0;
   --color-gray-900: #e3e1ec;
   --color-gray-950: #0d0e15;
+
+  /* ── Stitch semantic surface tokens ─────────────────────────── */
+  --color-surface: #12131a;
+  --color-surface-dim: #12131a;
+  --color-surface-bright: #383941;
+  --color-surface-container-lowest: #0d0e15;
+  --color-surface-container-low: #16171d;
+  --color-surface-container: #1e1f26;
+  --color-surface-container-high: #26272e;
+  --color-surface-container-highest: #33343c;
+  --color-surface-variant: #33343c;
+
+  --color-on-surface: #e3e1ec;
+  --color-on-surface-variant: #cfc4c5;
+  --color-on-background: #e3e1ec;
+
+  --color-outline: #4c4650;
+  --color-outline-variant: #2a2b33;
+
+  --color-primary: #e3e1ec;
+  --color-on-primary: #16171d;
+  --color-primary-fixed-dim: #c6c6c6;
+  --color-error: #ffb4ab;
+}
+
+/* ── Light mode: re-point the variables ───────────────────────── */
+html.light {
+  --color-white: #ffffff;
+
+  --color-gray-50:  #f6f6f9;
+  --color-gray-100: #eeeef2;
+  --color-gray-200: #e2e2e8;
+  --color-gray-300: #cfcfd6;
+  --color-gray-400: #a7a6b0;
+  --color-gray-500: #76757f;
+  --color-gray-600: #5b5a64;
+  --color-gray-700: #45444d;
+  --color-gray-800: #2a2930;
+  --color-gray-900: #1a1b22;
+  --color-gray-950: #ffffff;
+
+  --color-surface: #f7f7fa;
+  --color-surface-dim: #ececf1;
+  --color-surface-bright: #ffffff;
+  --color-surface-container-lowest: #ffffff;
+  --color-surface-container-low: #f3f3f7;
+  --color-surface-container: #eeeef3;
+  --color-surface-container-high: #e7e7ee;
+  --color-surface-container-highest: #e1e1e9;
+  --color-surface-variant: #e2e2e8;
+
+  --color-on-surface: #1a1b22;
+  --color-on-surface-variant: #5b5a64;
+  --color-on-background: #1a1b22;
+
+  --color-outline: #b6b5bf;
+  --color-outline-variant: #d9d9e0;
+
+  --color-primary: #1a1b22;
+  --color-on-primary: #ffffff;
+  --color-primary-fixed-dim: #45444d;
+  --color-error: #b3261e;
 }
 
 @layer base {
   * { box-sizing: border-box; }
 
   body {
-    background-color: #121318;
-    color: #e3e1ec;
+    background-color: var(--color-surface);
+    color: var(--color-on-surface);
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
   }
 
+  .material-symbols-outlined {
+    font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 1;
+    user-select: none;
+  }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
-  ::-webkit-scrollbar-track { background: #121318; }
-  ::-webkit-scrollbar-thumb { background: #33343c; }
-  ::-webkit-scrollbar-thumb:hover { background: #4c4650; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--color-outline-variant); border-radius: 10px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--color-outline); }
 }
 
 @layer components {
@@ -50,61 +160,75 @@
   .btn-primary {
     display: inline-flex; align-items: center; gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background: #e3e1ec; color: #16171d;
+    background: var(--color-primary); color: var(--color-on-primary);
     font-size: 0.875rem; font-weight: 600; line-height: 1.25rem;
-    border: 1px solid #e3e1ec;
-    transition: background-color .15s, border-color .15s;
+    border: 1px solid var(--color-primary);
+    transition: opacity .15s;
   }
-  .btn-primary:hover { background: #ffffff; border-color: #ffffff; }
+  .btn-primary:hover { opacity: .9; }
   .btn-primary:disabled { opacity: .4; cursor: not-allowed; }
 
   .btn-secondary {
     display: inline-flex; align-items: center; gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background: transparent; color: #e3e1ec;
+    background: transparent; color: var(--color-on-surface);
     font-size: 0.875rem; font-weight: 500; line-height: 1.25rem;
-    border: 1px solid #33343c;
+    border: 1px solid var(--color-outline-variant);
     transition: background-color .15s, border-color .15s;
   }
-  .btn-secondary:hover { background: #202128; border-color: #4c4650; }
+  .btn-secondary:hover { background: var(--color-surface-container); border-color: var(--color-outline); }
 
   .btn-danger {
     display: inline-flex; align-items: center; gap: 0.5rem;
     padding: 0.5rem 1rem;
-    background: transparent; color: #ffb4ab;
+    background: transparent; color: var(--color-error);
     font-size: 0.875rem; font-weight: 500; line-height: 1.25rem;
-    border: 1px solid #5c2b28;
+    border: 1px solid color-mix(in srgb, var(--color-error) 35%, transparent);
     transition: background-color .15s, border-color .15s;
   }
-  .btn-danger:hover { background: rgba(255, 180, 171, .08); border-color: #93000a; }
+  .btn-danger:hover { background: color-mix(in srgb, var(--color-error) 10%, transparent); }
 
   /* ── Inputs ──────────────────────────────────────────────── */
   .input {
     width: 100%;
     padding: 0.5rem 0.75rem;
-    background: #14151b;
-    border: 1px solid #33343c;
-    color: #e3e1ec;
+    background: transparent;
+    border: 1px solid var(--color-outline-variant);
+    color: var(--color-on-surface);
     font-size: 0.875rem;
     transition: border-color .15s, box-shadow .15s;
   }
-  .input::placeholder { color: #6f6c79; }
+  .input::placeholder { color: var(--color-on-surface-variant); opacity: .55; }
   .input:focus {
     outline: none;
-    border-color: #e3e1ec;
-    box-shadow: 0 0 0 1px #e3e1ec;
+    border-color: var(--color-on-surface);
   }
-  /* Native select / date popovers on dark */
-  .input option { background: #1a1b22; color: #e3e1ec; }
+  .input option { background: var(--color-surface-container); color: var(--color-on-surface); }
 
   /* ── Cards (1px border, no shadow, sharp) ────────────────── */
   .card {
-    background: #1a1b22;
-    border: 1px solid #2a2b33;
+    background: var(--color-surface-container-low);
+    border: 1px solid var(--color-outline-variant);
     padding: 1.25rem;
   }
 
-  /* ── Status chips (rectangular box + dot via text color) ── */
+  /* ── Status dot ───────────────────────────────────────────── */
+  .status-dot {
+    display: inline-block; width: 0.5rem; height: 0.5rem;
+    border-radius: 9999px; margin-right: 0.5rem;
+  }
+  .status-active { background: #22c55e; box-shadow: 0 0 8px rgba(34,197,94,.5); }
+  .status-idle   { background: var(--color-outline); opacity: .5; }
+  .status-error  { background: #ef4444; }
+
+  /* ── Bento grid ───────────────────────────────────────────── */
+  .bento-grid {
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    gap: var(--spacing-gutter);
+  }
+
+  /* ── Status chips (rectangular box) ──────────────────────── */
   .badge-green, .badge-red, .badge-yellow, .badge-gray, .badge-blue {
     display: inline-flex; align-items: center; gap: 0.375rem;
     padding: 0.125rem 0.5rem;
@@ -116,9 +240,9 @@
   .badge-red    { background: rgba(255, 130, 122, .08); color: #ffb4ab; border-color: rgba(255, 130, 122, .28); }
   .badge-yellow { background: rgba(245, 200, 110, .08); color: #f5c86e; border-color: rgba(245, 200, 110, .25); }
   .badge-blue   { background: rgba(140, 170, 255, .08); color: #9cb4ff; border-color: rgba(140, 170, 255, .25); }
-  .badge-gray   { background: #202128; color: #9c99a8; border-color: #33343c; }
+  .badge-gray   { background: var(--color-surface-container); color: var(--color-on-surface-variant); border-color: var(--color-outline-variant); }
 
   /* ── Table ───────────────────────────────────────────────── */
   .table-row-hover { transition: background-color .15s; }
-  .table-row-hover:hover { background: #202128; }
+  .table-row-hover:hover { background: var(--color-surface-container-high); }
 }
