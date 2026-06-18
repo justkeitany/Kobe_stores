@@ -30,3 +30,27 @@ export function logout() {
 export function isAuthenticated(): boolean {
   return !!localStorage.getItem("access_token");
 }
+
+/** Decode the logged-in username (JWT `sub` claim). Falls back to "admin". */
+export function currentUsername(): string {
+  const token = localStorage.getItem("access_token");
+  if (!token) return "admin";
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
+    return payload?.sub || "admin";
+  } catch {
+    return "admin";
+  }
+}
+
+/** Decode the role claim (e.g. "admin"). */
+export function currentRole(): string {
+  const token = localStorage.getItem("access_token");
+  if (!token) return "";
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1] ?? ""));
+    return payload?.role || "";
+  } catch {
+    return "";
+  }
+}

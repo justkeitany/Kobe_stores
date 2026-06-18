@@ -1,24 +1,42 @@
 import { useEffect, useState } from "react";
 import {
   AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid,
+  LineChart, Line, Legend,
 } from "recharts";
 import { useServerStats } from "../hooks/useServerStats";
 import { MIcon } from "../components/MIcon";
 import api, { xtreamBaseUrl } from "../lib/api";
+import { currentUsername } from "../lib/auth";
 import { formatUptime } from "../lib/format";
 import toast from "react-hot-toast";
 import clsx from "clsx";
 
 interface StatPoint { t: string; cpu: number; ram: number; bw: number; }
+interface DayPoint { ts: number; cpu: number; ram: number; bw: number; }
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+const DAY_KEY = "dashboard_24h_history";
+
+function loadDayHistory(): DayPoint[] {
+  try {
+    const raw = JSON.parse(localStorage.getItem(DAY_KEY) ?? "[]") as DayPoint[];
+    const cutoff = Date.now() - DAY_MS;
+    return raw.filter((p) => p.ts >= cutoff);
+  } catch {
+    return [];
+  }
+}
 
 export default function Dashboard() {
   const { stats, connected } = useServerStats();
   const [history, setHistory] = useState<StatPoint[]>([]);
+  const [dayHistory, setDayHistory] = useState<DayPoint[]>(loadDayHistory);
   const [streamCount, setStreamCount] = useState(0);
   const [categoryCount, setCategoryCount] = useState(0);
 
   useEffect(() => {
     if (!stats) return;
+    const now = Date.now();
     setHistory((prev) => [
       ...prev.slice(-59),
       {
@@ -28,6 +46,18 @@ export default function Dashboard() {
         bw: Math.round(stats.bw_out_kbps),
       },
     ]);
+    setDayHistory((prev) => {
+      const cutoff = now - DAY_MS;
+      // Sample at most one point per minute to keep the 24h series light.
+      const last = prev[prev.length - 1];
+      if (last && now - last.ts < 60_000) return prev;
+      const next = [
+        ...prev.filter((p) => p.ts >= cutoff),
+        { ts: now, cpu: stats.cpu_percent, ram: stats.ram_percent, bw: Math.round(stats.bw_out_kbps) },
+      ];
+      try { localStorage.setItem(DAY_KEY, JSON.stringify(next)); } catch {}
+      return next;
+    });
   }, [stats]);
 
   function refreshCounts() {
@@ -51,6 +81,7 @@ export default function Dashboard() {
       {/* ── Page header ─────────────────────────────────────── */}
       <div className="flex items-center justify-between flex-wrap gap-md">
         <div>
+          <p className="text-body-sm text-on-surface-variant mb-0.5">Welcome back, <span className="text-on-surface font-bold">{currentUsername()}</span></p>
           <h2 className="font-headline-md text-headline-md font-bold mb-1">Dashboard</h2>
           <div className="flex items-center gap-md text-body-sm text-on-surface-variant">
             <span className="flex items-center">
@@ -84,6 +115,9 @@ export default function Dashboard() {
           label="Categories" icon="folder_zip" value={categoryCount}
           sub="Unified structure" />
       </div>
+
+      {/* ── Combined 24h performance chart ──────────────────── */}
+      <CombinedChart data={dayHistory} />
 
       {/* ── Charts row ──────────────────────────────────────── */}
       <div className="bento-grid">
@@ -151,6 +185,58 @@ function StatCard({ label, value, icon, sub, subGreen, accent, className }: {
         {sub}
       </div>
     </div>
+  );
+}
+
+/* ── Combined 24h performance chart ──────────────────────────── */
+const SERIES = [
+  { key: "cpu", name: "CPU %",         color: "#60a5fa" },
+  { key: "ram", name: "RAM %",         color: "#c084fc" },
+  { key: "bw",  name: "Bandwidth kbps", color: "#34d399" },
+];
+
+function CombinedChart({ data }: { data: DayPoint[] }) {
+  const chartData = data.map((p) => ({
+    ...p,
+    label: new Date(p.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+  }));
+
+  return (
+    <section className="bg-surface-container-low border border-outline-variant p-md">
+      <div className="flex justify-between items-center mb-sm flex-wrap gap-sm">
+        <div className="flex items-center gap-sm">
+          <MIcon name="monitoring" className="text-primary-fixed-dim" size={18} />
+          <h3 className="font-code-label text-[10px] uppercase font-bold tracking-widest">
+            24-Hour Performance
+          </h3>
+        </div>
+        <span className="font-code-label text-[10px] text-on-surface-variant uppercase">
+          {chartData.length > 0
+            ? `${chartData.length} samples · CPU / RAM / Bandwidth`
+            : "Collecting data…"}
+        </span>
+      </div>
+      <ResponsiveContainer width="100%" height={200}>
+        <LineChart data={chartData} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant)" vertical={false} />
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "var(--color-on-surface-variant)" }}
+            tickLine={false} axisLine={false} minTickGap={48} />
+          <YAxis tick={{ fontSize: 10, fill: "var(--color-on-surface-variant)" }} tickLine={false} axisLine={false} />
+          <Tooltip
+            contentStyle={{
+              background: "var(--color-surface-container)", border: "1px solid var(--color-outline-variant)",
+              borderRadius: 0, fontSize: 12, color: "var(--color-on-surface)",
+            }}
+            labelStyle={{ color: "var(--color-on-surface-variant)" }}
+          />
+          <Legend wrapperStyle={{ fontSize: 11 }} iconType="plainline" />
+          {SERIES.map((s) => (
+            <Line key={s.key} type="monotone" dataKey={s.key} name={s.name}
+              stroke={s.color} strokeWidth={1.5} dot={false} isAnimationActive={false} />
+          ))}
+        </LineChart>
+      </ResponsiveContainer>
+    </section>
   );
 }
 

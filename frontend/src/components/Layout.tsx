@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
   Server, Settings, LogOut, Menu, Users,
 } from "lucide-react";
-import { logout } from "../lib/auth";
+import { logout, currentUsername } from "../lib/auth";
 import { useServerStats } from "../hooks/useServerStats";
 import { useTheme } from "../lib/theme";
 import { MIcon } from "./MIcon";
@@ -137,6 +137,7 @@ function TopHeader() {
   const { stats, connected } = useServerStats();
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState<null | "bell" | "account">(null);
+  const username = currentUsername();
 
   const closeMenu = () => setMenu(null);
 
@@ -151,16 +152,16 @@ function TopHeader() {
   }
 
   return (
-    <header className="h-16 shrink-0 border-b border-outline-variant bg-surface flex items-center justify-between px-lg gap-lg z-30">
+    <header className="h-12 shrink-0 border-b border-outline-variant bg-surface flex items-center justify-between px-lg gap-lg z-30">
       {/* Search */}
-      <form onSubmit={submitSearch} className="relative w-full max-w-md">
+      <form onSubmit={submitSearch} className="relative flex-1 max-w-3xl">
         <MIcon name="search" size={18}
-          className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+          className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
         <input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          className="input pl-10 pr-4 text-body-sm"
-          placeholder="Search streams…  (press Enter)"
+          className="input h-8 w-full pl-11 pr-4 text-body-sm rounded-full bg-surface-container-low border-outline-variant focus:bg-surface-container focus:border-on-surface"
+          placeholder="Search streams…  press Enter"
           type="text"
         />
       </form>
@@ -195,10 +196,10 @@ function TopHeader() {
         <div className="relative">
           <button
             onClick={() => setMenu(menu === "bell" ? null : "bell")}
-            className="relative p-2 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-md transition-colors"
+            className="relative p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-md transition-colors"
             title="Notifications"
           >
-            <MIcon name="notifications" size={22} />
+            <MIcon name="notifications" size={20} />
             {alerts.length > 0 && (
               <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-error rounded-full" />
             )}
@@ -244,12 +245,12 @@ function TopHeader() {
             onClick={() => setMenu(menu === "account" ? null : "account")}
             className="flex items-center gap-2 hover:opacity-80 transition-opacity"
           >
-            <div className="text-right hidden sm:block">
-              <p className="font-bold text-body-sm leading-tight">Admin User</p>
-              <p className="font-code-label text-[10px] text-on-surface-variant uppercase tracking-widest">Superadmin</p>
+            <div className="text-right hidden sm:block leading-tight">
+              <p className="font-code-label text-[10px] text-on-surface-variant">Welcome back</p>
+              <p className="font-bold text-body-sm leading-tight">{username}</p>
             </div>
-            <div className="w-8 h-8 bg-surface-container-highest border border-outline-variant rounded-md flex items-center justify-center">
-              <MIcon name="account_circle" size={22} className="text-on-surface-variant" />
+            <div className="w-7 h-7 bg-surface-container-highest border border-outline-variant rounded-md flex items-center justify-center">
+              <MIcon name="account_circle" size={20} className="text-on-surface-variant" />
             </div>
           </button>
           {menu === "account" && (

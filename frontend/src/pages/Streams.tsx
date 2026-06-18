@@ -96,12 +96,12 @@ export default function Streams() {
   }
 
   return (
-    <div className="p-lg space-y-lg">
+    <div className="p-lg space-y-md">
       {/* Header */}
       <div className="flex justify-between items-end flex-wrap gap-md">
         <div>
-          <h2 className="font-headline-md text-headline-md font-bold mb-1">Streams</h2>
-          <p className="text-on-surface-variant text-body-sm">
+          <h2 className="text-lg font-bold tracking-tight mb-0.5">Streams</h2>
+          <p className="text-on-surface-variant text-[12px]">
             Managing {streams.length.toLocaleString()} broadcast endpoint{streams.length === 1 ? "" : "s"}
           </p>
         </div>
@@ -146,25 +146,25 @@ export default function Streams() {
           <table className="w-full text-left text-body-sm border-collapse">
             <thead>
               <tr className="border-b border-outline-variant bg-surface-container-high/30">
-                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant">Stream</th>
-                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant">Category</th>
-                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant">Status</th>
-                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant text-right">Viewers</th>
-                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant text-center">Enabled</th>
-                <th className="px-md py-4 font-code-label uppercase text-[11px] tracking-wider text-on-surface-variant text-right">Actions</th>
+                <th className="px-md py-2.5 font-code-label uppercase text-[10px] tracking-wider text-on-surface-variant">Stream</th>
+                <th className="px-md py-2.5 font-code-label uppercase text-[10px] tracking-wider text-on-surface-variant">Category</th>
+                <th className="px-md py-2.5 font-code-label uppercase text-[10px] tracking-wider text-on-surface-variant">Status</th>
+                <th className="px-md py-2.5 font-code-label uppercase text-[10px] tracking-wider text-on-surface-variant text-right">Viewers</th>
+                <th className="px-md py-2.5 font-code-label uppercase text-[10px] tracking-wider text-on-surface-variant text-center">Enabled</th>
+                <th className="px-md py-2.5 font-code-label uppercase text-[10px] tracking-wider text-on-surface-variant text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-outline-variant/50">
               {isLoading && (
                 <tr>
-                  <td colSpan={6} className="px-md py-8 text-center text-on-surface-variant">
-                    <Loader2 size={20} className="animate-spin mx-auto" />
+                  <td colSpan={6} className="px-md py-6 text-center text-on-surface-variant">
+                    <Loader2 size={18} className="animate-spin mx-auto" />
                   </td>
                 </tr>
               )}
               {!isLoading && streams.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-md py-8 text-center text-on-surface-variant">
+                  <td colSpan={6} className="px-md py-6 text-center text-on-surface-variant">
                     No streams found. Add one or import an M3U file.
                   </td>
                 </tr>
@@ -174,18 +174,18 @@ export default function Streams() {
                 const offline = !s.is_enabled || s.status === "error";
                 return (
                   <tr key={s.id} className={clsx("table-row-hover group", offline && "opacity-60")}>
-                    <td className="px-md py-4">
-                      <div className="flex items-center gap-3">
+                    <td className="px-md py-2">
+                      <div className="flex items-center gap-2.5">
                         {s.logo_url ? (
                           <img
                             src={s.logo_url}
                             alt=""
-                            className="w-10 h-10 object-cover bg-surface-container border border-outline-variant"
+                            className="w-8 h-8 object-cover bg-surface-container border border-outline-variant"
                             onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
                           />
                         ) : (
-                          <div className="w-10 h-10 bg-surface-container border border-outline-variant flex items-center justify-center">
-                            <MIcon name="live_tv" size={18} className="text-on-surface-variant opacity-50" />
+                          <div className="w-8 h-8 bg-surface-container border border-outline-variant flex items-center justify-center">
+                            <MIcon name="live_tv" size={16} className="text-on-surface-variant opacity-50" />
                           </div>
                         )}
                         <div className="min-w-0">
@@ -204,39 +204,39 @@ export default function Streams() {
                         </div>
                       </div>
                     </td>
-                    <td className="px-md py-4">
+                    <td className="px-md py-2">
                       {cat?.name
                         ? <span className="border border-outline-variant px-2 py-0.5 text-[11px] font-code-label">{cat.name}</span>
                         : <span className="text-on-surface-variant/50 text-[11px]">Uncategorized</span>}
                     </td>
-                    <td className="px-md py-4"><StatusCell status={s.status} enabled={s.is_enabled} /></td>
-                    <td className={clsx("px-md py-4 text-right font-code-label", s.viewer_count > 0 && "font-bold text-primary-fixed-dim")}>
+                    <td className="px-md py-2"><StatusCell status={s.status} enabled={s.is_enabled} /></td>
+                    <td className={clsx("px-md py-2 text-right font-code-label", s.viewer_count > 0 && "font-bold text-primary-fixed-dim")}>
                       {s.viewer_count}
                     </td>
-                    <td className="px-md py-4 text-center">
+                    <td className="px-md py-2 text-center">
                       <button onClick={() => toggleMutation.mutate(s.id)} title={s.is_enabled ? "Disable" : "Enable"}>
                         {s.is_enabled
-                          ? <MIcon name="check_circle" fill size={20} className="text-green-500" />
-                          : <MIcon name="cancel" size={20} className="text-outline" />}
+                          ? <MIcon name="check_circle" fill size={18} className="text-green-500" />
+                          : <MIcon name="cancel" size={18} className="text-outline" />}
                       </button>
                     </td>
-                    <td className="px-md py-4 text-right">
-                      <div className="flex justify-end gap-2 opacity-40 group-hover:opacity-100 transition-opacity">
+                    <td className="px-md py-2 text-right">
+                      <div className="flex justify-end gap-1.5 opacity-40 group-hover:opacity-100 transition-opacity">
                         <button title="Test URL" className="p-1 hover:text-primary-fixed-dim transition-colors"
                           onClick={() => testMutation.mutate(s.id)}>
-                          <MIcon name="science" size={20} />
+                          <MIcon name="science" size={18} />
                         </button>
                         <button title="Restart" className="p-1 hover:text-primary-fixed-dim transition-colors"
                           onClick={() => restartMutation.mutate(s.id)}>
-                          <MIcon name="refresh" size={20} />
+                          <MIcon name="refresh" size={18} />
                         </button>
                         <button title="Edit" className="p-1 hover:text-primary-fixed-dim transition-colors"
                           onClick={() => { setEditing(s); setShowModal(true); }}>
-                          <MIcon name="edit" size={20} />
+                          <MIcon name="edit" size={18} />
                         </button>
                         <button title="Delete" className="p-1 hover:text-red-400 transition-colors"
                           onClick={() => { if (confirm(`Delete "${s.name}"?`)) deleteMutation.mutate(s.id); }}>
-                          <MIcon name="delete" size={20} />
+                          <MIcon name="delete" size={18} />
                         </button>
                       </div>
                     </td>
@@ -247,7 +247,7 @@ export default function Streams() {
           </table>
         </div>
         {!isLoading && streams.length > 0 && (
-          <div className="px-md py-4 bg-surface-container flex items-center justify-between border-t border-outline-variant">
+          <div className="px-md py-2.5 bg-surface-container flex items-center justify-between border-t border-outline-variant">
             <p className="text-on-surface-variant text-[12px]">
               Showing {streams.length.toLocaleString()} stream{streams.length === 1 ? "" : "s"}
             </p>

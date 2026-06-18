@@ -49,11 +49,11 @@ export default function ServerPage() {
   const viewers = stats?.streams.reduce((sum, s) => sum + s.viewers, 0) ?? 0;
 
   return (
-    <div className="p-lg space-y-lg">
+    <div className="p-lg space-y-md">
       <div className="flex items-end justify-between flex-wrap gap-md">
         <div>
-          <h2 className="font-headline-md text-headline-md font-bold tracking-tight mb-1">Server Monitor</h2>
-          <p className="text-on-surface-variant text-body-sm">Live system telemetry and process control.</p>
+          <h2 className="text-lg font-bold tracking-tight mb-0.5">Server Monitor</h2>
+          <p className="text-on-surface-variant text-[12px]">Live system telemetry and process control.</p>
         </div>
         <div className="flex gap-md">
           <button className="btn-secondary" onClick={fetchLogs} disabled={loadingLogs}>
@@ -80,9 +80,9 @@ export default function ServerPage() {
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
-        <ChartCard label="CPU % (LAST 60M)" dataKey="cpu" data={history} />
-        <ChartCard label="RAM % (LAST 60M)" dataKey="ram" data={history} />
-        <ChartCard label="BANDWIDTH OUT (kbps)" dataKey="bw" data={history} />
+        <ChartCard label="CPU % (LAST 60M)" dataKey="cpu" data={history} color="#60a5fa" />
+        <ChartCard label="RAM % (LAST 60M)" dataKey="ram" data={history} color="#c084fc" />
+        <ChartCard label="BANDWIDTH OUT (kbps)" dataKey="bw" data={history} color="#34d399" />
       </div>
 
       {/* Footer cards */}
@@ -143,17 +143,17 @@ function StatCard({ label, value, unit, sub, icon }: {
   label: string; value: number | string; unit?: string; sub?: string; icon: string;
 }) {
   return (
-    <div className="bg-surface-container-low border border-outline-variant p-md flex flex-col justify-between h-24 hover:bg-surface-container transition-colors">
+    <div className="bg-surface-container-low border border-outline-variant p-md flex flex-col justify-between h-20 hover:bg-surface-container transition-colors">
       <span className="font-code-label text-[10px] text-on-surface-variant uppercase tracking-tighter">{label}</span>
       <div className="flex items-end justify-between">
         <div className="flex flex-col min-w-0">
-          <span className="text-[26px] font-bold leading-none tracking-tight">
-            {value}{unit && <span className="text-sm font-normal opacity-40 ml-0.5">{unit}</span>}
+          <span className="text-[22px] font-bold leading-none tracking-tight">
+            {value}{unit && <span className="text-xs font-normal opacity-40 ml-0.5">{unit}</span>}
           </span>
           {sub && <span className="font-code-label text-[10px] text-on-surface-variant mt-1">{sub}</span>}
         </div>
-        <div className="w-9 h-9 rounded-md flex items-center justify-center bg-surface-variant text-primary-fixed-dim shrink-0">
-          <MIcon name={icon} fill size={20} />
+        <div className="w-8 h-8 rounded-md flex items-center justify-center bg-surface-variant text-primary-fixed-dim shrink-0">
+          <MIcon name={icon} fill size={18} />
         </div>
       </div>
     </div>
@@ -163,32 +163,34 @@ function StatCard({ label, value, unit, sub, icon }: {
 /* ── Footer card ─────────────────────────────────────────────── */
 function FooterCard({ label, value, icon }: { label: string; value: string; icon: string }) {
   return (
-    <div className="bg-surface-container border border-outline-variant p-md flex items-center gap-md">
-      <div className="w-10 h-10 rounded-md flex items-center justify-center bg-surface-variant text-primary-fixed-dim shrink-0">
-        <MIcon name={icon} size={22} />
+    <div className="bg-surface-container border border-outline-variant p-sm px-md flex items-center gap-md">
+      <div className="w-8 h-8 rounded-md flex items-center justify-center bg-surface-variant text-primary-fixed-dim shrink-0">
+        <MIcon name={icon} size={18} />
       </div>
       <div>
         <p className="font-code-label text-[10px] uppercase text-on-surface-variant">{label}</p>
-        <p className="text-headline-md font-headline-md font-bold leading-tight">{value}</p>
+        <p className="text-lg font-bold leading-tight">{value}</p>
       </div>
     </div>
   );
 }
 
 /* ── Chart card ──────────────────────────────────────────────── */
-function ChartCard({ label, dataKey, data }: { label: string; dataKey: string; data: any[] }) {
+function ChartCard({ label, dataKey, data, color = "#c6c6c6" }: {
+  label: string; dataKey: string; data: any[]; color?: string;
+}) {
   return (
     <div className="bg-surface-container-low border border-outline-variant p-md">
-      <div className="flex items-center gap-sm mb-md">
-        <span className="w-2 h-2 rounded-full bg-primary-fixed-dim" />
+      <div className="flex items-center gap-sm mb-sm">
+        <span className="w-2 h-2 rounded-full" style={{ background: color }} />
         <h4 className="font-code-label text-code-label uppercase tracking-widest text-on-surface">{label}</h4>
       </div>
-      <ResponsiveContainer width="100%" height={100}>
+      <ResponsiveContainer width="100%" height={84}>
         <AreaChart data={data} margin={{ top: 4, right: 0, left: -30, bottom: 0 }}>
           <defs>
             <linearGradient id={`gs-${dataKey}`} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#c6c6c6" stopOpacity={0.2} />
-              <stop offset="95%" stopColor="#c6c6c6" stopOpacity={0} />
+              <stop offset="5%" stopColor={color} stopOpacity={0.25} />
+              <stop offset="95%" stopColor={color} stopOpacity={0} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" stroke="var(--color-outline-variant)" vertical={false} />
@@ -198,7 +200,7 @@ function ChartCard({ label, dataKey, data }: { label: string; dataKey: string; d
             contentStyle={{ background: "var(--color-surface-container)", border: "1px solid var(--color-outline-variant)", borderRadius: 0, fontSize: 11, color: "var(--color-on-surface)" }}
             labelStyle={{ color: "var(--color-on-surface-variant)" }}
           />
-          <Area type="monotone" dataKey={dataKey} stroke="#c6c6c6" strokeWidth={1.5}
+          <Area type="monotone" dataKey={dataKey} stroke={color} strokeWidth={1.5}
             fill={`url(#gs-${dataKey})`} dot={false} isAnimationActive={false} />
         </AreaChart>
       </ResponsiveContainer>
