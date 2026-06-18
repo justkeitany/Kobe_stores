@@ -44,6 +44,10 @@ CRONEOF
     chmod 0644 /etc/cron.d/iptv-ytdlp
     info "yt-dlp nightly update cron added"
 fi
+# Deno: JS runtime yt-dlp needs for reliable YouTube extraction.
+if ! command -v deno >/dev/null 2>&1; then
+    curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- -y >/dev/null 2>&1 && info "deno installed" || warn "deno install failed"
+fi
 
 step "Updating backend"
 # Copy new app code but preserve .env

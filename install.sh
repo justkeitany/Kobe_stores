@@ -68,6 +68,11 @@ cat > /etc/cron.d/iptv-ytdlp <<'CRONEOF'
 CRONEOF
 chmod 0644 /etc/cron.d/iptv-ytdlp
 /usr/local/bin/yt-dlp --version >/dev/null 2>&1 && info "yt-dlp $(/usr/local/bin/yt-dlp --version) installed" || warn "yt-dlp install may have failed"
+# Deno: JS runtime yt-dlp now needs for reliable YouTube extraction.
+if ! command -v deno >/dev/null 2>&1; then
+    curl -fsSL https://deno.land/install.sh | DENO_INSTALL=/usr/local sh -s -- -y >/dev/null 2>&1 || warn "deno install failed (YouTube extraction may be degraded)"
+fi
+command -v deno >/dev/null 2>&1 && info "deno $(deno --version 2>/dev/null | head -1 | awk '{print $2}') installed"
 
 step "Creating directories"
 mkdir -p "$APP_DIR" "$HLS_DIR" "$WEB_DIR"
@@ -120,6 +125,9 @@ HLS_LIST_SIZE=6
 HLS_OUTPUT_DIR=$HLS_DIR
 FFMPEG_PATH=/usr/bin/ffmpeg
 YTDLP_PATH=/usr/local/bin/yt-dlp
+# YouTube blocks datacenter IPs — set these if streams fail with 429/bot-check:
+YTDLP_COOKIES=
+YTDLP_PROXY=
 MAX_RETRY_ATTEMPTS=5
 HEALTH_CHECK_INTERVAL=30
 ADMIN_IP_WHITELIST=
@@ -164,7 +172,7 @@ Type=exec
 User=www-data
 Group=www-data
 WorkingDirectory=$APP_DIR/backend
-Environment="PATH=$APP_DIR/venv/bin"
+Environment="PATH=$APP_DIR/venv/bin:/usr/local/bin:/usr/bin:/bin"
 EnvironmentFile=$APP_DIR/backend/.env
 ExecStart=$APP_DIR/venv/bin/uvicorn app.main:app \\
     --host 127.0.0.1 --port 8000 --workers 1 \\

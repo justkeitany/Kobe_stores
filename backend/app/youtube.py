@@ -19,6 +19,7 @@ than the raw YouTube URL.
 """
 import asyncio
 import logging
+import os
 from urllib.parse import urlparse, urlencode, parse_qsl, urlunparse
 
 import httpx
@@ -77,9 +78,25 @@ def clean_youtube_url(url: str) -> str:
     return urlunparse((parsed.scheme, parsed.netloc, path, "", query, ""))
 
 
+def _ytdlp_cmd(url: str) -> list[str]:
+    """Build the yt-dlp command, adding cookies/proxy from settings when present.
+
+    YouTube blocks datacenter IPs (HTTP 429 / "Sign in to confirm you're not a
+    bot"); a cookies file and/or an outbound proxy are the documented ways past
+    it, both opt-in via .env so a plain install still works on un-blocked IPs.
+    """
+    cmd = [settings.YTDLP_PATH, "-g", "-f", "best", "--no-warnings", "--no-playlist"]
+    if settings.YTDLP_COOKIES and os.path.exists(settings.YTDLP_COOKIES):
+        cmd += ["--cookies", settings.YTDLP_COOKIES]
+    if settings.YTDLP_PROXY:
+        cmd += ["--proxy", settings.YTDLP_PROXY]
+    cmd.append(url)
+    return cmd
+
+
 async def _run_ytdlp(url: str) -> str | None:
     """Resolve a fresh direct manifest URL with `yt-dlp -g -f best`."""
-    cmd = [settings.YTDLP_PATH, "-g", "-f", "best", "--no-warnings", url]
+    cmd = _ytdlp_cmd(url)
     try:
         proc = await asyncio.create_subprocess_exec(
             *cmd,

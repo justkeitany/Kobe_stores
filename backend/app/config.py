@@ -34,6 +34,12 @@ class Settings(BaseSettings):
 
     # yt-dlp — resolves fresh HLS manifests for YouTube live streams
     YTDLP_PATH: str = "/usr/local/bin/yt-dlp"
+    # YouTube blocks/ratelimits datacenter IPs with "Sign in to confirm you're
+    # not a bot" / HTTP 429. Set one or both of these in .env to get past it:
+    #   YTDLP_COOKIES = /opt/iptv-panel/backend/cookies.txt  (Netscape cookie file)
+    #   YTDLP_PROXY   = http://user:pass@host:port           (residential proxy)
+    YTDLP_COOKIES: str = ""
+    YTDLP_PROXY: str = ""
 
     # Stream health
     MAX_RETRY_ATTEMPTS: int = 5
