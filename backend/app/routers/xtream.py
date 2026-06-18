@@ -196,7 +196,7 @@ def _user_info_from_data(data: dict) -> dict:
         "active_cons": "0",
         "created_at": "0",
         "max_connections": data.get("max_connections", "1"),
-        "allowed_output_formats": ["ts", "m3u8", "rtmp"],
+        "allowed_output_formats": ["m3u8", "ts", "rtmp"],
         "is_mag": "0",
         "is_stalker": "0",
         "package": "",
