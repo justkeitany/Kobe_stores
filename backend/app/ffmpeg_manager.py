@@ -76,9 +76,8 @@ class StreamProcess:
             "-hide_banner",
             "-loglevel", "warning",
             "-re",
-            # Pluto stitch URLs need fresh session params (deviceId/sid) per
-            # FFmpeg start, or the stitcher returns 400. Non-Pluto URLs pass
-            # through unchanged.
+            # Pluto channel URLs are rewritten to the jmp2.uk resolver, which
+            # redirects to a working stream. Non-Pluto URLs pass through.
             "-i", resolve_pluto_url(self.current_url),
             # Reconnect options for resilience
             "-reconnect", "1",
