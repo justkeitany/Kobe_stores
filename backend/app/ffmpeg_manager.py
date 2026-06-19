@@ -39,10 +39,11 @@ FFMPEG_INPUT_BUFFER_ARGS = [
 
 
 # How long (seconds) a stream may go without a playlist request before it is
-# considered idle and stopped. HLS players reload the live playlist roughly
-# every segment duration (~2s), so this tolerates a few missed polls while
-# still stopping promptly once the viewer leaves.
-STREAM_IDLE_TIMEOUT = 8
+# considered idle and stopped. It must comfortably exceed a player's polling
+# gap: adaptive (multi-variant) players split polls between the master and the
+# current variant and buffer well ahead, so short windows (e.g. 8s) falsely
+# reap an actively-watched channel and cause a restart/buffering death spiral.
+STREAM_IDLE_TIMEOUT = 45
 
 
 # Transcode ladder. "auto" copies the source codec untouched (no CPU, full
@@ -287,14 +288,35 @@ class StreamProcess:
         return os.path.join(self.hls_dir, f"v{v}", "index.m3u8")
 
     def _reset_hls_dir(self) -> None:
-        """Wipe the channel's HLS dir before (re)launch so files from a previous
-        mode (single ↔ multi-variant) can't linger and confuse players."""
+        """Remove only the *other* mode's leftovers before (re)launch.
+
+        Clears single-mode files when starting multi-variant and vice-versa, so a
+        mode switch can't leave a mixed/stale playlist — but a same-mode restart
+        keeps its existing segments, avoiding a visible gap for current viewers.
+        """
+        os.makedirs(self.hls_dir, exist_ok=True)
         try:
-            if os.path.isdir(self.hls_dir):
-                shutil.rmtree(self.hls_dir)
+            if self.multivariant:
+                stale = [os.path.join(self.hls_dir, "index.m3u8")]
+                stale += [
+                    os.path.join(self.hls_dir, f)
+                    for f in os.listdir(self.hls_dir)
+                    if f.startswith("seg") and f.endswith(".ts")
+                ]
+                for p in stale:
+                    try:
+                        os.remove(p)
+                    except OSError:
+                        pass
+            else:
+                for d in range(len(MULTIVARIANT_RUNGS)):
+                    shutil.rmtree(os.path.join(self.hls_dir, f"v{d}"), ignore_errors=True)
+                try:
+                    os.remove(os.path.join(self.hls_dir, "master.m3u8"))
+                except OSError:
+                    pass
         except OSError:
             pass
-        os.makedirs(self.hls_dir, exist_ok=True)
 
     def _build_multivariant_cmd(self) -> list[str]:
         """One FFmpeg producing a shared HLS ladder: v0 source copy + v1 720p +
