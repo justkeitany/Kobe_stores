@@ -9,11 +9,17 @@ FFmpeg restream manager.
 import asyncio
 import os
 import subprocess
+import time
 import logging
 from datetime import datetime, timezone
-from typing import Dict, Optional
+from typing import AsyncIterator, Dict, Optional
 from app.config import settings
 from app.pluto_stream import resolve as resolve_pluto_url
+
+try:
+    import psutil  # CPU guardrail for ABR transcoding
+except ImportError:  # pragma: no cover - psutil is optional
+    psutil = None
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +53,129 @@ def _codec_args(quality: str) -> list[str]:
         "-g", "48", "-sc_threshold", "0",
         "-c:a", "aac", "-b:a", profile["a_bitrate"], "-ac", "2",
     ]
+
+
+# ── Adaptive bitrate (ABR) ──────────────────────────────────────────────────
+# Used only for the per-viewer TS path when a stream's quality is "auto".
+# Each viewer's delivered throughput is measured (drain rate of their TS pipe)
+# and the rendition is re-selected every ABR_RECHECK_SECONDS. "high" is a pure
+# passthrough (stream copy) and costs no CPU.
+ABR_LADDER: Dict[str, Optional[dict]] = {
+    "low":    {"height": 360, "v_bitrate": "500k",  "maxrate": "600k",  "bufsize": "1200k", "a_bitrate": "96k"},
+    "medium": {"height": 720, "v_bitrate": "2500k", "maxrate": "3000k", "bufsize": "6000k", "a_bitrate": "128k"},
+    "high":   None,  # passthrough — no transcode
+}
+# Rendition tiers, lowest → highest.
+ABR_TIERS = ["low", "medium", "high"]
+# Throughput thresholds (Mbps): <1 → low, 1–4 → medium, >4 → high.
+ABR_LOW_MBPS = 1.0
+ABR_HIGH_MBPS = 4.0
+# First (quick) measurement acts as the "test segment"; then re-check every 30s.
+ABR_PROBE_SECONDS = 5
+ABR_RECHECK_SECONDS = 30
+# Drain-rate is capped by the current rendition's own bitrate, so a transcoded
+# viewer can't measure headroom above their tier. Every Nth re-check, step up one
+# tier to re-probe true capacity (and to drop back toward passthrough, freeing
+# CPU); if it can't be sustained the next absolute pick drops it again.
+ABR_PROBE_UP_EVERY = 4
+# CPU guardrails.
+ABR_MAX_TRANSCODES = 3
+ABR_CPU_LIMIT = 75.0
+ABR_TRANSCODE_THREADS = 2
+
+
+def _pick_abr_quality(mbps: Optional[float]) -> str:
+    """Map a measured throughput (Mbps) to a rendition. None → passthrough."""
+    if mbps is None:
+        return "high"
+    if mbps < ABR_LOW_MBPS:
+        return "low"
+    if mbps < ABR_HIGH_MBPS:
+        return "medium"
+    return "high"
+
+
+def _step_up(quality: str) -> str:
+    """Next tier up (clamped at the top), used by the periodic up-probe."""
+    try:
+        return ABR_TIERS[min(ABR_TIERS.index(quality) + 1, len(ABR_TIERS) - 1)]
+    except ValueError:
+        return "high"
+
+
+def _abr_codec_args(quality: str) -> list[str]:
+    """Codec args for an ABR rendition. Transcodes are capped to -threads 2 so a
+    single job can't hog the box; 'high' (and anything unknown) is stream copy."""
+    profile = ABR_LADDER.get(quality)
+    if not profile:
+        return ["-c", "copy"]
+    return [
+        "-threads", str(ABR_TRANSCODE_THREADS),
+        "-vf", f"scale=-2:{profile['height']}",
+        "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "main",
+        "-b:v", profile["v_bitrate"], "-maxrate", profile["maxrate"], "-bufsize", profile["bufsize"],
+        "-g", "48", "-sc_threshold", "0",
+        "-c:a", "aac", "-b:a", profile["a_bitrate"], "-ac", "2",
+    ]
+
+
+class TranscodeGovernor:
+    """Caps concurrent ABR transcodes and refuses new ones when CPU is high.
+
+    A background sampler keeps a cached CPU reading so try_acquire() never blocks
+    the event loop. When psutil is unavailable, only the job-count cap applies.
+    """
+
+    def __init__(self, max_jobs: int = ABR_MAX_TRANSCODES, cpu_limit: float = ABR_CPU_LIMIT):
+        self.max_jobs = max_jobs
+        self.cpu_limit = cpu_limit
+        self._active = 0
+        self._lock = asyncio.Lock()
+        self._cpu = 0.0
+        self._sampler: Optional[asyncio.Task] = None
+
+    def start(self) -> None:
+        if psutil is None:
+            return
+        if self._sampler is None or self._sampler.done():
+            try:
+                psutil.cpu_percent(interval=None)  # prime the first reading
+            except Exception:
+                pass
+            self._sampler = asyncio.create_task(self._sample())
+
+    async def _sample(self) -> None:
+        while True:
+            try:
+                await asyncio.sleep(5)
+                self._cpu = psutil.cpu_percent(interval=None)
+            except asyncio.CancelledError:
+                break
+            except Exception:
+                await asyncio.sleep(5)
+
+    async def try_acquire(self) -> bool:
+        """Reserve a transcode slot; False if at the job cap or CPU is too high."""
+        async with self._lock:
+            if self._active >= self.max_jobs:
+                return False
+            if psutil is not None and self._cpu >= self.cpu_limit:
+                return False
+            self._active += 1
+            return True
+
+    async def release(self) -> None:
+        async with self._lock:
+            if self._active > 0:
+                self._active -= 1
+
+    @property
+    def active(self) -> int:
+        return self._active
+
+
+# Global governor shared by every ABR viewer.
+transcode_governor = TranscodeGovernor()
 
 
 class StreamProcess:
@@ -366,6 +495,119 @@ class FFmpegManager:
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.DEVNULL,
         )
+
+    async def _spawn_abr(self, url: str, quality: str) -> asyncio.subprocess.Process:
+        """FFmpeg emitting MPEG-TS on stdout for an ABR rendition (capped threads)."""
+        cmd = [
+            settings.FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel", "error",
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
+            "-i", resolve_pluto_url(url),
+            *_abr_codec_args(quality),
+            "-f", "mpegts",
+            "-",
+        ]
+        return await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+
+    async def _open_abr(self, url: str, desired: str):
+        """Open a rendition, honouring the CPU governor.
+
+        Transcoded tiers (low/medium) need a governor slot; if none is free (job
+        cap hit or CPU too high) we silently fall back to passthrough so the
+        viewer always gets video. Returns (proc, actual_quality, holds_slot).
+        """
+        if desired in ("low", "medium"):
+            if await transcode_governor.try_acquire():
+                try:
+                    proc = await self._spawn_abr(url, desired)
+                    return proc, desired, True
+                except Exception:
+                    await transcode_governor.release()
+                    logger.warning("ABR transcode spawn failed for %s — passthrough", url)
+        # Passthrough (high) or guardrail/spawn fallback.
+        proc = await self._spawn_abr(url, "high")
+        return proc, "high", False
+
+    async def _close_abr(self, proc: Optional[asyncio.subprocess.Process], holds_slot: bool) -> None:
+        if proc is not None and proc.returncode is None:
+            try:
+                proc.kill()
+                await proc.wait()
+            except ProcessLookupError:
+                pass
+            except Exception:
+                pass
+        if holds_slot:
+            await transcode_governor.release()
+
+    async def abr_ts_stream(self, url: str) -> AsyncIterator[bytes]:
+        """Per-viewer adaptive MPEG-TS stream (used when stream quality='auto').
+
+        Measures delivered throughput (how fast the client drains the pipe) and
+        re-picks the rendition every ~30s — upgrading when there's headroom,
+        downgrading when the client can't keep up. CPU is protected by the
+        governor (max jobs + CPU ceiling + threads cap). The transcode is killed
+        the moment the client disconnects (generator close → finally). Any error
+        falls back to passthrough; the viewer never sees a failure.
+        """
+        transcode_governor.start()
+        # Start on passthrough: zero CPU until the first measurement says otherwise.
+        proc, quality, holds_slot = await self._open_abr(url, "high")
+        win_bytes = 0
+        win_start = time.monotonic()
+        next_eval = win_start + ABR_PROBE_SECONDS
+        empty_restarts = 0
+        eval_count = 0
+        try:
+            while True:
+                try:
+                    chunk = await asyncio.wait_for(proc.stdout.read(65536), timeout=20)
+                except asyncio.TimeoutError:
+                    break  # source stalled; let the player reconnect
+                if not chunk:
+                    # FFmpeg exited. Fall back to passthrough once or twice, then give up.
+                    empty_restarts += 1
+                    if empty_restarts > 2:
+                        break
+                    await self._close_abr(proc, holds_slot)
+                    proc, quality, holds_slot = await self._open_abr(url, "high")
+                    win_bytes = 0
+                    win_start = time.monotonic()
+                    next_eval = win_start + ABR_RECHECK_SECONDS
+                    continue
+
+                empty_restarts = 0
+                win_bytes += len(chunk)
+                yield chunk
+
+                now = time.monotonic()
+                if now >= next_eval:
+                    elapsed = now - win_start
+                    mbps = (win_bytes * 8) / (elapsed * 1_000_000) if elapsed > 0 else None
+                    eval_count += 1
+                    if quality != "high" and eval_count % ABR_PROBE_UP_EVERY == 0:
+                        # Periodic up-probe to re-test true capacity above the cap.
+                        target = _step_up(quality)
+                    else:
+                        target = _pick_abr_quality(mbps)
+                    if target != quality:
+                        await self._close_abr(proc, holds_slot)
+                        proc, quality, holds_slot = await self._open_abr(url, target)
+                        logger.info(
+                            "ABR %s: %.2f Mbps measured → %s", url, mbps or 0.0, quality
+                        )
+                    win_bytes = 0
+                    win_start = now
+                    next_eval = now + ABR_RECHECK_SECONDS
+        finally:
+            await self._close_abr(proc, holds_slot)
 
     async def test_stream_url(self, url: str) -> dict:
         """Quick test to check if a stream URL is accessible."""

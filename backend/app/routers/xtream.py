@@ -486,6 +486,15 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
     # .ts output: serve one continuous MPEG-TS stream (one FFmpeg per viewer).
     # Players buffer a progressive TS feed more smoothly than HLS on weak links.
     if ext == "ts":
+        # quality == "auto": adapt the rendition to the viewer's measured speed
+        # (CPU-protected, passthrough fallback). Explicit qualities stay forced.
+        if stream.quality == "auto":
+            return StreamingResponse(
+                ffmpeg_manager.abr_ts_stream(primary_url),
+                media_type="video/mp2t",
+                headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+            )
+
         proc = await ffmpeg_manager.spawn_ts(primary_url, stream.quality)
 
         async def ts_iter():
