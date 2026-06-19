@@ -39,6 +39,12 @@ class Stream(Base):
     #                username across healthy mirrors (load balancing + failover).
     delivery_mode = Column(String(20), default="restream", nullable=False)
 
+    # Output quality. "auto" copies the source codec untouched (lowest CPU,
+    # highest bandwidth); the others transcode down to cap resolution/bitrate so
+    # weak connections buffer less. Pluto channels default to "low".
+    #   auto | low (480p) | medium (720p) | high (1080p)
+    quality = Column(String(10), default="auto", nullable=False)
+
     # Stream status
     status = Column(String(50), default="idle")  # idle, running, error, stopped
     last_error = Column(Text, nullable=True)

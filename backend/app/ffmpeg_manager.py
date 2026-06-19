@@ -24,9 +24,35 @@ logger = logging.getLogger(__name__)
 STREAM_IDLE_TIMEOUT = 8
 
 
+# Transcode ladder. "auto" copies the source codec untouched (no CPU, full
+# bandwidth). The others scale down to a height cap and bound the bitrate so weak
+# connections buffer less. scale=-2:H keeps the aspect ratio and an even width.
+QUALITY_PROFILES: Dict[str, dict] = {
+    "low":    {"height": 480,  "v_bitrate": "1000k", "maxrate": "1200k", "bufsize": "2400k", "a_bitrate": "96k"},
+    "medium": {"height": 720,  "v_bitrate": "2500k", "maxrate": "3000k", "bufsize": "6000k", "a_bitrate": "128k"},
+    "high":   {"height": 1080, "v_bitrate": "4500k", "maxrate": "5400k", "bufsize": "10800k", "a_bitrate": "160k"},
+}
+VALID_QUALITIES = {"auto", *QUALITY_PROFILES}
+
+
+def _codec_args(quality: str) -> list[str]:
+    """FFmpeg codec args for a quality tier — stream copy for 'auto', else x264/AAC transcode."""
+    profile = QUALITY_PROFILES.get(quality)
+    if not profile:
+        return ["-c", "copy"]
+    return [
+        "-vf", f"scale=-2:{profile['height']}",
+        "-c:v", "libx264", "-preset", "veryfast", "-profile:v", "main",
+        "-b:v", profile["v_bitrate"], "-maxrate", profile["maxrate"], "-bufsize", profile["bufsize"],
+        "-g", "48", "-sc_threshold", "0",
+        "-c:a", "aac", "-b:a", profile["a_bitrate"], "-ac", "2",
+    ]
+
+
 class StreamProcess:
-    def __init__(self, stream_id: int, sources: list[str], stream_name: str):
+    def __init__(self, stream_id: int, sources: list[str], stream_name: str, quality: str = "auto"):
         self.stream_id = stream_id
+        self.quality = quality if quality in VALID_QUALITIES else "auto"
         # Ordered failover chain. FFmpeg pulls one source at a time; on crash the
         # health monitor advances to the next entry (wrapping around).
         self.sources: list[str] = [s for s in sources if s] or [""]
@@ -83,8 +109,8 @@ class StreamProcess:
             "-reconnect", "1",
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "5",
-            # Copy streams without re-encoding (lowest latency)
-            "-c", "copy",
+            # Stream copy ('auto') or transcode down to the selected quality tier.
+            *_codec_args(self.quality),
             # HLS output
             "-f", "hls",
             "-hls_time", str(settings.HLS_SEGMENT_TIME),
@@ -237,23 +263,28 @@ class FFmpegManager:
                 logger.error(f"Reaper error: {e}")
                 await asyncio.sleep(2)
 
-    async def get_or_create(self, stream_id: int, sources: list[str], stream_name: str) -> StreamProcess:
+    async def get_or_create(
+        self, stream_id: int, sources: list[str], stream_name: str, quality: str = "auto"
+    ) -> StreamProcess:
         async with self._lock:
             sp = self._streams.get(stream_id)
             if sp is None:
-                sp = StreamProcess(stream_id, sources, stream_name)
+                sp = StreamProcess(stream_id, sources, stream_name, quality)
                 self._streams[stream_id] = sp
-            elif sources and sp.status not in ("running", "starting"):
-                # Pick up edited source pools the next time the stream (re)starts.
-                sp.sources = [s for s in sources if s] or [""]
-                sp.source_index = 0
+            elif sp.status not in ("running", "starting"):
+                # Pick up edited source pools / quality the next time it (re)starts.
+                if sources:
+                    sp.sources = [s for s in sources if s] or [""]
+                    sp.source_index = 0
+                sp.quality = quality if quality in VALID_QUALITIES else "auto"
             return sp
 
     async def start_stream(
-        self, stream_id: int, sources: list[str], stream_name: str, client_key: str = "viewer"
+        self, stream_id: int, sources: list[str], stream_name: str,
+        client_key: str = "viewer", quality: str = "auto",
     ) -> StreamProcess:
         self._ensure_reaper()
-        sp = await self.get_or_create(stream_id, sources, stream_name)
+        sp = await self.get_or_create(stream_id, sources, stream_name, quality)
         sp.heartbeat(client_key)
         if sp.status not in ("running", "starting"):
             await sp.start()
@@ -265,7 +296,9 @@ class FFmpegManager:
         if sp:
             await sp.stop()
 
-    async def restart_stream(self, stream_id: int, sources: Optional[list[str]] = None) -> bool:
+    async def restart_stream(
+        self, stream_id: int, sources: Optional[list[str]] = None, quality: Optional[str] = None
+    ) -> bool:
         async with self._lock:
             sp = self._streams.get(stream_id)
         if not sp:
@@ -273,6 +306,8 @@ class FFmpegManager:
         await sp.stop()
         if sources:
             sp.sources = [s for s in sources if s] or [""]
+        if quality is not None:
+            sp.quality = quality if quality in VALID_QUALITIES else "auto"
         sp.source_index = 0
         await asyncio.sleep(1)
         return await sp.start()
@@ -285,6 +320,7 @@ class FFmpegManager:
         return {
             "stream_id": stream_id,
             "status": sp.status,
+            "quality": sp.quality,
             "viewer_count": sp.active_viewers(),
             "retry_count": sp.retry_count,
             "last_error": sp.last_error,
@@ -304,6 +340,32 @@ class FFmpegManager:
             stream_ids = list(self._streams.keys())
         for sid in stream_ids:
             await self.stop_stream(sid)
+
+    async def spawn_ts(self, url: str, quality: str = "auto") -> asyncio.subprocess.Process:
+        """Start an FFmpeg that emits a continuous MPEG-TS stream on stdout.
+
+        Used by the Xtream `.ts` output: one process per viewer remuxing ('auto')
+        or transcoding the source into a single progressive TS stream, which
+        players buffer more smoothly than HLS on weak connections. The caller
+        owns the process and must kill it when the client disconnects.
+        """
+        cmd = [
+            settings.FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel", "error",
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
+            "-i", resolve_pluto_url(url),
+            *_codec_args(quality),
+            "-f", "mpegts",
+            "-",
+        ]
+        return await asyncio.create_subprocess_exec(
+            *cmd,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
 
     async def test_stream_url(self, url: str) -> dict:
         """Quick test to check if a stream URL is accessible."""

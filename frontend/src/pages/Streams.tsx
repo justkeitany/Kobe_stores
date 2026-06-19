@@ -18,6 +18,7 @@ interface Stream {
   viewer_count: number;
   last_error?: string;
   delivery_mode?: "restream" | "balanced";
+  quality?: "auto" | "low" | "medium" | "high";
   source_count?: number;
 }
 
@@ -301,6 +302,9 @@ function StreamModal({
   const [deliveryMode, setDeliveryMode] = useState<"restream" | "balanced">(
     stream?.delivery_mode ?? "restream"
   );
+  const [quality, setQuality] = useState<"auto" | "low" | "medium" | "high">(
+    stream?.quality ?? "auto"
+  );
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState<number | null>(null);
 
@@ -311,6 +315,7 @@ function StreamModal({
       const urls = (r.data.sources ?? []).map((s: any) => s.url);
       setSources(urls.length ? urls : [r.data.stream_url ?? ""]);
       setDeliveryMode(r.data.delivery_mode ?? "restream");
+      setQuality(r.data.quality ?? "auto");
     }).catch(() => {});
   }, [stream]);
 
@@ -356,6 +361,7 @@ function StreamModal({
         stream_url: cleaned[0],
         sources: cleaned,
         delivery_mode: deliveryMode,
+        quality,
         logo_url: logo || null,
         category_id: catId || null,
       };
@@ -439,6 +445,25 @@ function StreamModal({
               : "One FFmpeg process restreams the channel; on failure it fails over to the next source."}
           </p>
         </div>
+
+        {/* Quality / transcode */}
+        {deliveryMode === "restream" && (
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1.5">Quality</label>
+            <select className="input" value={quality}
+              onChange={(e) => setQuality(e.target.value as "auto" | "low" | "medium" | "high")}>
+              <option value="auto">Auto — copy source (no transcode, most bandwidth)</option>
+              <option value="low">Low — 480p (least buffering)</option>
+              <option value="medium">Medium — 720p</option>
+              <option value="high">High — 1080p</option>
+            </select>
+            <p className="text-xs text-gray-400 mt-1">
+              {quality === "auto"
+                ? "Source is passed through untouched. Lowest CPU, highest bandwidth."
+                : "FFmpeg transcodes down to cap resolution/bitrate so weak connections buffer less (uses more CPU)."}
+            </p>
+          </div>
+        )}
 
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-1.5">Logo URL</label>

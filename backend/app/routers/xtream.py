@@ -483,11 +483,37 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
             raise HTTPException(503, "No healthy source available")
         return RedirectResponse(url=chosen.url, status_code=302)
 
+    # .ts output: serve one continuous MPEG-TS stream (one FFmpeg per viewer).
+    # Players buffer a progressive TS feed more smoothly than HLS on weak links.
+    if ext == "ts":
+        proc = await ffmpeg_manager.spawn_ts(primary_url, stream.quality)
+
+        async def ts_iter():
+            try:
+                while True:
+                    chunk = await proc.stdout.read(65536)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                if proc.returncode is None:
+                    try:
+                        proc.kill()
+                        await proc.wait()
+                    except ProcessLookupError:
+                        pass
+
+        return StreamingResponse(
+            ts_iter(),
+            media_type="video/mp2t",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
+
     # Start FFmpeg if needed and record this viewer's heartbeat. The player keeps
     # polling the .m3u8 below (~every 2s), so each poll refreshes the heartbeat;
     # when it stops polling, the manager's reaper stops FFmpeg within ~8s.
     sp = await ffmpeg_manager.start_stream(
-        stream_id, [r.url for r in refs], stream.name, client_key
+        stream_id, [r.url for r in refs], stream.name, client_key, stream.quality
     )
 
     if ext == "m3u8":

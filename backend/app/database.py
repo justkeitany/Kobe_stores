@@ -41,6 +41,7 @@ async def get_db() -> AsyncSession:
 # supports "ADD COLUMN IF NOT EXISTS", so each statement is safe to re-run.
 _COLUMN_MIGRATIONS = (
     "ALTER TABLE streams ADD COLUMN IF NOT EXISTS delivery_mode VARCHAR(20) NOT NULL DEFAULT 'restream'",
+    "ALTER TABLE streams ADD COLUMN IF NOT EXISTS quality VARCHAR(10) NOT NULL DEFAULT 'auto'",
 )
 
 

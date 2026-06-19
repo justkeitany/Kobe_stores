@@ -10,9 +10,9 @@ from sqlalchemy.orm import selectinload
 from app.auth import get_current_admin
 from app.database import get_db
 from app.models import Stream, StreamCategory, StreamSource
-from app.ffmpeg_manager import ffmpeg_manager
+from app.ffmpeg_manager import ffmpeg_manager, VALID_QUALITIES
 from app.youtube import is_youtube_url, clean_youtube_url, proxy_resolve
-from app.pluto_stream import resolve as resolve_pluto_url
+from app.pluto_stream import resolve as resolve_pluto_url, is_pluto_url
 from app.sources import source_refs, source_urls
 
 router = APIRouter(prefix="/api/streams", tags=["streams"])
@@ -31,6 +31,8 @@ class StreamCreate(BaseModel):
     sort_order: int = 0
     epg_channel_id: Optional[str] = None
     delivery_mode: Optional[str] = None
+    # auto | low | medium | high. Defaults to "low" for Pluto sources, else "auto".
+    quality: Optional[str] = None
     # Ordered source pool. When given it is authoritative; otherwise the pool is
     # derived from stream_url (+ backup_url).
     sources: Optional[list[str]] = None
@@ -46,6 +48,7 @@ class StreamUpdate(BaseModel):
     sort_order: Optional[int] = None
     epg_channel_id: Optional[str] = None
     delivery_mode: Optional[str] = None
+    quality: Optional[str] = None
     sources: Optional[list[str]] = None
 
 
@@ -152,6 +155,7 @@ async def list_streams(
             "sort_order": s.sort_order,
             "epg_channel_id": s.epg_channel_id,
             "delivery_mode": s.delivery_mode,
+            "quality": s.quality,
             "source_count": len(source_refs(s, s.sources)),
             "status": statuses.get(s.id, {}).get("status", s.status),
             "viewer_count": statuses.get(s.id, {}).get("viewer_count", 0),
@@ -180,6 +184,9 @@ async def create_stream(
     delivery_mode = payload.pop("delivery_mode", None) or "restream"
     if delivery_mode not in VALID_DELIVERY_MODES:
         raise HTTPException(400, "delivery_mode must be 'restream' or 'balanced'")
+    quality = payload.pop("quality", None)
+    if quality is not None and quality not in VALID_QUALITIES:
+        raise HTTPException(400, f"quality must be one of {sorted(VALID_QUALITIES)}")
 
     payload["stream_url"] = _normalize_url(payload.get("stream_url"))
     payload["backup_url"] = _normalize_url(payload.get("backup_url"))
@@ -193,6 +200,11 @@ async def create_stream(
         [stream.stream_url, stream.backup_url]
     )
     await _replace_sources(db, stream, pool)
+
+    # Pluto channels stream more reliably downscaled — default them to low.
+    if quality is None:
+        quality = "low" if (pool and is_pluto_url(pool[0])) else "auto"
+    stream.quality = quality
 
     await db.commit()
     await db.refresh(stream)
@@ -223,6 +235,7 @@ async def get_stream(
         "sort_order": stream.sort_order,
         "epg_channel_id": stream.epg_channel_id,
         "delivery_mode": stream.delivery_mode,
+        "quality": stream.quality,
         "sources": [
             {"url": r.url, "id": r.id, "status": r.status, "priority": r.priority}
             for r in refs
@@ -289,6 +302,8 @@ async def update_stream(
     sources_in = updates.pop("sources", None)
     if "delivery_mode" in updates and updates["delivery_mode"] not in VALID_DELIVERY_MODES:
         raise HTTPException(400, "delivery_mode must be 'restream' or 'balanced'")
+    if "quality" in updates and updates["quality"] not in VALID_QUALITIES:
+        raise HTTPException(400, f"quality must be one of {sorted(VALID_QUALITIES)}")
     if "stream_url" in updates:
         updates["stream_url"] = _normalize_url(updates["stream_url"])
     if "backup_url" in updates:
@@ -355,10 +370,12 @@ async def restart_stream(
     if not stream:
         raise HTTPException(404, "Stream not found")
     urls = source_urls(stream, stream.sources)
-    ok = await ffmpeg_manager.restart_stream(stream_id, urls)
+    ok = await ffmpeg_manager.restart_stream(stream_id, urls, stream.quality)
     if not ok:
         # Not running yet, start it
-        sp = await ffmpeg_manager.start_stream(stream_id, urls, stream.name)
+        sp = await ffmpeg_manager.start_stream(
+            stream_id, urls, stream.name, quality=stream.quality
+        )
         return {"restarted": True, "status": sp.status}
     return {"restarted": True}
 
@@ -432,6 +449,7 @@ async def import_m3u(
             logo_url=ch.get("logo") or None,
             category_id=cat_id,
             epg_channel_id=ch.get("tvg_id") or None,
+            quality="low" if is_pluto_url(stream_url) else "auto",
             status="idle",
         )
         db.add(stream)
