@@ -75,15 +75,21 @@ def _codec_args(quality: str) -> list[str]:
 # and the rendition is re-selected every ABR_RECHECK_SECONDS. "high" is a pure
 # passthrough (stream copy) and costs no CPU.
 ABR_LADDER: Dict[str, Optional[dict]] = {
-    "low":    {"height": 360, "v_bitrate": "500k",  "maxrate": "600k",  "bufsize": "1200k", "a_bitrate": "96k"},
-    "medium": {"height": 720, "v_bitrate": "2500k", "maxrate": "3000k", "bufsize": "6000k", "a_bitrate": "128k"},
-    "high":   None,  # passthrough — no transcode
+    # Sized so each tier comfortably fits the connection that selects it. medium
+    # (720p ~1.45 Mbps peak) is the sweet spot for a ~2 Mbps line — 720p at this
+    # bitrate looks sharper than a starved 1080p would. high is untouched source.
+    "low":    {"height": 480, "v_bitrate": "600k",  "maxrate": "750k",  "bufsize": "1500k", "a_bitrate": "96k"},
+    "medium": {"height": 720, "v_bitrate": "1250k", "maxrate": "1450k", "bufsize": "3000k", "a_bitrate": "128k"},
+    "high":   None,  # passthrough — no transcode (delivers full source, e.g. 1080p)
 }
 # Rendition tiers, lowest → highest.
 ABR_TIERS = ["low", "medium", "high"]
-# Throughput thresholds (Mbps): <1 → low, 1–4 → medium, >4 → high.
-ABR_LOW_MBPS = 1.0
-ABR_HIGH_MBPS = 4.0
+# Each tier's peak delivered rate (Mbps, video+audio). The selector picks the
+# highest tier whose peak fits the viewer's measured throughput after headroom,
+# so a 2 Mbps line gets 720p (not an oversized 2.5 Mbps stream that buffers).
+ABR_RUNG_MBPS = {"low": 0.85, "medium": 1.6, "high": 4.0}
+# Keep ~18% of the measured pipe free so it never saturates (jitter/overhead).
+ABR_HEADROOM = 0.82
 # First (quick) measurement acts as the "test segment"; then re-check every 30s.
 ABR_PROBE_SECONDS = 5
 ABR_RECHECK_SECONDS = 30
@@ -99,14 +105,18 @@ ABR_TRANSCODE_THREADS = 2
 
 
 def _pick_abr_quality(mbps: Optional[float]) -> str:
-    """Map a measured throughput (Mbps) to a rendition. None → passthrough."""
+    """Highest tier whose peak rate fits the measured throughput after headroom.
+
+    None (no measurement yet) → passthrough. Falls back to the lowest tier when
+    nothing fits, so a very slow line still gets the smallest stream.
+    """
     if mbps is None:
         return "high"
-    if mbps < ABR_LOW_MBPS:
-        return "low"
-    if mbps < ABR_HIGH_MBPS:
-        return "medium"
-    return "high"
+    budget = mbps * ABR_HEADROOM
+    for tier in reversed(ABR_TIERS):  # high → medium → low
+        if ABR_RUNG_MBPS[tier] <= budget:
+            return tier
+    return ABR_TIERS[0]
 
 
 def _step_up(quality: str) -> str:
