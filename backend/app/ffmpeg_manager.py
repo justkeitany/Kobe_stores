@@ -23,6 +23,20 @@ except ImportError:  # pragma: no cover - psutil is optional
 
 logger = logging.getLogger(__name__)
 
+
+# Input-side buffering applied to every live FFmpeg pull. Larger probe/analyze
+# windows and a deep thread queue absorb brief source hiccups, regenerated PTS
+# and discarded corrupt packets keep the muxer from stalling, and -re paces the
+# input at native rate. These are all input options, placed before -i.
+FFMPEG_INPUT_BUFFER_ARGS = [
+    "-fflags", "+genpts+discardcorrupt",
+    "-analyzeduration", "2000000",
+    "-probesize", "2000000",
+    "-thread_queue_size", "4096",
+    "-re",
+]
+
+
 # How long (seconds) a stream may go without a playlist request before it is
 # considered idle and stopped. HLS players reload the live playlist roughly
 # every segment duration (~2s), so this tolerates a few missed polls while
@@ -230,7 +244,8 @@ class StreamProcess:
             settings.FFMPEG_PATH,
             "-hide_banner",
             "-loglevel", "warning",
-            "-re",
+            # Input-side buffering (probe/analyze window, thread queue, -re).
+            *FFMPEG_INPUT_BUFFER_ARGS,
             # Pluto channel URLs are rewritten to the jmp2.uk resolver, which
             # redirects to a working stream. Non-Pluto URLs pass through.
             "-i", resolve_pluto_url(self.current_url),
@@ -240,11 +255,13 @@ class StreamProcess:
             "-reconnect_delay_max", "5",
             # Stream copy ('auto') or transcode down to the selected quality tier.
             *_codec_args(self.quality),
-            # HLS output
+            # HLS output — flush each packet and hold a deeper segment window so
+            # players have more buffered ahead of the live edge.
+            "-flush_packets", "1",
             "-f", "hls",
-            "-hls_time", str(settings.HLS_SEGMENT_TIME),
-            "-hls_list_size", str(settings.HLS_LIST_SIZE),
-            "-hls_flags", "delete_segments+append_list+omit_endlist",
+            "-hls_time", "2",
+            "-hls_list_size", "10",
+            "-hls_flags", "delete_segments+append_list+split_by_time",
             "-hls_segment_type", "mpegts",
             "-hls_segment_filename", os.path.join(self.hls_dir, "seg%d.ts"),
             "-method", "PUT",
@@ -482,11 +499,13 @@ class FFmpegManager:
             settings.FFMPEG_PATH,
             "-hide_banner",
             "-loglevel", "error",
+            *FFMPEG_INPUT_BUFFER_ARGS,
             "-reconnect", "1",
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "5",
             "-i", resolve_pluto_url(url),
             *_codec_args(quality),
+            "-flush_packets", "1",
             "-f", "mpegts",
             "-",
         ]
@@ -502,11 +521,13 @@ class FFmpegManager:
             settings.FFMPEG_PATH,
             "-hide_banner",
             "-loglevel", "error",
+            *FFMPEG_INPUT_BUFFER_ARGS,
             "-reconnect", "1",
             "-reconnect_streamed", "1",
             "-reconnect_delay_max", "5",
             "-i", resolve_pluto_url(url),
             *_abr_codec_args(quality),
+            "-flush_packets", "1",
             "-f", "mpegts",
             "-",
         ]
