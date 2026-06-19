@@ -8,6 +8,7 @@ FFmpeg restream manager.
 """
 import asyncio
 import os
+import shutil
 import subprocess
 import time
 import logging
@@ -285,6 +286,16 @@ class StreamProcess:
     def variant_playlist(self, v: int) -> str:
         return os.path.join(self.hls_dir, f"v{v}", "index.m3u8")
 
+    def _reset_hls_dir(self) -> None:
+        """Wipe the channel's HLS dir before (re)launch so files from a previous
+        mode (single ↔ multi-variant) can't linger and confuse players."""
+        try:
+            if os.path.isdir(self.hls_dir):
+                shutil.rmtree(self.hls_dir)
+        except OSError:
+            pass
+        os.makedirs(self.hls_dir, exist_ok=True)
+
     def _build_multivariant_cmd(self) -> list[str]:
         """One FFmpeg producing a shared HLS ladder: v0 source copy + v1 720p +
         v2 480p, plus per-variant playlists. The player adapts across them."""
@@ -375,6 +386,7 @@ class StreamProcess:
                     if await transcode_governor.try_acquire_mv():
                         self.multivariant = True
                         self._holds_mv = True
+                self._reset_hls_dir()
                 cmd = (
                     self._build_multivariant_cmd()
                     if self.multivariant
