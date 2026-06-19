@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.auth import get_current_admin
 from app.database import get_db
 from app.models import Stream, StreamCategory
+from app.category_sync import link_category_to_all_bouquets
 
 router = APIRouter(prefix="/api/categories", tags=["categories"])
 
@@ -63,6 +64,9 @@ async def create_category(
 ):
     cat = StreamCategory(**data.model_dump())
     db.add(cat)
+    await db.flush()  # assign cat.id before linking it into bouquets
+    # Make the new category visible to all existing users immediately.
+    await link_category_to_all_bouquets(db, cat.id, cat.sort_order)
     await db.commit()
     await db.refresh(cat)
     return cat

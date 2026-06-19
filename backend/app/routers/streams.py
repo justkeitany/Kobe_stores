@@ -14,6 +14,7 @@ from app.ffmpeg_manager import ffmpeg_manager, VALID_QUALITIES
 from app.youtube import is_youtube_url, clean_youtube_url, proxy_resolve
 from app.pluto_stream import resolve as resolve_pluto_url, is_pluto_url
 from app.sources import source_refs, source_urls
+from app.category_sync import link_category_to_all_bouquets
 
 router = APIRouter(prefix="/api/streams", tags=["streams"])
 
@@ -431,6 +432,8 @@ async def import_m3u(
             new_cat = StreamCategory(name=group, sort_order=len(category_map))
             db.add(new_cat)
             await db.flush()
+            # Auto-add to every bouquet so imported channels reach users at once.
+            await link_category_to_all_bouquets(db, new_cat.id, new_cat.sort_order)
             category_map[group_key] = new_cat.id
 
         cat_id = category_map[group_key]
