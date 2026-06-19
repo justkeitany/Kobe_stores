@@ -103,6 +103,21 @@ ABR_MAX_TRANSCODES = 3
 ABR_CPU_LIMIT = 75.0
 ABR_TRANSCODE_THREADS = 2
 
+# ── Multi-variant HLS ───────────────────────────────────────────────────────
+# When a stream's quality is "auto", the HLS path publishes ONE shared ladder of
+# renditions and the player adapts itself (and exposes a manual quality menu).
+# v0 is the source passthrough (no transcode); v1/v2 are downscaled. Measured at
+# ~0.6 of one core per channel, so several can run at once. Index order here is
+# the variant number (vN) FFmpeg emits.
+MULTIVARIANT_RUNGS = [
+    {"name": "Original", "bandwidth": 5000000, "resolution": None},        # v0 = copy
+    {"name": "720p",     "bandwidth": 1600000, "resolution": "1280x720"},  # v1
+    {"name": "480p",     "bandwidth": 800000,  "resolution": "854x480"},   # v2
+]
+# Cap concurrent adaptive channels so a burst can't saturate the CPU; beyond
+# this a new auto channel falls back to a single passthrough stream.
+ABR_MAX_MULTIVARIANT = 4
+
 
 def _pick_abr_quality(mbps: Optional[float]) -> str:
     """Highest tier whose peak rate fits the measured throughput after headroom.
@@ -154,6 +169,7 @@ class TranscodeGovernor:
         self.max_jobs = max_jobs
         self.cpu_limit = cpu_limit
         self._active = 0
+        self._mv_active = 0
         self._lock = asyncio.Lock()
         self._cpu = 0.0
         self._sampler: Optional[asyncio.Task] = None
@@ -193,6 +209,22 @@ class TranscodeGovernor:
             if self._active > 0:
                 self._active -= 1
 
+    async def try_acquire_mv(self) -> bool:
+        """Reserve an adaptive (multi-variant HLS) channel slot; False if at the
+        channel cap or CPU is too high (caller then serves single passthrough)."""
+        async with self._lock:
+            if self._mv_active >= ABR_MAX_MULTIVARIANT:
+                return False
+            if psutil is not None and self._cpu >= self.cpu_limit:
+                return False
+            self._mv_active += 1
+            return True
+
+    async def release_mv(self) -> None:
+        async with self._lock:
+            if self._mv_active > 0:
+                self._mv_active -= 1
+
     @property
     def active(self) -> int:
         return self._active
@@ -206,6 +238,10 @@ class StreamProcess:
     def __init__(self, stream_id: int, sources: list[str], stream_name: str, quality: str = "auto"):
         self.stream_id = stream_id
         self.quality = quality if quality in VALID_QUALITIES else "auto"
+        # Adaptive HLS (one shared multi-variant ladder, player-driven). Decided
+        # at first start(): only when quality is "auto" and the governor allows.
+        self.multivariant: bool = False
+        self._holds_mv: bool = False
         # Ordered failover chain. FFmpeg pulls one source at a time; on crash the
         # health monitor advances to the next entry (wrapping around).
         self.sources: list[str] = [s for s in sources if s] or [""]
@@ -241,6 +277,53 @@ class StreamProcess:
     @property
     def hls_playlist(self) -> str:
         return os.path.join(self.hls_dir, "index.m3u8")
+
+    @property
+    def master_playlist(self) -> str:
+        return os.path.join(self.hls_dir, "master.m3u8")
+
+    def variant_playlist(self, v: int) -> str:
+        return os.path.join(self.hls_dir, f"v{v}", "index.m3u8")
+
+    def _build_multivariant_cmd(self) -> list[str]:
+        """One FFmpeg producing a shared HLS ladder: v0 source copy + v1 720p +
+        v2 480p, plus per-variant playlists. The player adapts across them."""
+        for i in range(len(MULTIVARIANT_RUNGS)):
+            os.makedirs(os.path.join(self.hls_dir, f"v{i}"), exist_ok=True)
+        return [
+            settings.FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel", "warning",
+            *FFMPEG_INPUT_BUFFER_ARGS,
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
+            "-i", resolve_pluto_url(self.current_url),
+            "-filter_complex",
+            "[0:v]split=2[a][b];[a]scale=-2:720[v720o];[b]scale=-2:480[v480o]",
+            # v0 — source passthrough (no transcode)
+            "-map", "0:v:0", "-map", "0:a:0?", "-c:v:0", "copy", "-c:a:0", "copy",
+            # v1 — 720p, capped to fit ~2 Mbps lines
+            "-map", "[v720o]", "-map", "0:a:0?",
+            "-c:v:1", "libx264", "-preset", "veryfast", "-threads", str(ABR_TRANSCODE_THREADS),
+            "-b:v:1", "1250k", "-maxrate:v:1", "1450k", "-bufsize:v:1", "3000k",
+            "-c:a:1", "aac", "-b:a:1", "128k",
+            # v2 — 480p
+            "-map", "[v480o]", "-map", "0:a:0?",
+            "-c:v:2", "libx264", "-preset", "veryfast", "-threads", str(ABR_TRANSCODE_THREADS),
+            "-b:v:2", "600k", "-maxrate:v:2", "750k", "-bufsize:v:2", "1500k",
+            "-c:a:2", "aac", "-b:a:2", "96k",
+            "-flush_packets", "1",
+            "-f", "hls",
+            "-hls_time", "2",
+            "-hls_list_size", "10",
+            "-hls_flags", "delete_segments+append_list+omit_endlist",
+            "-hls_segment_type", "mpegts",
+            "-master_pl_name", "master.m3u8",
+            "-hls_segment_filename", os.path.join(self.hls_dir, "v%v", "seg%d.ts"),
+            "-var_stream_map", "v:0,a:0 v:1,a:1 v:2,a:2",
+            os.path.join(self.hls_dir, "v%v", "index.m3u8"),
+        ]
 
     def _build_ffmpeg_cmd(self) -> list[str]:
         """
@@ -284,7 +367,19 @@ class StreamProcess:
                 return True
             try:
                 self.status = "starting"
-                cmd = self._build_ffmpeg_cmd()
+                # Adaptive HLS when quality is auto and the governor has room;
+                # otherwise a single stream (passthrough for auto, transcode for
+                # an explicit tier). Decided once, kept across crash-restarts.
+                if self.quality == "auto" and not self._holds_mv:
+                    transcode_governor.start()
+                    if await transcode_governor.try_acquire_mv():
+                        self.multivariant = True
+                        self._holds_mv = True
+                cmd = (
+                    self._build_multivariant_cmd()
+                    if self.multivariant
+                    else self._build_ffmpeg_cmd()
+                )
                 self.process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.DEVNULL,
@@ -326,6 +421,11 @@ class StreamProcess:
             self.process = None
             self.retry_count = 0
             logger.info(f"Stream {self.stream_id} stopped")
+        # Release the adaptive-channel slot (outside self._lock — different lock).
+        if self._holds_mv:
+            await transcode_governor.release_mv()
+            self._holds_mv = False
+            self.multivariant = False
 
     async def _health_monitor(self):
         """Restart FFmpeg if it crashes while viewers are still watching.

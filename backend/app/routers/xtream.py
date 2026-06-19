@@ -19,7 +19,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from app.database import AsyncSessionLocal
 from app.models import Stream, StreamCategory, EpgData, BouquetCategory, Settings as SettingsModel
-from app.ffmpeg_manager import ffmpeg_manager
+from app.ffmpeg_manager import ffmpeg_manager, MULTIVARIANT_RUNGS
 from app.config import settings
 from app.youtube import is_youtube_url, proxy_resolve
 from app.sources import source_refs, source_urls, pick_source_for_user
@@ -428,8 +428,53 @@ def _rewrite_playlist(path: str, stream_id: int) -> str:
     return "\n".join(out) + "\n"
 
 
+def _build_master_playlist(stream_id: int) -> str:
+    """Master playlist for adaptive (multi-variant) HLS.
+
+    We emit it ourselves (rather than reuse FFmpeg's) so the source/passthrough
+    rung — which FFmpeg omits because a copied stream has no known bitrate — is
+    included. Variant URIs point back at this endpoint (?v=N) so each poll still
+    heartbeats the stream; segments are served directly by Nginx. Listed lowest
+    bitrate first for a fast startup, then the player ramps up.
+    """
+    lines = ["#EXTM3U", "#EXT-X-VERSION:3"]
+    order = sorted(range(len(MULTIVARIANT_RUNGS)), key=lambda i: MULTIVARIANT_RUNGS[i]["bandwidth"])
+    for i in order:
+        rung = MULTIVARIANT_RUNGS[i]
+        inf = f"#EXT-X-STREAM-INF:BANDWIDTH={rung['bandwidth']}"
+        if rung.get("resolution"):
+            inf += f",RESOLUTION={rung['resolution']}"
+        lines.append(inf)
+        lines.append(f"{stream_id}.m3u8?v={i}")
+    return "\n".join(lines) + "\n"
+
+
+def _rewrite_variant(path: str, stream_id: int, v: int) -> str:
+    """Point a variant's segment lines at Nginx (/hls/<id>/v<N>/)."""
+    with open(path) as f:
+        lines = f.read().splitlines()
+    out = []
+    for line in lines:
+        if line and not line.startswith("#"):
+            out.append(f"/hls/{stream_id}/v{v}/{line.split('/')[-1]}")
+        else:
+            out.append(line)
+    return "\n".join(out) + "\n"
+
+
+async def _wait_for_file(path: str, tries: int = 20, delay: float = 0.5) -> bool:
+    for _ in range(tries):
+        if os.path.exists(path):
+            return True
+        await asyncio.sleep(delay)
+    return False
+
+
 @router.get("/live/{username}/{password}/{stream_file}")
-async def serve_live(username: str, password: str, stream_file: str, request: Request):
+async def serve_live(
+    username: str, password: str, stream_file: str, request: Request,
+    v: Optional[int] = Query(None),
+):
     user_data = await _check_credentials(username, password)
     if not user_data:
         raise HTTPException(401, "Unauthorized")
@@ -525,13 +570,38 @@ async def serve_live(username: str, password: str, stream_file: str, request: Re
         stream_id, [r.url for r in refs], stream.name, client_key, stream.quality
     )
 
+    no_cache = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
     if ext == "m3u8":
-        # Serve the live playlist from the backend so every poll is a heartbeat.
+        # Adaptive (multi-variant) HLS: the player auto-switches across a shared
+        # ladder and gets a manual quality menu. Both the master and the per-
+        # variant media playlists are served here so each poll heartbeats.
+        if sp.multivariant:
+            if v is None:
+                await _wait_for_file(sp.variant_playlist(0))
+                return Response(
+                    content=_build_master_playlist(stream_id),
+                    media_type="application/vnd.apple.mpegurl",
+                    headers=no_cache,
+                )
+            if v < 0 or v >= len(MULTIVARIANT_RUNGS):
+                raise HTTPException(404, "Unknown variant")
+            variant_path = sp.variant_playlist(v)
+            await _wait_for_file(variant_path)
+            try:
+                content = _rewrite_variant(variant_path, stream_id, v)
+            except FileNotFoundError:
+                raise HTTPException(503, "Stream is starting, please retry")
+            return Response(
+                content=content,
+                media_type="application/vnd.apple.mpegurl",
+                headers=no_cache,
+            )
+
+        # Single-rendition HLS — serve the live playlist from the backend so
+        # every poll is a heartbeat.
         playlist_path = sp.hls_playlist
-        for _ in range(20):
-            if os.path.exists(playlist_path):
-                break
-            await asyncio.sleep(0.5)
+        await _wait_for_file(playlist_path)
         try:
             content = _rewrite_playlist(playlist_path, stream_id)
         except FileNotFoundError:
