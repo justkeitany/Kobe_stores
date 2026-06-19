@@ -18,6 +18,7 @@ from app.routers.users import router as users_router
 from app.routers.xtream import router as xtream_router
 from app.routers.proxy import router as proxy_router
 from app.routers.pluto import router as pluto_router
+from app.routers.freestreams import router as freestreams_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -91,6 +92,10 @@ app.include_router(proxy_router)
 
 # Pluto TV channel directory passthrough (/api/pluto/channels)
 app.include_router(pluto_router)
+
+# Free-streams (Plex/Samsung/Roku/Tubi) M3U directory passthrough
+# (/api/freestreams/{provider}/channels)
+app.include_router(freestreams_router)
 
 # ── WebSocket ──────────────────────────────────────────────────────────────
 @app.websocket("/ws/stats")

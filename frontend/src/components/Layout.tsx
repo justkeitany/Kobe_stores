@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
-import { NavLink, Outlet, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
-  Server, Settings, LogOut, Menu, Users,
+  Server, Settings, LogOut, Menu, Users, Clapperboard, ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { logout, currentUsername } from "../lib/auth";
@@ -11,15 +11,35 @@ import { useTheme } from "../lib/theme";
 import { MIcon } from "./MIcon";
 import clsx from "clsx";
 
-const PLUTO_LOGO = "https://logo.keitanyfrank.store/Pluto-TV-Logo.png";
+const LOGOS = {
+  pluto: "https://logo.keitanyfrank.store/Pluto-TV-Logo.png",
+  roku: "https://logo.keitanyfrank.store/Roku-Logo.png",
+  samsung: "https://logo.keitanyfrank.store/Samsung_TV_Plus_logo.png",
+  plex: "https://logo.keitanyfrank.store/plex-logo.png",
+  tubi: "https://logo.keitanyfrank.store/Tubi-Logo.png",
+};
 
-type NavItem = { label: string; path: string; icon?: LucideIcon; img?: string };
+type NavLeaf = { label: string; path: string; icon?: LucideIcon; img?: string };
+type NavGroup = { label: string; icon: LucideIcon; children: NavLeaf[] };
+type NavEntry = NavLeaf | NavGroup;
 
-const nav: NavItem[] = [
+const isGroup = (e: NavEntry): e is NavGroup => "children" in e;
+
+const nav: NavEntry[] = [
   { label: "Dashboard",  icon: LayoutDashboard, path: "/" },
   { label: "Users",      icon: Users,           path: "/users" },
   { label: "Streams",    icon: Tv,              path: "/streams" },
-  { label: "Pluto TV",   img: PLUTO_LOGO,       path: "/pluto" },
+  {
+    label: "Free Streams",
+    icon: Clapperboard,
+    children: [
+      { label: "Pluto TV",         img: LOGOS.pluto,   path: "/pluto" },
+      { label: "Plex",             img: LOGOS.plex,    path: "/freestreams/plex" },
+      { label: "Samsung TV Plus",  img: LOGOS.samsung, path: "/freestreams/samsung" },
+      { label: "Roku",             img: LOGOS.roku,    path: "/freestreams/roku" },
+      { label: "Tubi",             img: LOGOS.tubi,    path: "/freestreams/tubi" },
+    ],
+  },
   { label: "Categories", icon: FolderOpen,      path: "/categories" },
   { label: "Bouquets",   icon: Package,         path: "/bouquets" },
   { label: "EPG",        icon: Radio,           path: "/epg" },
@@ -28,6 +48,51 @@ const nav: NavItem[] = [
 
 export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
+  const { pathname } = useLocation();
+
+  // Track which collapsible nav groups are open. A group defaults to open when
+  // the current route lives inside it.
+  const [openGroups, setOpenGroups] = useState<Set<string>>(() => {
+    const open = new Set<string>();
+    for (const e of nav) {
+      if (isGroup(e) && e.children.some((c) => pathname === c.path)) open.add(e.label);
+    }
+    return open;
+  });
+
+  const toggleGroup = (label: string) =>
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      next.has(label) ? next.delete(label) : next.add(label);
+      return next;
+    });
+
+  const leafClass = (isActive: boolean, indented = false) =>
+    clsx(
+      "flex items-center gap-3 px-md py-sm text-body-sm font-medium transition-colors border-r-2 rounded-l-md",
+      collapsed && "justify-center px-0",
+      indented && !collapsed && "pl-9",
+      isActive
+        ? "bg-surface-variant text-on-surface font-bold border-primary"
+        : "text-on-surface-variant border-transparent hover:bg-surface-container hover:text-on-surface"
+    );
+
+  const renderLeaf = ({ label, icon: Icon, img, path }: NavLeaf, indented = false) => (
+    <NavLink
+      key={path}
+      to={path}
+      end={path === "/"}
+      title={collapsed ? label : undefined}
+      className={({ isActive }) => leafClass(isActive, indented)}
+    >
+      {img ? (
+        <img src={img} alt="" className="w-5 h-5 object-contain shrink-0" />
+      ) : Icon ? (
+        <Icon size={16} className="shrink-0" />
+      ) : null}
+      {!collapsed && <span>{label}</span>}
+    </NavLink>
+  );
 
   const footerLink = (active: boolean) =>
     clsx(
@@ -81,30 +146,42 @@ export default function Layout() {
 
         {/* Nav items (lucide icons — intentionally kept) */}
         <nav className="flex-1 px-sm py-1 overflow-y-auto space-y-0.5">
-          {nav.map(({ label, icon: Icon, img, path }) => (
-            <NavLink
-              key={path}
-              to={path}
-              end={path === "/"}
-              title={collapsed ? label : undefined}
-              className={({ isActive }) =>
-                clsx(
-                  "flex items-center gap-3 px-md py-sm text-body-sm font-medium transition-colors border-r-2 rounded-l-md",
-                  collapsed && "justify-center px-0",
-                  isActive
-                    ? "bg-surface-variant text-on-surface font-bold border-primary"
-                    : "text-on-surface-variant border-transparent hover:bg-surface-container hover:text-on-surface"
-                )
-              }
-            >
-              {img ? (
-                <img src={img} alt="" className="w-5 h-5 object-contain shrink-0" />
-              ) : Icon ? (
-                <Icon size={16} className="shrink-0" />
-              ) : null}
-              {!collapsed && <span>{label}</span>}
-            </NavLink>
-          ))}
+          {nav.map((entry) => {
+            if (!isGroup(entry)) return renderLeaf(entry);
+
+            // When the sidebar is collapsed there's no room for a dropdown, so
+            // surface the children directly as icon rows.
+            if (collapsed) return entry.children.map((c) => renderLeaf(c));
+
+            const { label, icon: Icon, children } = entry;
+            const open = openGroups.has(label);
+            const hasActiveChild = children.some((c) => pathname === c.path);
+            return (
+              <div key={label}>
+                <button
+                  onClick={() => toggleGroup(label)}
+                  className={clsx(
+                    "w-full flex items-center gap-3 px-md py-sm text-body-sm font-medium transition-colors border-r-2 rounded-l-md border-transparent",
+                    hasActiveChild
+                      ? "text-on-surface font-bold"
+                      : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                  )}
+                >
+                  <Icon size={16} className="shrink-0" />
+                  <span>{label}</span>
+                  <ChevronDown
+                    size={14}
+                    className={clsx("ml-auto shrink-0 transition-transform", open && "rotate-180")}
+                  />
+                </button>
+                {open && (
+                  <div className="mt-0.5 space-y-0.5">
+                    {children.map((c) => renderLeaf(c, true))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
 
         {/* Footer: Settings + Logout */}

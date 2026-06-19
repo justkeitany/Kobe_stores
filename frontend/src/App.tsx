@@ -9,6 +9,7 @@ import Dashboard from "./pages/Dashboard";
 import UsersPage from "./pages/UsersPage";
 import Streams from "./pages/Streams";
 import PlutoTV from "./pages/PlutoTV";
+import FreeStreamsTV from "./pages/FreeStreamsTV";
 import Categories from "./pages/Categories";
 import Bouquets from "./pages/Bouquets";
 import EPG from "./pages/EPG";
@@ -56,6 +57,7 @@ export default function App() {
             <Route path="users" element={<UsersPage />} />
             <Route path="streams" element={<Streams />} />
             <Route path="pluto" element={<PlutoTV />} />
+            <Route path="freestreams/:provider" element={<FreeStreamsTV />} />
             <Route path="categories" element={<Categories />} />
             <Route path="bouquets" element={<Bouquets />} />
             <Route path="epg" element={<EPG />} />
