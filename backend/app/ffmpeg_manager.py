@@ -63,6 +63,53 @@ QUALITY_PROFILES: Dict[str, dict] = {
 VALID_QUALITIES = {"auto", *QUALITY_PROFILES}
 
 
+# Cooldown after a stream exhausts its retries on a dead/broken source, before
+# any viewer poll is allowed to respawn it. Without this, a permanently-failing
+# source (e.g. an offline provider) is restarted on every poll → a crash storm
+# that pins CPU and spams "stream error" notifications.
+ERROR_RETRY_COOLDOWN = 60
+
+
+# Caches whether a source URL carries a video track. None is never stored — only
+# definitive True/False — so a failed probe doesn't get memoised as a wrong answer.
+_VIDEO_PROBE_CACHE: Dict[str, bool] = {}
+
+
+async def _source_has_video(url: str) -> bool:
+    """Whether the source has at least one video stream (cached per resolved URL).
+
+    Audio-only sources (radio / Icecast) have no video track, so the multi-variant
+    video ladder ([0:v]split…scale) and any -vf scale would fail instantly with
+    ffmpeg rc=1. We probe once with ffprobe and route audio-only sources to an
+    audio pipeline instead. On any probe failure we assume video (the safe default)
+    so a transient network blip never wrongly strips video from a real channel.
+    """
+    resolved = resolve_pluto_url(url)
+    if resolved in _VIDEO_PROBE_CACHE:
+        return _VIDEO_PROBE_CACHE[resolved]
+    ffprobe = os.path.join(os.path.dirname(settings.FFMPEG_PATH), "ffprobe")
+    has_video = True
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            ffprobe, "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_type",
+            "-of", "csv=p=0",
+            resolved,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=12)
+        if proc.returncode == 0:
+            # rc 0 + "video" → has a video stream; rc 0 + empty → audio-only.
+            has_video = b"video" in out
+            _VIDEO_PROBE_CACHE[resolved] = has_video
+        # rc != 0 → probe couldn't read the source; leave uncached, assume video.
+    except (asyncio.TimeoutError, Exception):
+        has_video = True
+    return has_video
+
+
 def _codec_args(quality: str) -> list[str]:
     """FFmpeg codec args for a quality tier — stream copy for 'auto', else x264/AAC transcode."""
     profile = QUALITY_PROFILES.get(quality)
@@ -250,6 +297,11 @@ class StreamProcess:
         # at first start(): only when quality is "auto" and the governor allows.
         self.multivariant: bool = False
         self._holds_mv: bool = False
+        # Set at start() by an ffprobe: audio-only sources (radio) skip the video
+        # ladder entirely and use a plain audio HLS command.
+        self.audio_only: bool = False
+        # When the stream last exhausted its retries (dead source); gates respawns.
+        self.gave_up_at: Optional[datetime] = None
         # Ordered failover chain. FFmpeg pulls one source at a time; on crash the
         # health monitor advances to the next entry (wrapping around).
         self.sources: list[str] = [s for s in sources if s] or [""]
@@ -370,6 +422,35 @@ class StreamProcess:
             os.path.join(self.hls_dir, "v%v", "index.m3u8"),
         ]
 
+    def _build_audio_cmd(self) -> list[str]:
+        """HLS command for an audio-only source (radio / Icecast).
+
+        No video maps or filters (those would fail rc=1) — just a single AAC audio
+        rendition, transcoded for player compatibility across MP3/AAC sources. It
+        is served through the normal single-rendition playlist path.
+        """
+        os.makedirs(self.hls_dir, exist_ok=True)
+        return [
+            settings.FFMPEG_PATH,
+            "-hide_banner",
+            "-loglevel", "warning",
+            *FFMPEG_INPUT_BUFFER_ARGS,
+            "-reconnect", "1",
+            "-reconnect_streamed", "1",
+            "-reconnect_delay_max", "5",
+            "-i", resolve_pluto_url(self.current_url),
+            "-vn",
+            "-c:a", "aac", "-b:a", "128k", "-ac", "2",
+            "-flush_packets", "1",
+            "-f", "hls",
+            "-hls_time", "2",
+            "-hls_list_size", "10",
+            "-hls_flags", "delete_segments+append_list+omit_endlist",
+            "-hls_segment_type", "mpegts",
+            "-hls_segment_filename", os.path.join(self.hls_dir, "seg%d.ts"),
+            self.hls_playlist,
+        ]
+
     def _build_ffmpeg_cmd(self) -> list[str]:
         """
         Low-latency HLS optimized FFmpeg command.
@@ -415,17 +496,21 @@ class StreamProcess:
                 # Adaptive HLS when quality is auto and the governor has room;
                 # otherwise a single stream (passthrough for auto, transcode for
                 # an explicit tier). Decided once, kept across crash-restarts.
-                if self.quality == "auto" and not self._holds_mv:
+                # Detect audio-only sources (radio/Icecast) so they never hit the
+                # video ladder, which would crash with rc=1. Probed once, cached.
+                self.audio_only = not await _source_has_video(self.current_url)
+                if self.quality == "auto" and not self._holds_mv and not self.audio_only:
                     transcode_governor.start()
                     if await transcode_governor.try_acquire_mv():
                         self.multivariant = True
                         self._holds_mv = True
                 self._reset_hls_dir()
-                cmd = (
-                    self._build_multivariant_cmd()
-                    if self.multivariant
-                    else self._build_ffmpeg_cmd()
-                )
+                if self.multivariant:
+                    cmd = self._build_multivariant_cmd()
+                elif self.audio_only:
+                    cmd = self._build_audio_cmd()
+                else:
+                    cmd = self._build_ffmpeg_cmd()
                 self.process = await asyncio.create_subprocess_exec(
                     *cmd,
                     stdout=asyncio.subprocess.DEVNULL,
@@ -502,6 +587,7 @@ class StreamProcess:
 
                     if self.retry_count > settings.MAX_RETRY_ATTEMPTS:
                         self.status = "error"
+                        self.gave_up_at = datetime.now(timezone.utc)
                         logger.error(f"Stream {self.stream_id} exceeded max retries, giving up")
                         break
 
@@ -589,6 +675,15 @@ class FFmpegManager:
         sp = await self.get_or_create(stream_id, sources, stream_name, quality)
         sp.heartbeat(client_key)
         if sp.status not in ("running", "starting"):
+            # If it recently exhausted its retries on a dead/broken source, hold
+            # off respawning until the cooldown passes — otherwise every viewer
+            # poll relaunches a doomed ffmpeg (CPU storm + error-notification spam).
+            if sp.status == "error" and sp.gave_up_at is not None:
+                idle = (datetime.now(timezone.utc) - sp.gave_up_at).total_seconds()
+                if idle < ERROR_RETRY_COOLDOWN:
+                    return sp
+            sp.retry_count = 0
+            sp.gave_up_at = None
             await sp.start()
         return sp
 
