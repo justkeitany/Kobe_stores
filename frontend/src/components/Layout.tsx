@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
-  Server, Settings, LogOut, Menu, Users, Clapperboard, ChevronDown,
+  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown,
   type LucideIcon,
 } from "lucide-react";
 import { logout, currentUsername } from "../lib/auth";
@@ -24,6 +24,21 @@ type NavGroup = { label: string; icon: LucideIcon; children: NavLeaf[] };
 type NavEntry = NavLeaf | NavGroup;
 
 const isGroup = (e: NavEntry): e is NavGroup => "children" in e;
+
+// Tracks a CSS media query so JS render logic can match Tailwind breakpoints.
+function useMediaQuery(query: string): boolean {
+  const [matches, setMatches] = useState(
+    () => typeof window !== "undefined" && window.matchMedia(query).matches
+  );
+  useEffect(() => {
+    const mql = window.matchMedia(query);
+    const onChange = () => setMatches(mql.matches);
+    onChange();
+    mql.addEventListener("change", onChange);
+    return () => mql.removeEventListener("change", onChange);
+  }, [query]);
+  return matches;
+}
 
 const nav: NavEntry[] = [
   { label: "Dashboard",  icon: LayoutDashboard, path: "/" },
@@ -48,7 +63,18 @@ const nav: NavEntry[] = [
 
 export default function Layout() {
   const [collapsed, setCollapsed] = useState(false);
+  // Off-canvas drawer state for small screens (sidebar is hidden by default
+  // on mobile and slides in over the content).
+  const [mobileOpen, setMobileOpen] = useState(false);
   const { pathname } = useLocation();
+
+  // Close the mobile drawer whenever the route changes (e.g. tapping a link).
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
+
+  // The icon-rail collapse only applies on desktop; on mobile the drawer is
+  // always shown full-width with labels.
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
+  const railCollapsed = collapsed && isDesktop;
 
   // Track which collapsible nav groups are open. A group defaults to open when
   // the current route lives inside it.
@@ -70,8 +96,8 @@ export default function Layout() {
   const leafClass = (isActive: boolean, indented = false) =>
     clsx(
       "flex items-center gap-3 px-md py-sm text-body-sm font-medium transition-colors border-r-2 rounded-l-md",
-      collapsed && "justify-center px-0",
-      indented && !collapsed && "pl-9",
+      railCollapsed && "justify-center px-0",
+      indented && !railCollapsed && "pl-9",
       isActive
         ? "bg-surface-variant text-on-surface font-bold border-primary"
         : "text-on-surface-variant border-transparent hover:bg-surface-container hover:text-on-surface"
@@ -82,7 +108,7 @@ export default function Layout() {
       key={path}
       to={path}
       end={path === "/"}
-      title={collapsed ? label : undefined}
+      title={railCollapsed ? label : undefined}
       className={({ isActive }) => leafClass(isActive, indented)}
     >
       {img ? (
@@ -90,14 +116,14 @@ export default function Layout() {
       ) : Icon ? (
         <Icon size={16} className="shrink-0" />
       ) : null}
-      {!collapsed && <span>{label}</span>}
+      {!railCollapsed && <span>{label}</span>}
     </NavLink>
   );
 
   const footerLink = (active: boolean) =>
     clsx(
       "w-full flex items-center gap-3 px-md py-sm text-body-sm font-medium transition-colors",
-      collapsed && "justify-center px-0",
+      railCollapsed && "justify-center px-0",
       active
         ? "bg-surface-variant text-on-surface"
         : "text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
@@ -106,36 +132,59 @@ export default function Layout() {
   return (
     <div className="flex h-screen bg-surface overflow-hidden">
 
+      {/* Mobile backdrop — only shown while the drawer is open on small screens */}
+      {mobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+          onClick={() => setMobileOpen(false)}
+          aria-hidden
+        />
+      )}
+
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside className={clsx(
-        "flex flex-col bg-surface-container-lowest border-r border-outline-variant shrink-0 transition-all duration-200",
-        collapsed ? "w-14" : "w-60"
+        "flex flex-col bg-surface-container-lowest border-r border-outline-variant shrink-0 transition-transform duration-200",
+        // Mobile: fixed off-canvas drawer (always full width, never collapsed).
+        "fixed inset-y-0 left-0 z-50 w-60",
+        mobileOpen ? "translate-x-0" : "-translate-x-full",
+        // Desktop: in-flow column that can collapse to an icon rail.
+        "lg:static lg:translate-x-0 lg:z-auto lg:transition-all",
+        collapsed ? "lg:w-14" : "lg:w-60"
       )}>
 
         {/* Brand */}
         <div className={clsx(
           "flex items-center h-16 px-md gap-2.5 shrink-0",
-          collapsed && "justify-center px-0"
+          railCollapsed && "justify-center px-0"
         )}>
           <div className="w-7 h-7 rounded-md bg-brand flex items-center justify-center shrink-0">
             <Tv size={14} className="text-[#ffffff]" />
           </div>
-          {!collapsed && (
+          {!railCollapsed && (
             <h1 className="font-bold text-on-surface text-base tracking-tighter leading-none">IPTV Admin</h1>
           )}
+          {/* Desktop collapse toggle */}
           <button
             onClick={() => setCollapsed(!collapsed)}
             className={clsx(
-              "text-on-surface-variant hover:text-on-surface transition-colors",
-              collapsed ? "hidden" : "ml-auto"
+              "text-on-surface-variant hover:text-on-surface transition-colors hidden lg:block",
+              collapsed ? "lg:hidden" : "ml-auto"
             )}
           >
             <Menu size={16} />
           </button>
+          {/* Mobile close button */}
+          <button
+            onClick={() => setMobileOpen(false)}
+            className="text-on-surface-variant hover:text-on-surface transition-colors ml-auto lg:hidden"
+            aria-label="Close menu"
+          >
+            <X size={18} />
+          </button>
         </div>
 
-        {/* Collapsed toggle */}
-        {collapsed && (
+        {/* Collapsed toggle (desktop icon-rail only) */}
+        {railCollapsed && (
           <button
             onClick={() => setCollapsed(false)}
             className="mx-auto mb-1 text-on-surface-variant hover:text-on-surface"
@@ -151,7 +200,7 @@ export default function Layout() {
 
             // When the sidebar is collapsed there's no room for a dropdown, so
             // surface the children directly as icon rows.
-            if (collapsed) return entry.children.map((c) => renderLeaf(c));
+            if (railCollapsed) return entry.children.map((c) => renderLeaf(c));
 
             const { label, icon: Icon, children } = entry;
             const open = openGroups.has(label);
@@ -186,29 +235,29 @@ export default function Layout() {
 
         {/* Footer: Settings + Logout */}
         <div className="px-sm pt-md pb-3 space-y-0.5 shrink-0 border-t border-outline-variant/40">
-          <NavLink to="/settings" title={collapsed ? "Settings" : undefined}
+          <NavLink to="/settings" title={railCollapsed ? "Settings" : undefined}
             className={({ isActive }) => footerLink(isActive)}>
             <Settings size={16} className="shrink-0" />
-            {!collapsed && <span>Settings</span>}
+            {!railCollapsed && <span>Settings</span>}
           </NavLink>
           <button
             onClick={() => logout()}
-            title={collapsed ? "Logout" : undefined}
+            title={railCollapsed ? "Logout" : undefined}
             className={clsx(
               "w-full flex items-center gap-3 px-md py-sm text-body-sm font-medium",
               "text-on-surface-variant hover:text-error hover:bg-surface-container transition-colors",
-              collapsed && "justify-center px-0"
+              railCollapsed && "justify-center px-0"
             )}
           >
             <LogOut size={16} className="shrink-0" />
-            {!collapsed && <span>Logout</span>}
+            {!railCollapsed && <span>Logout</span>}
           </button>
         </div>
       </aside>
 
       {/* ── Main column ─────────────────────────────────────── */}
-      <div className="flex-1 flex flex-col overflow-hidden">
-        <TopHeader />
+      <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+        <TopHeader onMenuClick={() => setMobileOpen(true)} />
         <main className="flex-1 overflow-y-auto bg-surface">
           <Outlet />
         </main>
@@ -218,7 +267,7 @@ export default function Layout() {
 }
 
 /* ── Top header bar (functional) ─────────────────────────────── */
-function TopHeader() {
+function TopHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
   const { stats, connected } = useServerStats();
@@ -239,9 +288,18 @@ function TopHeader() {
   }
 
   return (
-    <header className="h-12 shrink-0 border-b border-outline-variant bg-surface flex items-center justify-between px-lg gap-lg z-30">
+    <header className="h-12 shrink-0 border-b border-outline-variant bg-surface flex items-center justify-between px-md sm:px-lg gap-sm sm:gap-lg z-30">
+      {/* Hamburger — opens the off-canvas sidebar on small screens */}
+      <button
+        onClick={onMenuClick}
+        className="lg:hidden shrink-0 p-1.5 -ml-1 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-md transition-colors"
+        aria-label="Open menu"
+      >
+        <Menu size={20} />
+      </button>
+
       {/* Search */}
-      <form onSubmit={submitSearch} className="relative flex-1 max-w-3xl">
+      <form onSubmit={submitSearch} className="relative flex-1 max-w-3xl min-w-0">
         <MIcon name="search" size={18}
           className="absolute left-4 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
         <input
