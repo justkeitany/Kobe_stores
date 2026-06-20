@@ -4,6 +4,7 @@ import logging
 from fastapi import APIRouter, Depends
 from app.auth import get_current_admin
 from app.ffmpeg_manager import ffmpeg_manager
+from app.viewers import live_counts
 
 router = APIRouter(prefix="/api/server", tags=["server"])
 logger = logging.getLogger(__name__)
@@ -34,6 +35,12 @@ async def get_stats(_=Depends(get_current_admin)):
         "active_stream_count": len(running),
         "streams": active_streams,
     }
+
+
+@router.get("/connections")
+async def get_connections(_=Depends(get_current_admin)):
+    """Live concurrent figures (HLS + .ts): active_connections, active_streams."""
+    return await live_counts()
 
 
 @router.get("/processes")

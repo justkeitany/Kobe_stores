@@ -9,6 +9,7 @@ Supported endpoints:
   GET       /xmltv.php               — XMLTV EPG data
 """
 import os
+import time
 import asyncio
 import logging
 from datetime import datetime, timezone
@@ -24,6 +25,7 @@ from app.config import settings
 from app.youtube import is_youtube_url, proxy_resolve
 from app.sources import source_refs, source_urls, pick_source_for_user
 from app.redis_client import get_redis
+from app.viewers import track_viewer, untrack_viewer
 from urllib.parse import quote
 
 router = APIRouter(tags=["xtream"])
@@ -415,6 +417,25 @@ def _client_key(request: Request) -> str:
     )
 
 
+async def _tracked_ts(inner, username: str, client_key: str, stream_id: int):
+    """Wrap a .ts byte generator so the viewer stays counted for the dashboard.
+
+    A .ts request is one long-lived connection (no playlist polling), so we
+    refresh the live-viewer entry every ~15s while bytes flow and remove it the
+    instant the client disconnects — keeping Active Streams / Connections honest.
+    """
+    last = 0.0
+    try:
+        async for chunk in inner:
+            t = time.monotonic()
+            if t - last > 15:
+                await track_viewer(username, client_key, stream_id)
+                last = t
+            yield chunk
+    finally:
+        await untrack_viewer(username, client_key, stream_id)
+
+
 def _rewrite_playlist(path: str, stream_id: int) -> str:
     """Read FFmpeg's HLS playlist and point segment lines at Nginx (/hls/<id>/)."""
     with open(path) as f:
@@ -528,6 +549,12 @@ async def serve_live(
             raise HTTPException(503, "No healthy source available")
         return RedirectResponse(url=chosen.url, status_code=302)
 
+    # Count this viewer for the dashboard, unconditionally (independent of the
+    # per-user connection limit, so admin/unlimited accounts are counted too).
+    # HLS polls re-trigger this every request; the .ts wrapper refreshes it while
+    # streaming and clears it on disconnect.
+    await track_viewer(username, client_key, stream_id)
+
     # .ts output: serve one continuous MPEG-TS stream (one FFmpeg per viewer).
     # Players buffer a progressive TS feed more smoothly than HLS on weak links.
     if ext == "ts":
@@ -535,7 +562,10 @@ async def serve_live(
         # (CPU-protected, passthrough fallback). Explicit qualities stay forced.
         if stream.quality == "auto":
             return StreamingResponse(
-                ffmpeg_manager.abr_ts_stream(primary_url),
+                _tracked_ts(
+                    ffmpeg_manager.abr_ts_stream(primary_url),
+                    username, client_key, stream_id,
+                ),
                 media_type="video/mp2t",
                 headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
             )
@@ -558,7 +588,7 @@ async def serve_live(
                         pass
 
         return StreamingResponse(
-            ts_iter(),
+            _tracked_ts(ts_iter(), username, client_key, stream_id),
             media_type="video/mp2t",
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )

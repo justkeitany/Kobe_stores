@@ -40,6 +40,14 @@ export default function UsersPage() {
     refetchInterval: 10000,
   });
 
+  // Real-time concurrent figures (counts both HLS and .ts viewers), polled
+  // independently of the user list so the tile reflects who is watching *now*.
+  const { data: liveCounts } = useQuery<{ active_connections: number; active_streams: number }>({
+    queryKey: ["live-connections"],
+    queryFn: () => api.get("/server/connections").then((r) => r.data),
+    refetchInterval: 5000,
+  });
+
   const deleteMut = useMutation({
     mutationFn: (id: number) => api.delete(`/users/${id}`),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["users"] }); toast.success("User deleted"); },
@@ -52,7 +60,6 @@ export default function UsersPage() {
 
   // Derived stats
   const total = users.length;
-  const activeCount = users.filter((u) => u.is_active && !isUserExpired(u)).length;
   const expiringSoon = users.filter((u) => {
     if (!u.expires_at || isUserExpired(u)) return false;
     const days = (new Date(u.expires_at).getTime() - Date.now()) / 86_400_000;
@@ -87,7 +94,7 @@ export default function UsersPage() {
       {/* Stat cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-gutter">
         <UserStat label="Total Users" value={total} />
-        <UserStat label="Active Connections" value={activeCount} valueClass="text-green-500" />
+        <UserStat label="Active Connections" value={liveCounts?.active_connections ?? 0} valueClass="text-green-500" />
         <UserStat label="Expiring Soon" value={expiringSoon} valueClass="text-orange-500" />
         <UserStat label="Disabled" value={disabled} valueClass="opacity-50" />
       </div>

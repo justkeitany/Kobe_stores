@@ -10,6 +10,7 @@ import time
 import psutil
 from fastapi import WebSocket, WebSocketDisconnect
 from app.ffmpeg_manager import ffmpeg_manager
+from app.viewers import live_counts
 
 logger = logging.getLogger(__name__)
 
@@ -32,9 +33,9 @@ async def stats_sender(websocket: WebSocket):
                 prev_net = net
 
                 active  = await ffmpeg_manager.get_all_statuses()
-                # A stream counts as "active" only while it has a live viewer,
-                # so the dashboard drops within ~8s of the viewer leaving.
-                watched = [s for s in active if s["viewer_count"] > 0]
+                # Real concurrent figures from the live-viewer set — counts BOTH
+                # HLS and .ts delivery (ffmpeg_manager only knows about HLS).
+                counts  = await live_counts()
 
                 payload = {
                     "type": "stats",
@@ -45,7 +46,8 @@ async def stats_sender(websocket: WebSocket):
                     "bw_out_kbps":  round(bw_out * 8 / 1024, 1),
                     "bw_in_kbps":   round(bw_in  * 8 / 1024, 1),
                     "uptime_seconds": round(time.time() - psutil.boot_time()),
-                    "active_streams": len(watched),
+                    "active_streams": counts["active_streams"],
+                    "active_connections": counts["active_connections"],
                     "streams": [
                         {
                             "id":      s["stream_id"],
