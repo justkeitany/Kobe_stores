@@ -68,6 +68,11 @@ step "Updating Nginx config"
 mkdir -p /etc/nginx/snippets
 cp "$TMP_DIR/nginx/iptv-panel.conf"     /etc/nginx/sites-available/iptv-panel
 cp "$TMP_DIR/nginx/iptv-locations.conf" /etc/nginx/snippets/iptv-locations.conf
+# Raw-IP redirect control: install the empty default ONLY if absent, so a
+# domain lock written by iptv-ssl-setup.sh (return 301 to the user's domain)
+# is preserved across upgrades rather than reverted to open IP access.
+[[ -f /etc/nginx/snippets/iptv-redirect.conf ]] || \
+    cp "$TMP_DIR/nginx/iptv-redirect.conf" /etc/nginx/snippets/iptv-redirect.conf
 nginx -t 2>/dev/null && systemctl reload nginx
 info "Nginx reloaded"
 

@@ -147,6 +147,12 @@ step "Configuring Nginx"
 mkdir -p /etc/nginx/snippets
 cp "$APP_DIR/nginx/iptv-locations.conf" /etc/nginx/snippets/iptv-locations.conf
 cp "$APP_DIR/nginx/iptv-panel.conf"     /etc/nginx/sites-available/iptv-panel
+# Empty raw-IP redirect control snippet (the catch-all includes it, so it must
+# exist for nginx to load). Stays empty until a domain is set, at which point
+# iptv-ssl-setup.sh fills it with a redirect to that domain. Don't clobber an
+# existing one (re-runs).
+[[ -f /etc/nginx/snippets/iptv-redirect.conf ]] || \
+    cp "$APP_DIR/nginx/iptv-redirect.conf" /etc/nginx/snippets/iptv-redirect.conf
 ln -sf /etc/nginx/sites-available/iptv-panel /etc/nginx/sites-enabled/iptv-panel
 rm -f  /etc/nginx/sites-enabled/default
 
