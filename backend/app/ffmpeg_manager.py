@@ -38,6 +38,36 @@ FFMPEG_INPUT_BUFFER_ARGS = [
 ]
 
 
+# HTTP source-resilience args for the live pull. Direct CDN sources (Pluto,
+# Samsung) are stable, but imported playlist channels are M3USe links that
+# 302-redirect to flaky upstreams (filmon, YouTube, Xtream) with short-lived
+# per-request tokens. Those sources drop, 404 a segment when a token rotates, or
+# signal EOF on a live playlist — and plain `-reconnect` doesn't cover EOF or
+# HTTP errors, so FFmpeg exits rc=0 on the first hiccup → the manager cold-starts
+# it → segment wipe + re-probe → the buffering spiral. These keep one FFmpeg
+# alive across the hiccup instead. All are http-protocol INPUT options and MUST
+# precede -i. A browser UA also stops upstreams that throttle FFmpeg's default
+# "Lavf/…" agent. Harmless on the stable CDN sources.
+FFMPEG_HTTP_RESILIENCE_ARGS = [
+    "-user_agent",
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "-reconnect", "1",
+    "-reconnect_streamed", "1",
+    # NOTE: deliberately NOT -reconnect_at_eof — it conflicts with the HLS
+    # demuxer (segment byte-streams EOF normally; reconnecting them throws
+    # "parse_playlist error / Immediate exit requested" and kills the stream).
+    "-reconnect_on_network_error", "1",
+    "-reconnect_on_http_error", "4xx,5xx",
+    "-reconnect_delay_max", "5",
+    # 15s I/O ceiling: a hung segment read fails fast and reconnects instead of
+    # stalling the muxer indefinitely (microseconds).
+    "-rw_timeout", "15000000",
+    # Reuse the HTTP connection across segment fetches — lower per-segment latency.
+    "-multiple_requests", "1",
+]
+
+
 # How long (seconds) a stream may go without a playlist request before it is
 # considered idle and stopped. It must comfortably exceed a player's polling
 # gap AND any transient buffering stall — a player that runs out of buffer stops
@@ -386,9 +416,7 @@ class StreamProcess:
             "-hide_banner",
             "-loglevel", "warning",
             *FFMPEG_INPUT_BUFFER_ARGS,
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
+            *FFMPEG_HTTP_RESILIENCE_ARGS,
             "-i", resolve_pluto_url(self.current_url),
             "-filter_complex",
             "[0:v]split=2[a][b];[a]scale=-2:720[v720o];[b]scale=-2:480[v480o]",
@@ -435,9 +463,7 @@ class StreamProcess:
             "-hide_banner",
             "-loglevel", "warning",
             *FFMPEG_INPUT_BUFFER_ARGS,
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
+            *FFMPEG_HTTP_RESILIENCE_ARGS,
             "-i", resolve_pluto_url(self.current_url),
             "-vn",
             "-c:a", "aac", "-b:a", "128k", "-ac", "2",
@@ -463,15 +489,15 @@ class StreamProcess:
             settings.FFMPEG_PATH,
             "-hide_banner",
             "-loglevel", "warning",
-            # Input-side buffering (probe/analyze window, thread queue, -re).
+            # Input-side buffering (probe/analyze window, thread queue, -re) and
+            # HTTP source resilience — these are INPUT options so they must come
+            # before -i (the reconnect flags used to sit after -i, where they
+            # applied to the output and did nothing for a dropping source).
             *FFMPEG_INPUT_BUFFER_ARGS,
+            *FFMPEG_HTTP_RESILIENCE_ARGS,
             # Pluto channel URLs are rewritten to the jmp2.uk resolver, which
             # redirects to a working stream. Non-Pluto URLs pass through.
             "-i", resolve_pluto_url(self.current_url),
-            # Reconnect options for resilience
-            "-reconnect", "1",
-            "-reconnect_streamed", "1",
-            "-reconnect_delay_max", "5",
             # Stream copy ('auto') or transcode down to the selected quality tier.
             *_codec_args(self.quality),
             # HLS output — flush each packet and hold a deeper segment window so
