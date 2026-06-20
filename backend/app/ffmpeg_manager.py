@@ -40,10 +40,16 @@ FFMPEG_INPUT_BUFFER_ARGS = [
 
 # How long (seconds) a stream may go without a playlist request before it is
 # considered idle and stopped. It must comfortably exceed a player's polling
-# gap: adaptive (multi-variant) players split polls between the master and the
-# current variant and buffer well ahead, so short windows (e.g. 8s) falsely
-# reap an actively-watched channel and cause a restart/buffering death spiral.
-STREAM_IDLE_TIMEOUT = 45
+# gap AND any transient buffering stall — a player that runs out of buffer stops
+# polling the playlist while it rebuffers, so a window that's too short (8s, even
+# 45s) reaps an *actively-watched* channel mid-stall. The reaped stream must then
+# cold-restart, which takes longer than the original dip → a 1–5 min hang or a
+# stream that never recovers (the "buffering death spiral"). The cost of being
+# wrong is asymmetric: a too-short window kills live viewers, while a too-long one
+# only wastes a little CPU keeping a truly-departed stream alive an extra minute.
+# So bias long: 120s survives any realistic dip yet still frees CPU within ~2 min
+# of a viewer actually leaving (the governor caps concurrent transcodes anyway).
+STREAM_IDLE_TIMEOUT = 120
 
 
 # Transcode ladder. "auto" copies the source codec untouched (no CPU, full
@@ -336,14 +342,20 @@ class StreamProcess:
             "[0:v]split=2[a][b];[a]scale=-2:720[v720o];[b]scale=-2:480[v480o]",
             # v0 — source passthrough (no transcode)
             "-map", "0:v:0", "-map", "0:a:0?", "-c:v:0", "copy", "-c:a:0", "copy",
-            # v1 — 720p, capped to fit ~2 Mbps lines
+            # v1 — 720p, capped to fit ~2 Mbps lines. force_key_frames pins a
+            # keyframe exactly every 2s (= hls_time) and sc_threshold 0 stops
+            # libx264 inserting extra scene-cut keyframes; together they yield
+            # clean, uniform 2.0s segments instead of ragged 1.0–2.3s ones (which
+            # destabilise the player's buffer math and cause micro-stalls).
             "-map", "[v720o]", "-map", "0:a:0?",
             "-c:v:1", "libx264", "-preset", "veryfast", "-threads", str(ABR_TRANSCODE_THREADS),
+            "-force_key_frames:v:1", "expr:gte(t,n_forced*2)", "-sc_threshold:v:1", "0",
             "-b:v:1", "1250k", "-maxrate:v:1", "1450k", "-bufsize:v:1", "3000k",
             "-c:a:1", "aac", "-b:a:1", "128k",
-            # v2 — 480p
+            # v2 — 480p (same uniform-segment treatment)
             "-map", "[v480o]", "-map", "0:a:0?",
             "-c:v:2", "libx264", "-preset", "veryfast", "-threads", str(ABR_TRANSCODE_THREADS),
+            "-force_key_frames:v:2", "expr:gte(t,n_forced*2)", "-sc_threshold:v:2", "0",
             "-b:v:2", "600k", "-maxrate:v:2", "750k", "-bufsize:v:2", "1500k",
             "-c:a:2", "aac", "-b:a:2", "96k",
             "-flush_packets", "1",

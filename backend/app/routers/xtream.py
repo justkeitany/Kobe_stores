@@ -565,7 +565,8 @@ async def serve_live(
 
     # Start FFmpeg if needed and record this viewer's heartbeat. The player keeps
     # polling the .m3u8 below (~every 2s), so each poll refreshes the heartbeat;
-    # when it stops polling, the manager's reaper stops FFmpeg within ~8s.
+    # when it stops polling, the manager's reaper stops FFmpeg after the idle
+    # window (long enough that a rebuffering player isn't killed mid-stall).
     sp = await ffmpeg_manager.start_stream(
         stream_id, [r.url for r in refs], stream.name, client_key, stream.quality
     )
