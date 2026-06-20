@@ -176,6 +176,27 @@ class AuditLog(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class Playlist(Base):
+    """A saved external M3U playlist URL (e.g. an M3USe shared link).
+
+    Cards on the Playlists page are rendered from cached metadata
+    (``channel_count`` + a handful of sample ``logos``) so the list loads
+    without re-fetching every multi-MB feed. The full channel list is parsed
+    live on demand when the user opens a playlist to import from it.
+    """
+    __tablename__ = "playlists"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    url = Column(Text, nullable=False)
+    description = Column(Text, nullable=True)
+    channel_count = Column(Integer, default=0)
+    logos = Column(JSON, nullable=True)  # sample logo URLs for the avatar stack
+    last_refreshed = Column(DateTime(timezone=True), nullable=True)
+    last_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class Settings(Base):
     __tablename__ = "settings"
 

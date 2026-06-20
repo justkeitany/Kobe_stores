@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
-  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown,
+  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo,
   type LucideIcon,
 } from "lucide-react";
 import { logout, currentUsername } from "../lib/auth";
@@ -55,6 +55,7 @@ const nav: NavEntry[] = [
       { label: "Tubi",             img: LOGOS.tubi,    path: "/freestreams/tubi" },
     ],
   },
+  { label: "Playlists",  icon: ListVideo,       path: "/playlists" },
   { label: "Categories", icon: FolderOpen,      path: "/categories" },
   { label: "Bouquets",   icon: Package,         path: "/bouquets" },
   { label: "EPG",        icon: Radio,           path: "/epg" },
