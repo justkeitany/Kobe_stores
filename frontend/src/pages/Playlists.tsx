@@ -16,9 +16,34 @@ interface Playlist {
   description: string | null;
   channel_count: number;
   logos: string[];
+  health: string | null;
   last_refreshed: string | null;
   last_error: string | null;
   created_at: string;
+}
+
+// Compact "3h ago" style relative time for the last-checked line.
+function timeAgo(iso: string | null): string {
+  if (!iso) return "never";
+  const secs = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (secs < 90) return "just now";
+  const mins = secs / 60;
+  if (mins < 60) return `${Math.round(mins)}m ago`;
+  const hrs = mins / 60;
+  if (hrs < 24) return `${Math.round(hrs)}h ago`;
+  return `${Math.round(hrs / 24)}d ago`;
+}
+
+// Parse a "alive/sampled live" health string so we can colour it.
+function healthTone(health: string | null, hasError: boolean): "good" | "warn" | "muted" {
+  if (hasError) return "warn";
+  const m = health?.match(/^(\d+)\/(\d+)/);
+  if (m) {
+    const [a, b] = [Number(m[1]), Number(m[2])];
+    if (b > 0 && a === b) return "good";
+    if (b > 0) return a > b / 2 ? "good" : "warn";
+  }
+  return "muted";
 }
 
 interface PlaylistChannel {
@@ -173,10 +198,32 @@ function PlaylistCard({
         </span>
       </div>
 
-      {/* Channel count + avatar stack */}
+      {/* Channel count + health + avatar stack */}
       <div>
-        <p className="text-on-surface-variant text-[12px] mb-2">
-          {playlist.channel_count} channel{playlist.channel_count === 1 ? "" : "s"}
+        <p className="text-on-surface-variant text-[12px] mb-2 flex items-center gap-1.5 flex-wrap">
+          <span>{playlist.channel_count} channel{playlist.channel_count === 1 ? "" : "s"}</span>
+          {playlist.health && (() => {
+            const tone = healthTone(playlist.health, !!playlist.last_error);
+            return (
+              <>
+                <span className="text-on-surface-variant/40">·</span>
+                <span className={clsx(
+                  "inline-flex items-center gap-1 font-medium",
+                  tone === "good" && "text-[#5edc8a]",
+                  tone === "warn" && "text-[#ffb4ab]",
+                  tone === "muted" && "text-on-surface-variant"
+                )}>
+                  <span className={clsx(
+                    "w-1.5 h-1.5 rounded-full",
+                    tone === "good" && "bg-[#5edc8a]",
+                    tone === "warn" && "bg-[#ffb4ab]",
+                    tone === "muted" && "bg-on-surface-variant"
+                  )} />
+                  {playlist.health}
+                </span>
+              </>
+            );
+          })()}
         </p>
         <AvatarStack logos={playlist.logos} total={playlist.channel_count} />
       </div>
@@ -207,8 +254,13 @@ function PlaylistCard({
         </p>
       )}
 
+      {/* Last-checked timestamp */}
+      <p className="text-[10px] text-on-surface-variant/60 mt-auto">
+        Checked {timeAgo(playlist.last_refreshed)}
+      </p>
+
       {/* Actions */}
-      <div className="flex items-center gap-1.5 mt-auto pt-1">
+      <div className="flex items-center gap-1.5 pt-0.5">
         <button
           onClick={onRefresh}
           disabled={refreshing}

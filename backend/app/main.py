@@ -43,10 +43,14 @@ async def lifespan(app: FastAPI):
     from app.source_health import health_loop
     health_task = asyncio.create_task(health_loop())
 
+    from app.routers.playlists import playlist_health_loop
+    playlist_task = asyncio.create_task(playlist_health_loop())
+
     yield
     # Shutdown
     logger.info("Shutting down...")
     health_task.cancel()
+    playlist_task.cancel()
     from app.ffmpeg_manager import ffmpeg_manager
     await ffmpeg_manager.stop_all()
     await close_redis()

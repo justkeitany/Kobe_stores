@@ -192,6 +192,8 @@ class Playlist(Base):
     description = Column(Text, nullable=True)
     channel_count = Column(Integer, default=0)
     logos = Column(JSON, nullable=True)  # sample logo URLs for the avatar stack
+    # Short channel-health summary from the last refresh, e.g. "27/30 live".
+    health = Column(String(255), nullable=True)
     last_refreshed = Column(DateTime(timezone=True), nullable=True)
     last_error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
