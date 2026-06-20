@@ -134,6 +134,10 @@ export default function FreeStreamsTV() {
             delivery_mode: "restream",
             logo_url: c.logo || null,
             category_id: cat!.id,
+            // channel-id/tvg-id from the playlist; matches the i.mjh.nz EPG
+            // (Plex/Samsung/Roku) so guide data binds to the channel. Skip the
+            // URL fallback ids (only real channel ids will line up with EPG).
+            epg_channel_id: c.id && !c.id.startsWith("http") ? c.id : null,
           });
           ok++;
         } catch {

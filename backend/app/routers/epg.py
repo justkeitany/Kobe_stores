@@ -46,6 +46,12 @@ async def fetch_and_parse_epg(source_id: int, url: str):
                     raise Exception(f"HTTP {resp.status}")
                 content = await resp.read()
 
+        # Transparently handle gzipped feeds (.xml.gz, or any source serving
+        # gzip without a decoded Content-Encoding). XMLTV starts with '<'.
+        if content[:2] == b"\x1f\x8b":
+            import gzip
+            content = gzip.decompress(content)
+
         root = etree.fromstring(content)
         programmes = root.findall("programme")
 

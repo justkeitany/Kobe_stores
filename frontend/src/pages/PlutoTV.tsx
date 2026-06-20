@@ -147,6 +147,9 @@ export default function PlutoTV() {
             delivery_mode: "restream",
             logo_url: c.logo || null,
             category_id: cat!.id,
+            // Pluto's channel _id; matches the tvg-id in the i.mjh.nz Pluto EPG
+            // (https://i.mjh.nz/PlutoTV/us.xml) so guide data binds to the channel.
+            epg_channel_id: c.id || null,
           });
           ok++;
         } catch {
