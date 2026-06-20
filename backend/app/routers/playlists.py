@@ -40,6 +40,8 @@ _LOGO_SAMPLE = 6
 # what actually tells you a playlist has gone bad.
 _PROBE_SAMPLE = 6
 _PROBE_TIMEOUT = 10
+# Max concurrent channel probes when the View modal asks for per-channel status.
+_PROBE_CONCURRENCY = 20
 # How often the background sweep re-checks every saved playlist.
 _SWEEP_INTERVAL = 24 * 3600
 # Delay the first sweep so it doesn't compete with app startup.
@@ -159,6 +161,61 @@ async def _probe_channel(client: httpx.AsyncClient, url: str) -> bool:
             return False
     except (httpx.HTTPError, UnicodeError):
         return False
+
+
+def _source_from(final_url: str, body: str = "") -> str:
+    """Best-effort source label for a channel.
+
+    M3USe often resolves a channel through a nested playlist (e.g. a GitHub
+    ``YouTube_to_m3u`` asset) before the real CDN, so the final host alone isn't
+    enough — we also scan the final URL path and a sample of the body for known
+    markers. YouTube wins on any youtube/googlevideo hint.
+    """
+    s = (final_url + " " + body[:1500]).lower()
+    if any(k in s for k in ("youtube", "youtu.be", "googlevideo", "ytimg")):
+        return "youtube"
+    if "filmon" in s:
+        return "filmon"
+    if "pluto" in s:
+        return "pluto"
+    if "samsung" in s or "jmp2" in s:
+        return "samsung"
+    if "plex.tv" in s or "provider-static.plex" in s:
+        return "plex"
+    if "tubi" in s:
+        return "tubi"
+    return "other"
+
+
+async def _probe_status(client: httpx.AsyncClient, url: str) -> dict:
+    """Resolve one channel and classify it for the View modal.
+
+    Returns ``{"status": ready|geo|dead, "source": <label>}``. ``geo`` is an
+    HTTP 451 (blocked for legal reasons); ``ready`` resolves to a stream; every
+    other outcome (404, auth, timeout…) is ``dead``.
+    """
+    try:
+        async with client.stream("GET", url.replace(" ", "%20"), timeout=_PROBE_TIMEOUT) as r:
+            final = str(r.url)
+            if r.status_code == 451:
+                return {"status": "geo", "source": _source_from(final)}
+            if r.status_code != 200:
+                return {"status": "dead", "source": _source_from(final)}
+            ctype = r.headers.get("content-type", "").lower()
+            if any(k in ctype for k in ("video", "octet", "mp2t", "mpegts")):
+                return {"status": "ready", "source": _source_from(final)}
+            async for chunk in r.aiter_bytes():
+                head = chunk[:2000].decode("utf-8", "replace")
+                low = head.lower()
+                # benmoose39's "moose" placeholder loop is what M3USe serves when
+                # the real upstream is offline — a 200 that is NOT a live channel.
+                if "moose-multiple" in low or "moose_offline" in low:
+                    return {"status": "dead", "source": "other"}
+                ok = ("#EXT" in head) or (".ts" in head) or (".m3u8" in head)
+                return {"status": "ready" if ok else "dead", "source": _source_from(final, head)}
+            return {"status": "dead", "source": _source_from(final)}
+    except (httpx.HTTPError, UnicodeError):
+        return {"status": "dead", "source": "other"}
 
 
 async def _assess_channels(channels: list[dict]) -> tuple[int, int]:
@@ -295,6 +352,40 @@ async def list_playlist_channels(
         logger.warning("playlist %s channel fetch failed: %s", p.url, exc)
         raise HTTPException(502, "Could not fetch playlist channels")
     return {"playlist_id": p.id, "name": p.name, "channels": channels}
+
+
+@router.get("/{playlist_id}/channels/probe")
+async def probe_playlist_channels(
+    playlist_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_admin),
+):
+    """Per-channel live status + source for the View modal.
+
+    Returns a ``statuses`` array aligned to the same order as ``/channels``
+    (both parse the feed identically), each ``{status, source}``. Probes run
+    concurrently but capped, so a big playlist may take a while — the frontend
+    renders the list first and fills these in when they land.
+    """
+    result = await db.execute(select(Playlist).where(Playlist.id == playlist_id))
+    p = result.scalar_one_or_none()
+    if not p:
+        raise HTTPException(404, "Playlist not found")
+    try:
+        channels = _parse_m3u(await _fetch_m3u(p.url))
+    except httpx.HTTPError as exc:
+        logger.warning("playlist %s probe fetch failed: %s", p.url, exc)
+        raise HTTPException(502, "Could not fetch playlist channels")
+
+    sem = asyncio.Semaphore(_PROBE_CONCURRENCY)
+
+    async def one(url: str) -> dict:
+        async with sem:
+            return await _probe_status(client, url)
+
+    async with httpx.AsyncClient(follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
+        statuses = await asyncio.gather(*(one(c["url"]) for c in channels))
+    return {"playlist_id": p.id, "statuses": statuses}
 
 
 @router.delete("/{playlist_id}", status_code=204)

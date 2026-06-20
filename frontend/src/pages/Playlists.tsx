@@ -1,12 +1,11 @@
 import { useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Plus, Copy, RefreshCw, Trash2, Eye, Loader2, Globe, X, AlertCircle, Download, Check,
+  Plus, RefreshCw, Trash2, Eye, Loader2, Globe, X, AlertCircle, Download, Play,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
-import { copyToClipboard } from "../lib/clipboard";
 import clsx from "clsx";
 
 interface Playlist {
@@ -52,6 +51,13 @@ interface PlaylistChannel {
   category: string;
   logo: string;
   url: string;
+}
+
+// Per-channel probe result from /channels/probe, aligned by index.
+type ChannelStatus = "ready" | "geo" | "dead";
+interface ChannelProbe {
+  status: ChannelStatus;
+  source: string;
 }
 
 export default function Playlists() {
@@ -158,7 +164,7 @@ export default function Playlists() {
         />
       )}
 
-      {viewing && <ChannelsDrawer playlist={viewing} onClose={() => setViewing(null)} />}
+      {viewing && <ChannelsModal playlist={viewing} onClose={() => setViewing(null)} />}
     </div>
   );
 }
@@ -174,18 +180,6 @@ function PlaylistCard({
   onRefresh: () => void;
   onDelete: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-
-  async function copyUrl() {
-    const ok = await copyToClipboard(playlist.url);
-    if (ok) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } else {
-      toast.error("Could not copy");
-    }
-  }
-
   return (
     <div className="bg-surface-container-low border border-outline-variant rounded-md p-md flex flex-col gap-3">
       {/* Title row */}
@@ -232,20 +226,6 @@ function PlaylistCard({
       <p className={clsx("text-[12px] line-clamp-2", playlist.description ? "text-on-surface-variant" : "text-on-surface-variant/60 italic")}>
         {playlist.description || "No description provided"}
       </p>
-
-      {/* URL + copy */}
-      <div className="flex items-center gap-1.5 bg-surface-container rounded px-2 py-1.5 border border-outline-variant">
-        <span className="text-[11px] text-on-surface-variant truncate font-mono flex-1" title={playlist.url}>
-          {playlist.url}
-        </span>
-        <button
-          onClick={copyUrl}
-          title="Copy URL"
-          className="shrink-0 text-on-surface-variant hover:text-on-surface transition-colors"
-        >
-          {copied ? <Check size={14} className="text-[#5edc8a]" /> : <Copy size={14} />}
-        </button>
-      </div>
 
       {/* Issues row */}
       {playlist.last_error && (
@@ -406,16 +386,15 @@ function AddPlaylistModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   );
 }
 
-/* ── Channels drawer (browse + import) ────────────────────────── */
+/* ── Channels modal (browse + import) ─────────────────────────── */
 
 interface Stream { id: number; name: string; stream_url: string; }
 interface Category { id: number; name: string; }
 
-function ChannelsDrawer({ playlist, onClose }: { playlist: Playlist; onClose: () => void }) {
+function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () => void }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [categoryFilter, setCategoryFilter] = useState("");
-  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [selected, setSelected] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
 
   const { data: channels = [], isLoading, isError } = useQuery<PlaylistChannel[]>({
@@ -423,6 +402,18 @@ function ChannelsDrawer({ playlist, onClose }: { playlist: Playlist; onClose: ()
     queryFn: () =>
       api.get(`/playlists/${playlist.id}/channels`).then((r) => r.data.channels as PlaylistChannel[]),
     staleTime: 5 * 60_000,
+  });
+
+  // Per-channel live status (READY / GEO-BLOCKED / DEAD) + resolved source.
+  // Aligned by index to `channels`. Slow for big lists, so the list renders
+  // first and these stream in — rows show a "checking…" state until then.
+  const { data: probes, isFetching: probing } = useQuery<ChannelProbe[]>({
+    queryKey: ["playlist-probe", playlist.id],
+    queryFn: () =>
+      api.get(`/playlists/${playlist.id}/channels/probe`, { timeout: 180_000 })
+        .then((r) => r.data.statuses as ChannelProbe[]),
+    enabled: channels.length > 0,
+    staleTime: 60_000,
   });
 
   const { data: streams = [] } = useQuery<Stream[]>({
@@ -438,32 +429,27 @@ function ChannelsDrawer({ playlist, onClose }: { playlist: Playlist; onClose: ()
 
   const isImported = (c: PlaylistChannel) => importedUrls.has(c.url);
 
-  const categories = useMemo(
-    () => Array.from(new Set(channels.map((c) => c.category))).sort(),
-    [channels]
-  );
-
-  const filtered = useMemo(() => {
+  // Keep each channel's original index so probe statuses (index-aligned) and
+  // selection survive search filtering.
+  const rows = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return channels.filter(
-      (c) =>
-        (!q || c.name.toLowerCase().includes(q)) &&
-        (!categoryFilter || c.category === categoryFilter)
-    );
-  }, [channels, search, categoryFilter]);
+    return channels
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => !q || c.name.toLowerCase().includes(q));
+  }, [channels, search]);
 
-  const selectableVisible = filtered.filter((c) => !isImported(c));
+  const selectableVisible = rows.filter(({ c }) => !isImported(c));
 
-  function toggle(id: string) {
+  function toggle(i: number) {
     setSelected((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      next.has(i) ? next.delete(i) : next.add(i);
       return next;
     });
   }
 
   async function importSelected() {
-    const toImport = channels.filter((c) => selected.has(c.id) && !isImported(c));
+    const toImport = channels.filter((c, i) => selected.has(i) && !isImported(c));
     if (!toImport.length) return;
     setImporting(true);
     const t = toast.loading(`Importing ${toImport.length} channel${toImport.length === 1 ? "" : "s"}…`);
@@ -505,116 +491,111 @@ function ChannelsDrawer({ playlist, onClose }: { playlist: Playlist; onClose: ()
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex justify-end">
+    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
-      <div className="relative bg-surface w-full max-w-3xl h-full flex flex-col shadow-2xl border-l border-outline-variant">
+      <div className="relative bg-surface w-full max-w-3xl max-h-[88vh] rounded-xl flex flex-col shadow-2xl border border-outline-variant overflow-hidden">
         {/* Header */}
-        <div className="shrink-0 border-b border-outline-variant px-lg py-md flex items-center justify-between gap-md">
-          <div className="min-w-0">
-            <h2 className="text-lg font-bold truncate">{playlist.name}</h2>
-            <p className="text-on-surface-variant text-[12px]">
-              {isLoading ? "Loading channels…" : `${channels.length} channels`}
-            </p>
-          </div>
-          <div className="flex items-center gap-sm shrink-0">
-            <button
-              className="btn-primary"
-              onClick={importSelected}
-              disabled={importing || selected.size === 0}
-            >
-              {importing ? <Loader2 size={16} className="animate-spin" /> : <Download size={16} />}
+        <div className="shrink-0 px-lg pt-lg pb-md flex items-start justify-between gap-md">
+          <h2 className="text-xl font-bold flex items-center gap-2 min-w-0">
+            <span className="truncate">{playlist.name}</span>
+            <Globe size={18} className="text-on-surface-variant shrink-0" />
+          </h2>
+          <button
+            onClick={onClose}
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-full border border-outline-variant text-on-surface-variant hover:text-on-surface hover:bg-surface-container transition-colors"
+            aria-label="Close"
+          >
+            <X size={18} />
+          </button>
+        </div>
+
+        {/* Channels count + controls */}
+        <div className="shrink-0 px-lg pb-md flex items-center justify-between gap-md flex-wrap">
+          <p className="font-bold text-base">
+            Channels {channels.length > 0 && <span className="text-on-surface-variant font-medium">({channels.length})</span>}
+          </p>
+          <div className="flex items-center gap-sm">
+            {selectableVisible.length > 0 && (
+              selected.size > 0 ? (
+                <button className="btn-secondary text-[12px] py-1" onClick={() => setSelected(new Set())}>Clear</button>
+              ) : (
+                <button
+                  className="btn-secondary text-[12px] py-1"
+                  onClick={() => setSelected(new Set(selectableVisible.map((r) => r.i)))}
+                >
+                  Select all
+                </button>
+              )
+            )}
+            <button className="btn-primary py-1" onClick={importSelected} disabled={importing || selected.size === 0}>
+              {importing ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
               Import ({selected.size})
             </button>
-            <button onClick={onClose} className="p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-md transition-colors">
-              <X size={20} />
-            </button>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="shrink-0 px-lg py-md flex gap-md flex-wrap items-center border-b border-outline-variant">
-          <div className="relative flex-1 min-w-[180px]">
-            <MIcon name="search" size={18}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
-            <input
-              className="input pl-10"
-              placeholder="Search channels…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
-          <select className="input w-48" value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}>
-            <option value="">All categories</option>
-            {categories.map((c) => <option key={c} value={c}>{c}</option>)}
-          </select>
-          <button
-            className="btn-secondary"
-            onClick={() => setSelected((prev) => {
-              const next = new Set(prev);
-              selectableVisible.forEach((c) => next.add(c.id));
-              return next;
-            })}
-            disabled={selectableVisible.length === 0}
-          >
-            Select All
-          </button>
-          <button className="btn-secondary" onClick={() => setSelected(new Set())} disabled={selected.size === 0}>
-            Clear
-          </button>
-        </div>
-
-        {/* Channel list */}
-        <div className="flex-1 overflow-y-auto px-lg py-md">
-          {isLoading && (
-            <div className="py-16 flex justify-center text-on-surface-variant">
-              <Loader2 size={24} className="animate-spin" />
+        {/* Search */}
+        {channels.length > 8 && (
+          <div className="shrink-0 px-lg pb-sm">
+            <div className="relative">
+              <MIcon name="search" size={18}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
+              <input
+                className="input pl-10"
+                placeholder="Search channels…"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
             </div>
+          </div>
+        )}
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto px-lg pb-lg">
+          {isLoading && (
+            <div className="py-16 flex justify-center text-on-surface-variant"><Loader2 size={24} className="animate-spin" /></div>
           )}
           {isError && (
-            <div className="py-16 text-center text-on-surface-variant">
-              Could not load channels. The playlist may be down — try Refresh.
-            </div>
+            <div className="py-16 text-center text-on-surface-variant">Could not load channels — the playlist may be down.</div>
           )}
-          {!isLoading && !isError && filtered.length === 0 && (
-            <div className="py-16 text-center text-on-surface-variant">No channels match your filters.</div>
+          {!isLoading && !isError && rows.length === 0 && (
+            <div className="py-16 text-center text-on-surface-variant">No channels match your search.</div>
           )}
-          {!isLoading && !isError && filtered.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-gutter">
-              {filtered.map((c) => {
+          {!isLoading && !isError && rows.length > 0 && (
+            <div className="border border-outline-variant rounded-lg divide-y divide-outline-variant overflow-hidden">
+              {rows.map(({ c, i }) => {
                 const added = isImported(c);
-                const checked = selected.has(c.id);
+                const checked = selected.has(i);
+                const probe = probes?.[i];
                 return (
                   <div
-                    key={c.id}
-                    onClick={() => !added && toggle(c.id)}
+                    key={i}
+                    onClick={() => !added && toggle(i)}
                     className={clsx(
-                      "bg-surface-container-low border p-md flex items-start gap-3 rounded-md transition-all",
-                      added
-                        ? "opacity-50 border-outline-variant"
-                        : clsx("cursor-pointer hover:border-primary",
-                            checked ? "border-primary-fixed-dim" : "border-outline-variant")
+                      "flex items-center gap-3 px-3 py-2.5 transition-colors",
+                      added ? "opacity-60" : "cursor-pointer hover:bg-surface-container-low",
+                      checked && "bg-surface-container"
                     )}
                   >
-                    <ChannelLogo logo={c.logo} name={c.name} />
-                    <div className="flex-1 min-w-0">
-                      <p className="font-bold text-body-sm truncate" title={c.name}>{c.name}</p>
-                      <span className="inline-block mt-1.5 border border-outline-variant px-2 py-0.5 text-[10px] font-code-label uppercase tracking-wider text-on-surface-variant">
-                        {c.category}
-                      </span>
+                    {/* Number / selection check */}
+                    <div className={clsx(
+                      "shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-[12px] font-medium",
+                      checked ? "bg-primary text-on-primary" : "bg-surface-container text-on-surface-variant"
+                    )}>
+                      {checked ? <CheckIcon /> : i + 1}
                     </div>
-                    <div className="shrink-0">
-                      {added ? (
-                        <span className="badge-green text-[10px] whitespace-nowrap">Added</span>
-                      ) : (
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggle(c.id)}
-                          onClick={(e) => e.stopPropagation()}
-                          className="w-4 h-4 accent-[var(--color-primary-fixed-dim)] cursor-pointer"
-                        />
-                      )}
-                    </div>
+
+                    <ChannelLogo logo={c.logo} name={c.name} size={36} />
+
+                    <span className="font-medium text-body-sm truncate flex-1 min-w-0" title={c.name}>{c.name}</span>
+
+                    {/* Status */}
+                    {added
+                      ? <span className="badge-green text-[10px] shrink-0">Added</span>
+                      : <StatusBadge status={probe?.status} probing={probing && !probe} />}
+
+                    {/* Source */}
+                    <SourcePill source={probe?.source} />
                   </div>
                 );
               })}
@@ -626,14 +607,58 @@ function ChannelsDrawer({ playlist, onClose }: { playlist: Playlist; onClose: ()
   );
 }
 
-function ChannelLogo({ logo, name }: { logo: string; name: string }) {
+function CheckIcon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="20 6 9 17 4 12" />
+    </svg>
+  );
+}
+
+function StatusBadge({ status, probing }: { status?: ChannelStatus; probing?: boolean }) {
+  if (!status) {
+    return probing
+      ? <span className="shrink-0 inline-flex items-center gap-1 text-[10px] text-on-surface-variant"><Loader2 size={10} className="animate-spin" /> checking</span>
+      : null;
+  }
+  const cfg = {
+    ready: { dot: "bg-[#5edc8a]", text: "text-on-surface-variant", label: "READY" },
+    geo:   { dot: "bg-[#f5c86e]", text: "text-[#f5c86e]",          label: "GEO-BLOCKED" },
+    dead:  { dot: "bg-[#ffb4ab]", text: "text-[#ffb4ab]",          label: "DEAD" },
+  }[status];
+  return (
+    <span className={clsx("shrink-0 inline-flex items-center gap-1.5 text-[10px] font-code-label uppercase tracking-wider", cfg.text)}>
+      <span className={clsx("w-1.5 h-1.5 rounded-full", cfg.dot)} />
+      {cfg.label}
+    </span>
+  );
+}
+
+function SourcePill({ source }: { source?: string }) {
+  if (!source) return null;
+  const isYoutube = source === "youtube";
+  return (
+    <span className={clsx(
+      "shrink-0 inline-flex items-center gap-1 text-[11px] font-medium rounded-full px-2.5 py-1 border",
+      isYoutube
+        ? "border-[#ff5252]/30 text-[#ff5252]"
+        : "border-outline-variant text-on-surface-variant"
+    )}>
+      {isYoutube ? <Play size={11} fill="currentColor" /> : <Plus size={12} />}
+      {source === "other" ? "others" : source}
+    </span>
+  );
+}
+
+function ChannelLogo({ logo, name, size = 48 }: { logo: string; name: string; size?: number }) {
   const [failed, setFailed] = useState(false);
   const fallbackLetter = (name.trim()[0] || "?").toUpperCase();
+  const box = { width: size, height: size };
   if (!logo || failed) {
     return (
       <div
-        className="w-12 h-12 shrink-0 border border-outline-variant rounded flex items-center justify-center text-on-surface font-bold text-body-sm"
-        style={{ backgroundColor: "#2a2a2a" }}
+        className="shrink-0 border border-outline-variant rounded-md flex items-center justify-center text-on-surface font-bold text-[12px]"
+        style={{ ...box, backgroundColor: "#2a2a2a" }}
       >
         {fallbackLetter}
       </div>
@@ -644,8 +669,8 @@ function ChannelLogo({ logo, name }: { logo: string; name: string }) {
       src={logo}
       alt=""
       onError={() => setFailed(true)}
-      className="w-12 h-12 shrink-0 object-contain border border-outline-variant rounded p-1"
-      style={{ backgroundColor: "#2a2a2a" }}
+      className="shrink-0 object-contain border border-outline-variant rounded-md p-1 bg-white"
+      style={box}
     />
   );
 }
