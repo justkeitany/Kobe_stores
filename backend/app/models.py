@@ -203,6 +203,18 @@ class Playlist(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class ChannelHealth(Base):
+    """Last probed health of a channel (keyed by its source URL), for imported
+    streams and playlist channels alike. Filled by the background sweep so the
+    Channels page shows real online/offline/geo instead of an optimistic guess."""
+    __tablename__ = "channel_health"
+
+    id = Column(Integer, primary_key=True, index=True)
+    url = Column(String(1000), index=True, nullable=False)
+    status = Column(String(16), nullable=False)  # online | offline | geo
+    last_checked = Column(DateTime(timezone=True), nullable=True)
+
+
 class AiEvent(Base):
     """An action or output produced by the Claude assistant — diagnoses,
     auto-applied fixes, daily digests, and chat answers. The panel's AI audit

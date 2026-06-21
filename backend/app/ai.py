@@ -32,7 +32,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import AsyncSessionLocal
-from app.models import AiEvent, AuditLog, Settings as SettingsModel, Stream
+from app.models import AiEvent, AuditLog, ChannelHealth, Playlist, Settings as SettingsModel, Stream
 
 logger = logging.getLogger(__name__)
 
@@ -477,33 +477,94 @@ async def digest_loop() -> None:
         await asyncio.sleep(24 * 3600)
 
 
-# How many errored streams to work per sweep (bounds cost + upstream load).
-_MONITOR_BATCH = 15
+# How many channels to actually probe per 30-min cycle, and how many of the
+# dead imported ones to hand to Claude for diagnosis+autofix per cycle.
+_HEALTH_BATCH = settings.AI_HEALTH_BATCH
+_HEALTH_CONCURRENCY = 4
+_DIAGNOSE_PER_CYCLE = 8
+_STATUS_MAP = {"ready": "online", "geo": "geo", "dead": "offline"}
 
 
-async def _monitor_once(db: AsyncSession) -> int:
-    """Diagnose + auto-fix streams currently in an error state. Returns the count."""
+async def _channel_targets(db: AsyncSession) -> list[dict]:
+    """Every distinct channel to health-check: {url, stream_id, name}. Imported
+    streams (primary source URL) + cached playlist channels, deduped by URL."""
+    from app.sources import source_urls
+
+    targets: dict[str, dict] = {}
     streams = (await db.execute(
-        select(Stream).where(Stream.status == "error", Stream.is_enabled == True)  # noqa: E712
-        .limit(_MONITOR_BATCH)
+        select(Stream).options(selectinload(Stream.sources)).where(Stream.is_enabled == True)  # noqa: E712
     )).scalars().all()
     for s in streams:
-        await diagnose_stream(db, s, s.last_error or "stream in error state", context="background monitor")
-    if streams:
-        logger.info("AI monitor swept %d errored streams", len(streams))
-    return len(streams)
+        urls = source_urls(s, s.sources) or ([s.stream_url] if s.stream_url else [])
+        if urls:
+            targets.setdefault(urls[0], {"url": urls[0], "stream_id": s.id, "name": s.name})
+    for p in (await db.execute(select(Playlist))).scalars().all():
+        for c in (p.channels or []):
+            u = c.get("url")
+            if u and u not in targets:
+                targets[u] = {"url": u, "stream_id": None, "name": c.get("name") or "Channel"}
+    return list(targets.values())
+
+
+async def _health_sweep(db: AsyncSession) -> int:
+    """Probe the least-recently-checked batch of channels and store real status.
+    A cheap HTTP probe (no Claude). Skips entirely while a stream is playing so
+    it never competes with a viewer's connection. Returns channels probed."""
+    if ffmpeg_manager.active_stream_count() > 0:
+        return 0
+    targets = await _channel_targets(db)
+    if not targets:
+        return 0
+
+    existing = {r.url: r for r in (await db.execute(select(ChannelHealth))).scalars().all()}
+    epoch = datetime(1970, 1, 1, tzinfo=timezone.utc)
+    targets.sort(key=lambda t: (existing[t["url"]].last_checked if t["url"] in existing and existing[t["url"]].last_checked else epoch))
+    batch = targets[:_HEALTH_BATCH]
+
+    from app.routers.playlists import _probe_status
+    sem = asyncio.Semaphore(_HEALTH_CONCURRENCY)
+
+    async def probe(client, t):
+        async with sem:
+            r = await _probe_status(client, t["url"])
+        return t, _STATUS_MAP.get(r["status"], "offline")
+
+    async with httpx.AsyncClient(follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
+        results = await asyncio.gather(*(probe(client, t) for t in batch))
+
+    now = datetime.now(timezone.utc)
+    dead_streams: list[tuple[int, str]] = []
+    for t, status in results:
+        row = existing.get(t["url"])
+        if row:
+            row.status, row.last_checked = status, now
+        else:
+            db.add(ChannelHealth(url=t["url"], status=status, last_checked=now))
+        if t["stream_id"] and status in ("offline", "geo"):
+            dead_streams.append((t["stream_id"], status))
+    await db.commit()
+    logger.info("AI health sweep probed %d channels (%d dead/geo imported)", len(batch), len(dead_streams))
+
+    # Hand the freshly-found dead/geo *imported* streams to Claude to diagnose +
+    # auto-fix (bounded per cycle; diagnose_stream caches so repeats are cheap).
+    for sid, status in dead_streams[:_DIAGNOSE_PER_CYCLE]:
+        s = (await db.execute(select(Stream).where(Stream.id == sid))).scalar_one_or_none()
+        if s:
+            await diagnose_stream(db, s, s.last_error or f"health sweep found this source {status}",
+                                  context="proactive health sweep")
+    return len(batch)
 
 
 async def monitor_loop() -> None:
-    """Background watchdog: every AI_MONITOR_INTERVAL, find broken channels,
-    diagnose them, auto-fix the safe ones, and drop a result into the alerts feed.
-    Invisible to the user except for the notification it leaves behind."""
+    """Background watchdog (every AI_MONITOR_INTERVAL): probe a rotating batch of
+    ALL channels for real online/offline/geo status, then diagnose + auto-fix the
+    dead imported ones. Invisible except for the notifications it leaves behind."""
     await asyncio.sleep(150)  # let startup settle
     while True:
         try:
             async with AsyncSessionLocal() as db:
                 if has_providers() and await is_enabled(db):
-                    await _monitor_once(db)
+                    await _health_sweep(db)
         except asyncio.CancelledError:
             break
         except Exception as e:

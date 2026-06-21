@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     AI_AUTONOMY: str = "autofix"
     # Background monitor sweep interval (seconds).
     AI_MONITOR_INTERVAL: int = 1800
+    # Channels probed per sweep cycle (rotates through all over a few cycles).
+    AI_HEALTH_BATCH: int = 400
     # Hard ceiling on Claude calls per day (cost guard).
     AI_DAILY_CALL_CAP: int = 200
     # Multiple providers for failover (when one gateway is down, try the next).

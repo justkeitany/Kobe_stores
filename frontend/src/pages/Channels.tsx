@@ -14,18 +14,18 @@ interface Channel {
   source: string;
   imported: boolean;
   is_enabled: boolean;
-  status: string | null;
+  health: Health;
   url?: string;
 }
-interface Alert { id: number; stream_id: number | null; title: string; data?: any; }
 
 const PAGE = 24;
-type Health = "online" | "offline" | "geo";
+type Health = "online" | "offline" | "geo" | "checking";
 
 const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
-  online:  { label: "Online",         cls: "bg-[#1f3a2a] text-[#5edc8a]", dot: "bg-[#5edc8a]" },
-  offline: { label: "Offline",        cls: "bg-[#3a1f1f] text-[#ffb4ab]", dot: "bg-[#ffb4ab]" },
-  geo:     { label: "Geo-restricted", cls: "bg-surface-container text-on-surface-variant", dot: "bg-[#9aa0a6]" },
+  online:   { label: "Online",         cls: "bg-[#1f3a2a] text-[#5edc8a]", dot: "bg-[#5edc8a]" },
+  offline:  { label: "Offline",        cls: "bg-[#3a1f1f] text-[#ffb4ab]", dot: "bg-[#ffb4ab]" },
+  geo:      { label: "Geo-restricted", cls: "bg-surface-container text-on-surface-variant", dot: "bg-[#9aa0a6]" },
+  checking: { label: "Checking…",      cls: "bg-surface-container text-on-surface-variant/70", dot: "bg-on-surface-variant/40" },
 };
 
 export default function Channels() {
@@ -38,29 +38,18 @@ export default function Channels() {
   const { data: channels = [], isLoading } = useQuery<Channel[]>({
     queryKey: ["all-channels"],
     queryFn: () => api.get("/channels").then((r) => r.data),
-    staleTime: 60_000,
+    refetchInterval: 60_000,
   });
-  const { data: alerts = [] } = useQuery<Alert[]>({
-    queryKey: ["ai-notifications"],
-    queryFn: () => api.get("/ai/notifications?limit=100").then((r) => r.data),
-    refetchInterval: 20_000,
-  });
-
-  // stream_id -> latest AI cause (for the geo/offline badge on imported channels)
-  const causeByStream = useMemo(() => {
-    const m = new Map<number, string>();
-    for (const a of alerts) if (a.stream_id != null && !m.has(a.stream_id)) m.set(a.stream_id, a.data?.cause);
-    return m;
-  }, [alerts]);
 
   function healthOf(c: Channel): Health {
-    if (probed[c.key]) return probed[c.key];
-    const cause = c.stream_id != null ? causeByStream.get(c.stream_id) : undefined;
-    if (cause === "geo_blocked") return "geo";
-    if (c.imported && (!c.is_enabled || c.status === "error")) return "offline";
-    if (!c.imported && (cause === "dead" || cause === "offline")) return "offline";
-    return "online";
+    return probed[c.key] || c.health;
   }
+
+  const counts = useMemo(() => {
+    const c = { online: 0, offline: 0, geo: 0, checking: 0 } as Record<Health, number>;
+    for (const ch of channels) c[probed[ch.key] || ch.health]++;
+    return c;
+  }, [channels, probed]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -104,10 +93,18 @@ export default function Channels() {
       <div className="flex justify-between items-end flex-wrap gap-md">
         <div>
           <h2 className="text-lg font-bold tracking-tight mb-0.5">Channels</h2>
-          <p className="text-on-surface-variant text-[12px]">
-            {isLoading ? "Loading…" : `${filtered.length} channel${filtered.length === 1 ? "" : "s"}`}
-            <span className="ml-2 opacity-70">· AI watches these in the background and fixes issues automatically</span>
+          <p className="text-on-surface-variant text-[12px] flex items-center gap-2 flex-wrap">
+            <span>{isLoading ? "Loading…" : `${filtered.length} channels`}</span>
+            {!isLoading && (
+              <span className="flex items-center gap-2">
+                <span className="text-[#5edc8a]">● {counts.online} online</span>
+                <span className="text-[#ffb4ab]">● {counts.offline} offline</span>
+                <span className="text-[#9aa0a6]">● {counts.geo} geo</span>
+                {counts.checking > 0 && <span className="opacity-60">● {counts.checking} checking…</span>}
+              </span>
+            )}
           </p>
+          <p className="text-on-surface-variant/70 text-[11px] mt-0.5">The AI probes every channel in the background and auto-fixes broken ones.</p>
         </div>
         <div className="relative w-full sm:w-72">
           <MIcon name="search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
