@@ -510,6 +510,7 @@ async def _health_sweep(db: AsyncSession) -> int:
     """Probe the least-recently-checked batch of channels and store real status.
     A cheap HTTP probe (no Claude). Skips entirely while a stream is playing so
     it never competes with a viewer's connection. Returns channels probed."""
+    from app.ffmpeg_manager import ffmpeg_manager
     if ffmpeg_manager.active_stream_count() > 0:
         return 0
     targets = await _channel_targets(db)
