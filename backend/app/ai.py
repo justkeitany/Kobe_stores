@@ -27,6 +27,8 @@ import os
 import time
 from datetime import datetime, timezone
 
+import httpx
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
