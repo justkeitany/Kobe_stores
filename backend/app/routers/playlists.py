@@ -207,7 +207,8 @@ async def _probe_status(client: httpx.AsyncClient, url: str) -> dict:
             if r.status_code != 200:
                 return {"status": "dead", "source": _source_from(final)}
             ctype = r.headers.get("content-type", "").lower()
-            if any(k in ctype for k in ("video", "octet", "mp2t", "mpegts")):
+            # video, audio (radio/Icecast), or raw TS/binary stream → live.
+            if any(k in ctype for k in ("video", "audio", "mpeg", "octet", "mp2t", "mpegts", "ogg", "aac", "icecast")):
                 return {"status": "ready", "source": _source_from(final)}
             async for chunk in r.aiter_bytes():
                 head = chunk[:2000].decode("utf-8", "replace")

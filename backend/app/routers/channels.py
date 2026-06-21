@@ -41,10 +41,18 @@ async def list_channels(db: AsyncSession = Depends(get_db), _=Depends(get_curren
     # Real probed health (online | offline | geo) keyed by URL, from the sweep.
     health = {r.url: r.status for r in (await db.execute(select(ChannelHealth))).scalars().all()}
 
-    def resolve(primary_url: str | None, imported: bool, enabled: bool, live_status: str | None) -> str:
+    def resolve(primary_url: str | None, imported: bool, enabled: bool,
+                live_status: str | None, viewers: int) -> str:
+        # Ground truth first: a channel FFmpeg is actively streaming IS online,
+        # whatever a stale probe says.
+        if imported:
+            if live_status in ("running", "starting") or viewers > 0:
+                return "online"
+            if not enabled:
+                return "offline"
         if primary_url and primary_url in health:
-            return health[primary_url]          # authoritative: last probe
-        if imported and (not enabled or live_status == "error"):
+            return health[primary_url]          # last probe result
+        if imported and live_status == "error":
             return "offline"
         return "checking"                        # not probed yet
 
@@ -57,6 +65,7 @@ async def list_channels(db: AsyncSession = Depends(get_db), _=Depends(get_curren
         if s.stream_url:
             imported_urls.add(s.stream_url)
         live_status = live.get(s.id, {}).get("status", s.status)
+        viewers = live.get(s.id, {}).get("viewer_count", 0)
         out.append({
             "key": f"s{s.id}",
             "stream_id": s.id,
@@ -65,7 +74,7 @@ async def list_channels(db: AsyncSession = Depends(get_db), _=Depends(get_curren
             "source": cats.get(s.category_id) or "Streams",
             "imported": True,
             "is_enabled": s.is_enabled,
-            "health": resolve(urls[0] if urls else None, True, s.is_enabled, live_status),
+            "health": resolve(urls[0] if urls else None, True, s.is_enabled, live_status, viewers),
         })
 
     # Playlist channels (cached) not already imported, deduped across playlists.
@@ -84,7 +93,7 @@ async def list_channels(db: AsyncSession = Depends(get_db), _=Depends(get_curren
                 "source": p.name,
                 "imported": False,
                 "is_enabled": True,
-                "health": resolve(url, False, True, None),
+                "health": resolve(url, False, True, None, 0),
                 "url": url,
             })
     return out
