@@ -53,7 +53,10 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     AI_MODEL: str = "claude-opus-4-8"
     # suggest | autofix  — autofix applies only whitelisted reversible actions.
-    AI_AUTONOMY: str = "suggest"
+    # Background monitoring auto-fixes by default.
+    AI_AUTONOMY: str = "autofix"
+    # Background monitor sweep interval (seconds).
+    AI_MONITOR_INTERVAL: int = 1800
     # Hard ceiling on Claude calls per day (cost guard).
     AI_DAILY_CALL_CAP: int = 200
     # Multiple providers for failover (when one gateway is down, try the next).

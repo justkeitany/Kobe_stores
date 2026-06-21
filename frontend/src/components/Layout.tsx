@@ -2,14 +2,28 @@ import { useState, useRef, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
-  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo, Sparkles,
+  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo, LayoutGrid,
   type LucideIcon,
 } from "lucide-react";
+import { useQuery } from "@tanstack/react-query";
 import { logout, currentUsername } from "../lib/auth";
 import { useServerStats } from "../hooks/useServerStats";
 import { useTheme } from "../lib/theme";
 import { MIcon } from "./MIcon";
+import api from "../lib/api";
 import clsx from "clsx";
+
+interface AiAlert {
+  id: number; stream_id: number | null; title: string; detail: string | null;
+  auto_applied: boolean; created_at: string;
+}
+function timeAgo(iso: string): string {
+  const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+  if (s < 90) return "just now";
+  if (s < 3600) return `${Math.round(s / 60)}m ago`;
+  if (s < 86400) return `${Math.round(s / 3600)}h ago`;
+  return `${Math.round(s / 86400)}d ago`;
+}
 
 const LOGOS = {
   pluto: "https://logo.keitanyfrank.store/Pluto-TV-Logo.png",
@@ -56,7 +70,7 @@ const nav: NavEntry[] = [
     ],
   },
   { label: "Playlists",  icon: ListVideo,       path: "/playlists" },
-  { label: "AI Assistant", icon: Sparkles,      path: "/ai" },
+  { label: "Channels",   icon: LayoutGrid,      path: "/channels" },
   { label: "Categories", icon: FolderOpen,      path: "/categories" },
   { label: "Bouquets",   icon: Package,         path: "/bouquets" },
   { label: "EPG",        icon: Radio,           path: "/epg" },
@@ -272,15 +286,29 @@ export default function Layout() {
 function TopHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const { theme, setTheme } = useTheme();
   const navigate = useNavigate();
-  const { stats, connected } = useServerStats();
+  const { connected } = useServerStats();
   const [q, setQ] = useState("");
   const [menu, setMenu] = useState<null | "bell" | "account">(null);
   const username = currentUsername();
 
   const closeMenu = () => setMenu(null);
 
-  // Live alerts: any stream currently in an error state.
-  const alerts = (stats?.streams ?? []).filter((s) => s.status === "error");
+  // AI alerts feed (background monitor + manual "Issues?" results).
+  const { data: aiAlerts = [] } = useQuery<AiAlert[]>({
+    queryKey: ["ai-notifications"],
+    queryFn: () => api.get("/ai/notifications?limit=25").then((r) => r.data),
+    refetchInterval: 30_000,
+  });
+  const [seenId, setSeenId] = useState(() => Number(localStorage.getItem("ai_seen_id") || 0));
+  const unseen = aiAlerts.filter((a) => a.id > seenId).length;
+  function openBell() {
+    setMenu(menu === "bell" ? null : "bell");
+    if (aiAlerts.length) {
+      const max = Math.max(...aiAlerts.map((a) => a.id));
+      setSeenId(max);
+      localStorage.setItem("ai_seen_id", String(max));
+    }
+  }
 
   function submitSearch(e: React.FormEvent) {
     e.preventDefault();
@@ -342,13 +370,15 @@ function TopHeader({ onMenuClick }: { onMenuClick: () => void }) {
         {/* Notifications */}
         <div className="relative">
           <button
-            onClick={() => setMenu(menu === "bell" ? null : "bell")}
+            onClick={openBell}
             className="relative p-1.5 text-on-surface-variant hover:text-on-surface hover:bg-surface-container rounded-md transition-colors"
             title="Notifications"
           >
             <MIcon name="notifications" size={20} />
-            {alerts.length > 0 && (
-              <span className="absolute top-1.5 right-1.5 w-1.5 h-1.5 bg-error rounded-full" />
+            {unseen > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[15px] h-[15px] px-0.5 bg-error text-on-error text-[9px] font-bold rounded-full flex items-center justify-center">
+                {unseen > 9 ? "9+" : unseen}
+              </span>
             )}
           </button>
           {menu === "bell" && (
@@ -356,24 +386,29 @@ function TopHeader({ onMenuClick }: { onMenuClick: () => void }) {
               <div className="px-3 py-2 border-b border-outline-variant flex items-center justify-between">
                 <span className="font-bold text-body-sm">Notifications</span>
                 <span className="font-code-label text-[10px] text-on-surface-variant uppercase">
-                  {connected ? "Live" : "Offline"}
+                  AI watchdog {connected ? "· live" : ""}
                 </span>
               </div>
-              {alerts.length === 0 ? (
+              {aiAlerts.length === 0 ? (
                 <p className="px-3 py-4 text-body-sm text-on-surface-variant">
-                  {connected ? "All systems operational." : "Connecting to server…"}
+                  All channels healthy. The AI checks in the background every 30 min.
                 </p>
               ) : (
-                <ul className="max-h-64 overflow-y-auto">
-                  {alerts.map((s) => (
-                    <li key={s.id}>
+                <ul className="max-h-80 overflow-y-auto">
+                  {aiAlerts.map((a) => (
+                    <li key={a.id}>
                       <button
-                        onClick={() => { closeMenu(); navigate("/streams"); }}
-                        className="w-full text-left px-3 py-2 hover:bg-surface-container-high transition-colors flex items-start gap-2"
+                        onClick={() => { closeMenu(); navigate("/channels"); }}
+                        className="w-full text-left px-3 py-2.5 hover:bg-surface-container-high transition-colors flex items-start gap-2 border-b border-outline-variant/40 last:border-0"
                       >
-                        <MIcon name="error" size={16} className="text-error mt-0.5" />
-                        <span className="text-body-sm">
-                          Stream <span className="font-bold">#{s.id}</span> is in an error state
+                        <MIcon
+                          name={a.auto_applied ? "auto_fix_high" : "warning"}
+                          size={16}
+                          className={clsx("mt-0.5 shrink-0", a.auto_applied ? "text-[#5edc8a]" : "text-[#f5c86e]")}
+                        />
+                        <span className="min-w-0">
+                          <span className="block text-body-sm leading-snug">{a.title}</span>
+                          <span className="block text-[10px] text-on-surface-variant mt-0.5">{timeAgo(a.created_at)}</span>
                         </span>
                       </button>
                     </li>

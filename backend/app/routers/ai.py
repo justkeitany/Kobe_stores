@@ -60,6 +60,21 @@ async def test(_=Depends(get_current_admin)):
     return {"results": await ai.test_providers()}
 
 
+@router.get("/notifications")
+async def notifications(limit: int = 30, db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)):
+    """Recent AI alerts for the notification panel (newest first)."""
+    rows = (await db.execute(
+        select(AiEvent).where(AiEvent.kind == "alert")
+        .order_by(AiEvent.created_at.desc(), AiEvent.id.desc()).limit(min(limit, 100))
+    )).scalars().all()
+    return [{
+        "id": e.id, "stream_id": e.stream_id, "title": e.title, "detail": e.detail,
+        "auto_applied": bool((e.data or {}).get("auto_applied")),
+        "severity": (e.data or {}).get("severity"),
+        "created_at": e.created_at,
+    } for e in rows]
+
+
 @router.put("/settings")
 async def update_settings(data: AiSettings, db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)):
     if data.enabled is not None:

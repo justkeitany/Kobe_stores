@@ -38,6 +38,12 @@ logger = logging.getLogger(__name__)
 
 # Reversible actions the AI is allowed to apply on its own in autofix mode.
 SAFE_ACTIONS = {"none", "switch_source", "drop_quality", "disable", "refresh_playlist"}
+_ACTION_LABEL = {
+    "switch_source": "switched to backup source",
+    "drop_quality": "lowered quality",
+    "disable": "disabled the dead channel",
+    "refresh_playlist": "flagged playlist for refresh",
+}
 
 # Per-day call counter (cost guard). Reset when the date rolls over.
 _calls: dict[str, int] = {}
@@ -319,17 +325,28 @@ async def diagnose_stream(db: AsyncSession, stream: Stream, error: str, context:
         return None
 
     _diag_cache[sig] = result
-    ev = await _record(
-        db, "diagnosis",
-        f"{stream.name}: {result['cause']}",
-        result["explanation"], stream_id=stream.id, data=result,
-    )
+    cause = result["cause"]
+    await _record(db, "diagnosis", f"{stream.name}: {cause}", result["explanation"],
+                  stream_id=stream.id, data=result)
 
     mode = await autonomy(db)
     action = result.get("recommended_action", "none")
+    applied = False
+    fix_detail = ""
     if mode == "autofix" and action in SAFE_ACTIONS and action != "none" and result.get("confidence") != "low":
         applied = await apply_safe_fix(db, stream.id, action, reason=result["explanation"])
-        ev.data = {**result, "auto_applied": applied}
+        if applied:
+            fix_detail = _ACTION_LABEL.get(action, action)
+
+    # One concise notification (the bell/notification panel reads kind="alert").
+    if applied:
+        summary = f"{cause.replace('_', ' ')} → {fix_detail} ✓ (auto-fixed)"
+    else:
+        nxt = action.replace("_", " ") if action != "none" else "needs attention"
+        summary = f"{cause.replace('_', ' ')} — {nxt}"
+    await _record(db, "alert", f"{stream.name}: {summary}", result["explanation"],
+                  stream_id=stream.id,
+                  data={"cause": cause, "action": action, "auto_applied": applied, "severity": result.get("severity")})
     await db.commit()
     return result
 
@@ -447,8 +464,6 @@ async def ops_chat(db: AsyncSession, question: str) -> str:
 
 async def digest_loop() -> None:
     """Generate a health digest once a day (no-op while AI is off/keyless)."""
-    import asyncio
-
     await asyncio.sleep(180)  # let startup settle
     while True:
         try:
@@ -460,3 +475,37 @@ async def digest_loop() -> None:
         except Exception as e:
             logger.error("AI digest loop error: %s", e)
         await asyncio.sleep(24 * 3600)
+
+
+# How many errored streams to work per sweep (bounds cost + upstream load).
+_MONITOR_BATCH = 15
+
+
+async def _monitor_once(db: AsyncSession) -> int:
+    """Diagnose + auto-fix streams currently in an error state. Returns the count."""
+    streams = (await db.execute(
+        select(Stream).where(Stream.status == "error", Stream.is_enabled == True)  # noqa: E712
+        .limit(_MONITOR_BATCH)
+    )).scalars().all()
+    for s in streams:
+        await diagnose_stream(db, s, s.last_error or "stream in error state", context="background monitor")
+    if streams:
+        logger.info("AI monitor swept %d errored streams", len(streams))
+    return len(streams)
+
+
+async def monitor_loop() -> None:
+    """Background watchdog: every AI_MONITOR_INTERVAL, find broken channels,
+    diagnose them, auto-fix the safe ones, and drop a result into the alerts feed.
+    Invisible to the user except for the notification it leaves behind."""
+    await asyncio.sleep(150)  # let startup settle
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                if has_providers() and await is_enabled(db):
+                    await _monitor_once(db)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("AI monitor loop error: %s", e)
+        await asyncio.sleep(settings.AI_MONITOR_INTERVAL)
