@@ -710,6 +710,11 @@ class FFmpegManager:
         self._ensure_reaper()
         sp = await self.get_or_create(stream_id, sources, stream_name, quality)
         sp.heartbeat(client_key)
+        # Channel switch: free this viewer's previous channel BEFORE starting the
+        # new one, so a connection-limited upstream (M3USe trial) never sees two
+        # connections at once. Done here instead of by lowering the idle window,
+        # so the channel actually being watched keeps its full buffering grace.
+        await self._release_other_streams(stream_id, client_key)
         if sp.status not in ("running", "starting"):
             # If it recently exhausted its retries on a dead/broken source, hold
             # off respawning until the cooldown passes — otherwise every viewer
@@ -722,6 +727,21 @@ class FFmpegManager:
             sp.gave_up_at = None
             await sp.start()
         return sp
+
+    async def _release_other_streams(self, keep_id: int, client_key: str) -> None:
+        """Stop other streams whose ONLY viewer is this client (a channel switch).
+
+        Frees the upstream connection immediately so a connection-limited account
+        doesn't trip "multiple connections". Never stops a stream that someone
+        else is still watching.
+        """
+        async with self._lock:
+            others = [(sid, sp) for sid, sp in self._streams.items() if sid != keep_id]
+        for sid, sp in others:
+            sp.active_viewers()  # prune stale heartbeats first
+            if client_key in sp.viewers and len(sp.viewers) == 1:
+                logger.info(f"Stream {sid} released — viewer switched to {keep_id}")
+                await self.stop_stream(sid)
 
     async def stop_stream(self, stream_id: int):
         async with self._lock:
