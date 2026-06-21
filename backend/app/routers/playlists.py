@@ -260,6 +260,11 @@ async def _refresh_meta(p: Playlist) -> None:
 
     p.channel_count = len(channels)
     p.logos = _sample_logos(channels)
+    # Cache the channel list (capped) for the Channels page aggregation.
+    p.channels = [
+        {"name": c["name"], "logo": c.get("logo") or "", "url": c["url"], "category": c.get("category") or ""}
+        for c in channels[:800]
+    ]
 
     if not channels:
         p.health = "no channels"

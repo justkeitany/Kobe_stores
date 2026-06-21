@@ -6,99 +6,97 @@ import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
 import clsx from "clsx";
 
-interface Stream {
-  id: number;
+interface Channel {
+  key: string;
+  stream_id: number | null;
   name: string;
-  logo_url?: string | null;
-  status: string;
+  logo: string;
+  source: string;
+  imported: boolean;
   is_enabled: boolean;
-  category_id?: number | null;
+  status: string | null;
+  url?: string;
 }
-interface Category { id: number; name: string; }
-interface Alert { id: number; stream_id: number | null; title: string; detail: string | null; auto_applied: boolean; created_at: string; data?: any; }
+interface Alert { id: number; stream_id: number | null; title: string; data?: any; }
 
 const PAGE = 24;
-
-type Health = "live" | "offline" | "geo" | "idle";
-
-function healthOf(s: Stream, cause?: string): Health {
-  if (!s.is_enabled) return "offline";
-  if (cause === "geo_blocked") return "geo";
-  if (s.status === "running") return "live";
-  if (s.status === "error") return "offline";
-  return "idle";
-}
+type Health = "online" | "offline" | "geo";
 
 const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
-  live:    { label: "Live Now",    cls: "bg-[#1f3a2a] text-[#5edc8a]", dot: "bg-[#5edc8a]" },
-  offline: { label: "Offline",     cls: "bg-[#3a1f1f] text-[#ffb4ab]", dot: "bg-[#ffb4ab]" },
-  geo:     { label: "Geo-blocked", cls: "bg-surface-container text-on-surface-variant", dot: "bg-[#f5c86e]" },
-  idle:    { label: "Idle",        cls: "bg-surface-container text-on-surface-variant", dot: "bg-on-surface-variant/50" },
+  online:  { label: "Online",         cls: "bg-[#1f3a2a] text-[#5edc8a]", dot: "bg-[#5edc8a]" },
+  offline: { label: "Offline",        cls: "bg-[#3a1f1f] text-[#ffb4ab]", dot: "bg-[#ffb4ab]" },
+  geo:     { label: "Geo-restricted", cls: "bg-surface-container text-on-surface-variant", dot: "bg-[#9aa0a6]" },
 };
 
 export default function Channels() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [working, setWorking] = useState<Set<number>>(new Set());
+  const [working, setWorking] = useState<Set<string>>(new Set());
+  const [probed, setProbed] = useState<Record<string, Health>>({});
 
-  const { data: streams = [], isLoading } = useQuery<Stream[]>({
-    queryKey: ["streams"],
-    queryFn: () => api.get("/streams").then((r) => r.data),
+  const { data: channels = [], isLoading } = useQuery<Channel[]>({
+    queryKey: ["all-channels"],
+    queryFn: () => api.get("/channels").then((r) => r.data),
+    staleTime: 60_000,
   });
-  const { data: cats = [] } = useQuery<Category[]>({
-    queryKey: ["categories"],
-    queryFn: () => api.get("/categories").then((r) => r.data),
-  });
-  // Recent AI alerts → map stream → latest cause/feedback for badges + inline note.
   const { data: alerts = [] } = useQuery<Alert[]>({
     queryKey: ["ai-notifications"],
     queryFn: () => api.get("/ai/notifications?limit=100").then((r) => r.data),
     refetchInterval: 20_000,
   });
 
-  const catName = useMemo(() => {
+  // stream_id -> latest AI cause (for the geo/offline badge on imported channels)
+  const causeByStream = useMemo(() => {
     const m = new Map<number, string>();
-    cats.forEach((c) => m.set(c.id, c.name));
-    return m;
-  }, [cats]);
-
-  const latestAlert = useMemo(() => {
-    const m = new Map<number, Alert>();
-    for (const a of alerts) if (a.stream_id != null && !m.has(a.stream_id)) m.set(a.stream_id, a);
+    for (const a of alerts) if (a.stream_id != null && !m.has(a.stream_id)) m.set(a.stream_id, a.data?.cause);
     return m;
   }, [alerts]);
 
+  function healthOf(c: Channel): Health {
+    if (probed[c.key]) return probed[c.key];
+    const cause = c.stream_id != null ? causeByStream.get(c.stream_id) : undefined;
+    if (cause === "geo_blocked") return "geo";
+    if (c.imported && (!c.is_enabled || c.status === "error")) return "offline";
+    if (!c.imported && (cause === "dead" || cause === "offline")) return "offline";
+    return "online";
+  }
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? streams.filter((s) => s.name.toLowerCase().includes(q)) : streams;
-  }, [streams, search]);
+    return q ? channels.filter((c) => c.name.toLowerCase().includes(q)) : channels;
+  }, [channels, search]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
   const cur = Math.min(page, pages - 1);
   const shown = filtered.slice(cur * PAGE, cur * PAGE + PAGE);
 
-  async function reportIssue(s: Stream) {
-    setWorking((w) => new Set(w).add(s.id));
+  async function reportIssue(c: Channel) {
+    setWorking((w) => new Set(w).add(c.key));
     try {
-      const r = await api.post(`/ai/diagnose/${s.id}`);
-      const d = r.data;
-      const fixed = d?.recommended_action && d.recommended_action !== "none";
-      toast.success(
-        `${s.name}: ${String(d.cause || "checked").replace(/_/g, " ")}${fixed ? ` → ${d.recommended_action.replace(/_/g, " ")}` : ""}`,
-        { duration: 6000 }
-      );
-      qc.invalidateQueries({ queryKey: ["ai-notifications"] });
-      qc.invalidateQueries({ queryKey: ["streams"] });
+      if (c.imported && c.stream_id != null) {
+        const r = await api.post(`/ai/diagnose/${c.stream_id}`);
+        const d = r.data;
+        const fixed = d?.recommended_action && d.recommended_action !== "none";
+        toast.success(`${c.name}: ${String(d.cause || "checked").replace(/_/g, " ")}${fixed ? ` → ${d.recommended_action.replace(/_/g, " ")}` : ""}`, { duration: 6000 });
+        qc.invalidateQueries({ queryKey: ["ai-notifications"] });
+        qc.invalidateQueries({ queryKey: ["all-channels"] });
+      } else {
+        const r = await api.post("/channels/probe", { url: c.url, name: c.name });
+        const st = r.data.status as Health | "skipped";
+        if (st === "skipped") {
+          toast(r.data.note);
+        } else {
+          setProbed((p) => ({ ...p, [c.key]: st }));
+          toast.success(`${c.name}: ${st} — ${r.data.note}`, { duration: 6000 });
+          qc.invalidateQueries({ queryKey: ["ai-notifications"] });
+        }
+      }
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "AI couldn't check this channel");
+      toast.error(e?.response?.data?.detail || "Couldn't check this channel");
     } finally {
-      setWorking((w) => { const n = new Set(w); n.delete(s.id); return n; });
+      setWorking((w) => { const n = new Set(w); n.delete(c.key); return n; });
     }
-  }
-
-  function watch(s: Stream) {
-    window.open(`${window.location.origin}/hls/${s.id}/master.m3u8`, "_blank");
   }
 
   return (
@@ -121,50 +119,45 @@ export default function Channels() {
       {isLoading ? (
         <div className="py-16 flex justify-center text-on-surface-variant"><Loader2 size={24} className="animate-spin" /></div>
       ) : filtered.length === 0 ? (
-        <div className="py-16 text-center text-on-surface-variant">No channels. Import some from Streams or Playlists.</div>
+        <div className="py-16 text-center text-on-surface-variant">No channels. Add a playlist or import streams.</div>
       ) : (
         <>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">
-            {shown.map((s) => {
-              const a = latestAlert.get(s.id);
-              const h = healthOf(s, a?.data?.cause);
-              const b = BADGE[h];
-              const busy = working.has(s.id);
+            {shown.map((c) => {
+              const b = BADGE[healthOf(c)];
+              const busy = working.has(c.key);
               return (
-                <div key={s.id} className="bg-surface-container-low border border-outline-variant rounded-md flex flex-col overflow-hidden">
+                <div key={c.key} className="bg-surface-container-low border border-outline-variant rounded-md flex flex-col overflow-hidden">
                   <div className="p-md flex flex-col items-center text-center gap-2 flex-1">
                     <div className="self-stretch flex items-center justify-between">
                       <span className={clsx("inline-flex items-center gap-1.5 text-[11px] font-medium rounded-full px-2 py-0.5", b.cls)}>
                         <span className={clsx("w-1.5 h-1.5 rounded-full", b.dot)} /> {b.label}
                       </span>
-                      <button onClick={() => reportIssue(s)} disabled={busy} title="Re-check with AI"
+                      <button onClick={() => reportIssue(c)} disabled={busy} title="Re-check"
                         className="text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50">
                         <RefreshCw size={15} className={clsx(busy && "animate-spin")} />
                       </button>
                     </div>
-                    <Logo logo={s.logo_url} />
-                    <p className="font-bold leading-tight">{s.name}</p>
-                    {s.category_id != null && catName.get(s.category_id) && (
-                      <span className="text-[10px] font-code-label uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-full px-2 py-0.5">
-                        {catName.get(s.category_id)}
-                      </span>
-                    )}
-                    {a && (
-                      <p className={clsx("text-[11px] mt-0.5 line-clamp-2", a.auto_applied ? "text-[#5edc8a]" : "text-on-surface-variant")}>
-                        {a.auto_applied ? "✓ " : ""}{a.title.replace(`${s.name}: `, "")}
-                      </p>
-                    )}
+                    <Logo logo={c.logo} />
+                    <p className="font-bold leading-tight line-clamp-2">{c.name}</p>
+                    <span className="text-[10px] font-code-label uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-full px-2 py-0.5 truncate max-w-full">
+                      {c.source}
+                    </span>
                   </div>
                   <div className="border-t border-outline-variant p-3 space-y-2">
-                    <button onClick={() => reportIssue(s)} disabled={busy}
+                    <button onClick={() => reportIssue(c)} disabled={busy}
                       className="w-full inline-flex items-center justify-center gap-1.5 text-[13px] font-medium rounded-md border border-error/40 text-error py-2 hover:bg-error/10 transition-colors disabled:opacity-50">
                       {busy ? <Loader2 size={14} className="animate-spin" /> : <AlertCircle size={14} />}
                       {busy ? "AI checking…" : "Issues?"}
                     </button>
-                    <button onClick={() => watch(s)}
-                      className="w-full inline-flex items-center justify-center gap-1.5 text-[13px] text-on-surface-variant hover:text-on-surface transition-colors">
-                      Watch in browser <ExternalLink size={13} />
-                    </button>
+                    {c.imported && c.stream_id != null ? (
+                      <button onClick={() => window.open(`${window.location.origin}/hls/${c.stream_id}/master.m3u8`, "_blank")}
+                        className="w-full inline-flex items-center justify-center gap-1.5 text-[13px] text-on-surface-variant hover:text-on-surface transition-colors">
+                        Watch in browser <ExternalLink size={13} />
+                      </button>
+                    ) : (
+                      <p className="text-center text-[11px] text-on-surface-variant/60">Not imported to streams</p>
+                    )}
                   </div>
                 </div>
               );

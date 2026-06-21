@@ -192,6 +192,10 @@ class Playlist(Base):
     description = Column(Text, nullable=True)
     channel_count = Column(Integer, default=0)
     logos = Column(JSON, nullable=True)  # sample logo URLs for the avatar stack
+    # Cached parsed channel list [{name,logo,url,category}] so the Channels page
+    # can show every playlist channel without re-fetching feeds. Filled by the
+    # health sweep / refresh (which already fetch + parse — no extra requests).
+    channels = Column(JSON, nullable=True)
     # Short channel-health summary from the last refresh, e.g. "27/30 live".
     health = Column(String(255), nullable=True)
     last_refreshed = Column(DateTime(timezone=True), nullable=True)
