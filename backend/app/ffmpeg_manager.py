@@ -615,6 +615,13 @@ class StreamProcess:
                         self.status = "error"
                         self.gave_up_at = datetime.now(timezone.utc)
                         logger.error(f"Stream {self.stream_id} exceeded max retries, giving up")
+                        # Ask the AI assistant to diagnose (and auto-fix in autofix
+                        # mode). Fire-and-forget; no-op when AI is off/keyless.
+                        try:
+                            from app.ai import diagnose_by_id
+                            asyncio.create_task(diagnose_by_id(self.stream_id, self.last_error or ""))
+                        except Exception:
+                            pass
                         break
 
                     # Fail over to the next source before retrying, so a dead

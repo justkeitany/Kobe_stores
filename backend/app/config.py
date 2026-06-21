@@ -49,6 +49,14 @@ class Settings(BaseSettings):
     ADMIN_IP_WHITELIST: str = ""  # comma separated IPs
     RATE_LIMIT_PER_MINUTE: int = 60
 
+    # AI assistant (Claude). Key lives in .env, never in the repo. Empty = AI off.
+    ANTHROPIC_API_KEY: str = ""
+    AI_MODEL: str = "claude-opus-4-8"
+    # suggest | autofix  — autofix applies only whitelisted reversible actions.
+    AI_AUTONOMY: str = "suggest"
+    # Hard ceiling on Claude calls per day (cost guard).
+    AI_DAILY_CALL_CAP: int = 200
+
     class Config:
         env_file = ".env"
         extra = "ignore"

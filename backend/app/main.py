@@ -20,6 +20,7 @@ from app.routers.proxy import router as proxy_router
 from app.routers.pluto import router as pluto_router
 from app.routers.freestreams import router as freestreams_router
 from app.routers.playlists import router as playlists_router
+from app.routers.ai import router as ai_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -46,11 +47,15 @@ async def lifespan(app: FastAPI):
     from app.routers.playlists import playlist_health_loop
     playlist_task = asyncio.create_task(playlist_health_loop())
 
+    from app.ai import digest_loop
+    ai_task = asyncio.create_task(digest_loop())
+
     yield
     # Shutdown
     logger.info("Shutting down...")
     health_task.cancel()
     playlist_task.cancel()
+    ai_task.cancel()
     from app.ffmpeg_manager import ffmpeg_manager
     await ffmpeg_manager.stop_all()
     await close_redis()
@@ -104,6 +109,9 @@ app.include_router(freestreams_router)
 
 # Saved M3U playlists (/api/playlists)
 app.include_router(playlists_router)
+
+# AI assistant (/api/ai)
+app.include_router(ai_router)
 
 # ── WebSocket ──────────────────────────────────────────────────────────────
 @app.websocket("/ws/stats")

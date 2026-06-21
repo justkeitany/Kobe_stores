@@ -199,6 +199,21 @@ class Playlist(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
 
+class AiEvent(Base):
+    """An action or output produced by the Claude assistant — diagnoses,
+    auto-applied fixes, daily digests, and chat answers. The panel's AI audit
+    trail (autonomous fixes are also mirrored into AuditLog)."""
+    __tablename__ = "ai_events"
+
+    id = Column(Integer, primary_key=True, index=True)
+    kind = Column(String(20), nullable=False, index=True)  # diagnosis|action|digest|chat
+    stream_id = Column(Integer, nullable=True, index=True)
+    title = Column(String(255), nullable=False)
+    detail = Column(Text, nullable=True)
+    data = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+
 class Settings(Base):
     __tablename__ = "settings"
 

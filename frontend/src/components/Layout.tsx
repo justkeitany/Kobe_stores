@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
-  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo,
+  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo, Sparkles,
   type LucideIcon,
 } from "lucide-react";
 import { logout, currentUsername } from "../lib/auth";
@@ -56,6 +56,7 @@ const nav: NavEntry[] = [
     ],
   },
   { label: "Playlists",  icon: ListVideo,       path: "/playlists" },
+  { label: "AI Assistant", icon: Sparkles,      path: "/ai" },
   { label: "Categories", icon: FolderOpen,      path: "/categories" },
   { label: "Bouquets",   icon: Package,         path: "/bouquets" },
   { label: "EPG",        icon: Radio,           path: "/epg" },
