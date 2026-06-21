@@ -20,11 +20,14 @@ Design notes
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
+import os
+import time
 from datetime import datetime, timezone
 
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -64,18 +67,146 @@ _DIAGNOSIS_SCHEMA = {
 }
 
 
-# ── client + guards ─────────────────────────────────────────────────────────
+# ── providers + failover ────────────────────────────────────────────────────
+# A provider failure puts it on a short cooldown so the next call skips straight
+# to a healthy one instead of eating its timeout again.
+_cooldown: dict[str, float] = {}
+_COOLDOWN_SECS = 120
 
-def _aclient():
-    """Async Anthropic client, or None when unavailable (no key / package)."""
-    if not settings.ANTHROPIC_API_KEY:
+
+def _providers() -> list[dict]:
+    """Ordered provider list. AI_PROVIDERS (JSON) first, then ANTHROPIC_API_KEY."""
+    out: list[dict] = []
+    raw = (settings.AI_PROVIDERS or "").strip()
+    if raw:
+        try:
+            for p in json.loads(raw):
+                if isinstance(p, dict) and p.get("api_key"):
+                    out.append({
+                        "name": p.get("name") or p.get("base_url") or "provider",
+                        "type": (p.get("type") or "sdk").lower(),
+                        "base_url": (p.get("base_url") or "").rstrip("/") or None,
+                        "api_key": p["api_key"],
+                        "model": p.get("model") or settings.AI_MODEL,
+                    })
+        except (json.JSONDecodeError, TypeError):
+            logger.warning("AI_PROVIDERS is not valid JSON — ignoring it")
+    if settings.ANTHROPIC_API_KEY:
+        out.append({"name": "anthropic", "type": "sdk", "base_url": None,
+                    "api_key": settings.ANTHROPIC_API_KEY, "model": settings.AI_MODEL})
+    return out
+
+
+def has_providers() -> bool:
+    return len(_providers()) > 0
+
+
+def _available(name: str) -> bool:
+    return _cooldown.get(name, 0.0) < time.time()
+
+
+def _mark_down(name: str) -> None:
+    _cooldown[name] = time.time() + _COOLDOWN_SECS
+
+
+def _clear_down(name: str) -> None:
+    _cooldown.pop(name, None)
+
+
+def _err(e: Exception) -> str:
+    return f"{type(e).__name__}: {str(e)[:200]}"
+
+
+async def _sdk_generate(p: dict, prompt: str, system: str, max_tokens: int) -> str:
+    import anthropic
+    kwargs = {"api_key": p["api_key"], "max_retries": 0, "timeout": 40.0}
+    if p["base_url"]:
+        kwargs["base_url"] = p["base_url"]
+    client = anthropic.AsyncAnthropic(**kwargs)
+    resp = await client.messages.create(
+        model=p["model"], max_tokens=max_tokens, system=system,
+        messages=[{"role": "user", "content": prompt}],
+    )
+    if resp.stop_reason == "refusal":
+        raise RuntimeError("provider refused the request")
+    return next((b.text for b in resp.content if b.type == "text"), "") or ""
+
+
+async def _cli_generate(p: dict, prompt: str, system: str) -> str:
+    """Route through the genuine `claude` CLI — for gateways (e.g. Aerolink) that
+    only accept the Claude Code client. Per-call env, no shared global state."""
+    os.makedirs(settings.AI_CLI_HOME, exist_ok=True)
+    env = {
+        "HOME": settings.AI_CLI_HOME,
+        "PATH": os.environ.get("PATH", "/usr/local/bin:/usr/bin:/bin"),
+        "ANTHROPIC_API_KEY": p["api_key"],
+        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1",
+    }
+    if p["base_url"]:
+        env["ANTHROPIC_BASE_URL"] = p["base_url"]
+    # Fold our instructions into the user turn — don't override Claude Code's own
+    # system prompt (some gateways validate it).
+    full = f"{system}\n\n{prompt}" if system else prompt
+    proc = await asyncio.create_subprocess_exec(
+        settings.CLAUDE_BIN, "-p", full, "--model", p["model"],
+        stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env, cwd="/tmp",
+    )
+    out, err = await asyncio.wait_for(proc.communicate(), timeout=120)
+    if proc.returncode != 0:
+        raise RuntimeError(f"claude cli rc={proc.returncode}: {err.decode('utf-8', 'replace')[:200]}")
+    text = out.decode("utf-8", "replace").strip()
+    if not text:
+        raise RuntimeError("claude cli returned empty output")
+    return text
+
+
+async def _generate(prompt: str, system: str, max_tokens: int = 1500) -> str | None:
+    """Generate text, failing over across providers. Returns None if all are down
+    or AI is unavailable. Counts one logical call regardless of failover hops."""
+    providers = _providers()
+    if not providers:
         return None
-    try:
-        import anthropic
-    except ImportError:
-        logger.warning("anthropic package not installed — AI features disabled")
+    if not _under_cap():
+        logger.warning("AI daily call cap reached")
         return None
-    return anthropic.AsyncAnthropic(api_key=settings.ANTHROPIC_API_KEY)
+    # Prefer providers not on cooldown, but fall back to all if every one is down.
+    order = [p for p in providers if _available(p["name"])] or providers
+    last = None
+    for p in order:
+        try:
+            text = (await _cli_generate(p, prompt, system)) if p["type"] == "cli" \
+                else (await _sdk_generate(p, prompt, system, max_tokens))
+            _clear_down(p["name"])
+            _count_call()
+            return text
+        except Exception as e:  # connection, timeout, 5xx, refusal, cli failure…
+            logger.warning("AI provider '%s' failed: %s", p["name"], _err(e))
+            _mark_down(p["name"])
+            last = e
+    logger.error("All AI providers failed; last error: %s", _err(last) if last else "none")
+    return None
+
+
+async def test_providers() -> list[dict]:
+    """Ping every provider through its own transport — for the UI health check."""
+    results = []
+    for p in _providers():
+        label = p["base_url"] or "api.anthropic.com"
+        t0 = time.time()
+        try:
+            if p["type"] == "cli":
+                text = await _cli_generate(p, "reply with the single word: pong", "")
+            else:
+                text = await _sdk_generate(p, "reply with the single word: pong", "", 16)
+            _clear_down(p["name"])
+            results.append({"name": p["name"], "type": p["type"], "base_url": label,
+                            "ok": True, "latency_ms": int((time.time() - t0) * 1000),
+                            "reply": text[:60]})
+        except Exception as e:
+            _mark_down(p["name"])
+            results.append({"name": p["name"], "type": p["type"], "base_url": label,
+                            "ok": False, "error": _err(e)})
+    return results
 
 
 async def get_setting(db: AsyncSession, key: str, default: str) -> str:
@@ -90,7 +221,7 @@ async def autonomy(db: AsyncSession) -> str:
 
 
 async def is_enabled(db: AsyncSession) -> bool:
-    if not settings.ANTHROPIC_API_KEY:
+    if not has_providers():
         return False
     return (await get_setting(db, "ai_enabled", "true")).lower() == "true"
 
@@ -139,37 +270,19 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
-async def _structured(client, prompt: str, schema: dict, system: str) -> dict | None:
-    # Prompt-driven JSON (robust across SDK versions) rather than output_config.
-    _count_call()
+async def _structured(prompt: str, schema: dict, system: str) -> dict | None:
+    # Prompt-driven JSON (robust across SDK + CLI transports) — fails over across providers.
     sys = (
         system
         + "\n\nReply with ONLY a JSON object matching this schema (no prose, no code fences):\n"
         + json.dumps(schema)
     )
-    resp = await client.messages.create(
-        model=settings.AI_MODEL,
-        max_tokens=1024,
-        system=sys,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    if resp.stop_reason == "refusal":
-        return None
-    text = next((b.text for b in resp.content if b.type == "text"), "")
-    return _extract_json(text)
+    text = await _generate(prompt, sys, max_tokens=1024)
+    return _extract_json(text or "")
 
 
-async def _text(client, prompt: str, system: str, max_tokens: int = 2000) -> str | None:
-    _count_call()
-    resp = await client.messages.create(
-        model=settings.AI_MODEL,
-        max_tokens=max_tokens,
-        system=system,
-        messages=[{"role": "user", "content": prompt}],
-    )
-    if resp.stop_reason == "refusal":
-        return None
-    return next((b.text for b in resp.content if b.type == "text"), "") or None
+async def _text(prompt: str, system: str, max_tokens: int = 2000) -> str | None:
+    return await _generate(prompt, system, max_tokens=max_tokens)
 
 
 # ── Diagnosis + auto-fix ────────────────────────────────────────────────────
@@ -185,15 +298,11 @@ _DIAG_SYSTEM = (
 async def diagnose_stream(db: AsyncSession, stream: Stream, error: str, context: str = "") -> dict | None:
     """Diagnose a failing stream. Returns the structured result, or None if AI is
     unavailable/over-cap. In autofix mode, also applies the recommended safe action."""
-    client = _aclient()
-    if client is None or not await is_enabled(db):
+    if not has_providers() or not await is_enabled(db):
         return None
     sig = f"{stream.id}:{(error or '')[:120]}"
     if sig in _diag_cache:
         return _diag_cache[sig]
-    if not _under_cap():
-        logger.warning("AI daily call cap reached — skipping diagnosis")
-        return None
 
     prompt = (
         f"Stream #{stream.id} '{stream.name}' (quality={stream.quality}, "
@@ -202,7 +311,7 @@ async def diagnose_stream(db: AsyncSession, stream: Stream, error: str, context:
         f"{context[:1000]}"
     )
     try:
-        result = await _structured(client, prompt, _DIAGNOSIS_SCHEMA, _DIAG_SYSTEM)
+        result = await _structured(prompt, _DIAGNOSIS_SCHEMA, _DIAG_SYSTEM)
     except Exception as e:  # never let an AI hiccup affect streaming
         logger.warning("diagnose_stream failed: %s", e)
         return None
@@ -302,18 +411,13 @@ async def _snapshot(db: AsyncSession) -> dict:
 
 
 async def generate_digest(db: AsyncSession) -> str | None:
-    client = _aclient()
-    if client is None or not await is_enabled(db) or not _under_cap():
+    if not has_providers() or not await is_enabled(db):
         return None
     snap = await _snapshot(db)
     system = ("You are the operations assistant for a self-hosted IPTV panel. Write a short daily "
               "health digest for the owner: what's broken, the likely cause, and what to do. "
               "Plain English, scannable, no fluff.")
-    try:
-        text = await _text(client, "Panel state:\n" + json.dumps(snap, default=str), system, max_tokens=1500)
-    except Exception as e:
-        logger.warning("generate_digest failed: %s", e)
-        return None
+    text = await _text("Panel state:\n" + json.dumps(snap, default=str), system, max_tokens=1500)
     if text:
         await _record(db, "digest", "Daily health digest", text, data=snap)
         await db.commit()
@@ -321,23 +425,18 @@ async def generate_digest(db: AsyncSession) -> str | None:
 
 
 async def ops_chat(db: AsyncSession, question: str) -> str:
-    client = _aclient()
-    if client is None:
-        return "AI is not configured. Add ANTHROPIC_API_KEY to the backend .env to enable it."
+    if not has_providers():
+        return "AI is not configured. Add an API key / provider to the backend .env to enable it."
     if not await is_enabled(db):
         return "AI is turned off. Enable it in the AI settings."
-    if not _under_cap():
-        return "Daily AI usage cap reached — try again tomorrow or raise the cap."
     snap = await _snapshot(db)
     system = ("You are the operations assistant for a self-hosted IPTV restreaming panel. Answer the "
               "owner's question using ONLY the live panel state provided. Be specific and concise; if "
               "the data doesn't cover it, say so.")
     prompt = f"Live panel state:\n{json.dumps(snap, default=str)}\n\nQuestion: {question}"
-    try:
-        text = await _text(client, prompt, system, max_tokens=1500)
-    except Exception as e:
-        logger.warning("ops_chat failed: %s", e)
-        return "The AI request failed — check the backend logs."
+    text = await _text(prompt, system, max_tokens=1500)
+    if text is None:
+        return "All AI providers are currently unavailable (or the daily cap was hit). Try again shortly."
     if text:
         await _record(db, "chat", question[:120], text)
         await db.commit()

@@ -7,13 +7,26 @@ import toast from "react-hot-toast";
 import api from "../lib/api";
 import clsx from "clsx";
 
+interface AiProvider {
+  name: string;
+  type: "sdk" | "cli";
+  base_url: string;
+  model: string;
+  available: boolean;
+}
 interface AiStatus {
+  providers: AiProvider[];
+  providers_count: number;
   key_present: boolean;
   enabled: boolean;
   autonomy: "suggest" | "autofix";
   model: string;
   calls_today: number;
   daily_cap: number;
+}
+interface TestResult {
+  name: string; type: string; base_url: string;
+  ok: boolean; latency_ms?: number; reply?: string; error?: string;
 }
 interface AiEvent {
   id: number;
@@ -75,7 +88,14 @@ export default function AIPage() {
     onError: (e: any) => toast.error(e?.response?.data?.detail || "Digest failed"),
   });
 
-  const keyMissing = status && !status.key_present;
+  const [tests, setTests] = useState<TestResult[] | null>(null);
+  const testMut = useMutation({
+    mutationFn: () => api.post("/ai/test").then((r) => r.data.results as TestResult[]),
+    onSuccess: (r) => { setTests(r); qc.invalidateQueries({ queryKey: ["ai-status"] }); },
+    onError: () => toast.error("Test failed"),
+  });
+
+  const keyMissing = status && status.providers_count === 0;
 
   return (
     <div className="p-lg space-y-md max-w-[1100px]">
@@ -139,6 +159,40 @@ export default function AIPage() {
             {status.autonomy === "autofix"
               ? "AI applies reversible fixes (switch source, drop quality, disable dead) and logs them."
               : "AI only diagnoses and recommends — nothing changes without you."}
+          </p>
+        </div>
+      )}
+
+      {/* Providers + failover */}
+      {status && status.providers.length > 0 && (
+        <div className="bg-surface-container-low border border-outline-variant rounded-md p-md">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-body-sm">Providers <span className="text-on-surface-variant font-normal">(failover order)</span></h3>
+            <button className="btn-secondary text-[12px] py-1" onClick={() => testMut.mutate()} disabled={testMut.isPending}>
+              {testMut.isPending ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />}
+              Test all
+            </button>
+          </div>
+          <div className="space-y-1.5">
+            {status.providers.map((p, i) => {
+              const t = tests?.find((r) => r.name === p.name);
+              return (
+                <div key={p.name} className="flex items-center gap-2.5 text-[13px]">
+                  <span className="text-on-surface-variant/60 w-4 text-right">{i + 1}</span>
+                  <span className={clsx("w-2 h-2 rounded-full shrink-0",
+                    t ? (t.ok ? "bg-[#5edc8a]" : "bg-[#ffb4ab]") : (p.available ? "bg-on-surface-variant/40" : "bg-[#f5c86e]"))} />
+                  <span className="font-medium">{p.name}</span>
+                  <span className="text-[10px] font-code-label uppercase border border-outline-variant rounded px-1.5 py-0.5 text-on-surface-variant">{p.type}</span>
+                  <span className="text-on-surface-variant truncate font-mono text-[11px]">{p.base_url}</span>
+                  <span className="ml-auto text-[11px] text-on-surface-variant shrink-0">
+                    {t ? (t.ok ? `OK · ${t.latency_ms}ms` : (t.error || "down")) : (p.available ? "" : "cooling down")}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <p className="text-[11px] text-on-surface-variant mt-2">
+            Calls try providers top-to-bottom; a failed one is skipped for ~2 min and the next is used automatically.
           </p>
         </div>
       )}

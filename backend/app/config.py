@@ -49,13 +49,24 @@ class Settings(BaseSettings):
     ADMIN_IP_WHITELIST: str = ""  # comma separated IPs
     RATE_LIMIT_PER_MINUTE: int = 60
 
-    # AI assistant (Claude). Key lives in .env, never in the repo. Empty = AI off.
+    # AI assistant (Claude). Keys live in .env, never in the repo. Empty = AI off.
     ANTHROPIC_API_KEY: str = ""
     AI_MODEL: str = "claude-opus-4-8"
     # suggest | autofix  — autofix applies only whitelisted reversible actions.
     AI_AUTONOMY: str = "suggest"
     # Hard ceiling on Claude calls per day (cost guard).
     AI_DAILY_CALL_CAP: int = 200
+    # Multiple providers for failover (when one gateway is down, try the next).
+    # JSON list, e.g.:
+    #   [{"name":"aerolink","type":"cli","base_url":"https://capi.aerolink.lat/","api_key":"aero_..."},
+    #    {"name":"anthropic","type":"sdk","api_key":"sk-ant-..."}]
+    # type "sdk" = raw Anthropic API; "cli" = routed through the claude CLI
+    # (for gateways that only accept the Claude Code client). ANTHROPIC_API_KEY,
+    # if set, is appended as a final "sdk" provider.
+    AI_PROVIDERS: str = ""
+    # Path to the claude CLI binary and a writable HOME for it (cli transport).
+    CLAUDE_BIN: str = "claude"
+    AI_CLI_HOME: str = "/opt/iptv-panel/.aihome"
 
     class Config:
         env_file = ".env"

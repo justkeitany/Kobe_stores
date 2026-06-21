@@ -37,14 +37,27 @@ async def _set(db: AsyncSession, key: str, value: str) -> None:
 
 @router.get("/status")
 async def status(db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)):
+    providers = ai._providers()
     return {
-        "key_present": bool(settings.ANTHROPIC_API_KEY),
+        "providers": [{
+            "name": p["name"], "type": p["type"],
+            "base_url": p["base_url"] or "api.anthropic.com",
+            "model": p["model"], "available": ai._available(p["name"]),
+        } for p in providers],
+        "providers_count": len(providers),
+        "key_present": len(providers) > 0,
         "enabled": await ai.is_enabled(db),
         "autonomy": await ai.autonomy(db),
         "model": settings.AI_MODEL,
         "calls_today": ai.calls_today(),
         "daily_cap": settings.AI_DAILY_CALL_CAP,
     }
+
+
+@router.post("/test")
+async def test(_=Depends(get_current_admin)):
+    """Ping every configured provider and report up/down + latency."""
+    return {"results": await ai.test_providers()}
 
 
 @router.put("/settings")
