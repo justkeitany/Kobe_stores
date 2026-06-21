@@ -407,14 +407,18 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
   // Per-channel live status (READY / GEO-BLOCKED / DEAD) + resolved source.
   // Aligned by index to `channels`. Slow for big lists, so the list renders
   // first and these stream in — rows show a "checking…" state until then.
-  const { data: probes, isFetching: probing } = useQuery<ChannelProbe[]>({
+  // The backend returns `skipped` when a stream is playing (probing would open
+  // another upstream connection a connection-limited account can't spare).
+  const { data: probeResp, isFetching: probing } = useQuery<{ skipped: boolean; statuses: ChannelProbe[] }>({
     queryKey: ["playlist-probe", playlist.id],
     queryFn: () =>
       api.get(`/playlists/${playlist.id}/channels/probe`, { timeout: 180_000 })
-        .then((r) => r.data.statuses as ChannelProbe[]),
+        .then((r) => ({ skipped: !!r.data.skipped, statuses: (r.data.statuses ?? []) as ChannelProbe[] })),
     enabled: channels.length > 0,
     staleTime: 60_000,
   });
+  const probes = probeResp?.statuses;
+  const probeSkipped = probeResp?.skipped ?? false;
 
   const { data: streams = [] } = useQuery<Stream[]>({
     queryKey: ["streams"],
@@ -550,6 +554,16 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
           </div>
         )}
 
+        {/* Status checks paused while a stream is playing */}
+        {probeSkipped && (
+          <div className="shrink-0 px-lg pb-sm">
+            <p className="flex items-center gap-1.5 text-[11px] text-on-surface-variant bg-surface-container rounded px-2.5 py-1.5 border border-outline-variant">
+              <AlertCircle size={13} className="shrink-0" />
+              Live status paused — a channel is playing, so checks won't open extra connections to your provider.
+            </p>
+          </div>
+        )}
+
         {/* List */}
         <div className="flex-1 overflow-y-auto px-lg pb-lg">
           {isLoading && (
@@ -592,7 +606,7 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
                     {/* Status */}
                     {added
                       ? <span className="badge-green text-[10px] shrink-0">Added</span>
-                      : <StatusBadge status={probe?.status} probing={probing && !probe} />}
+                      : <StatusBadge status={probe?.status} probing={probing && !probe && !probeSkipped} />}
 
                     {/* Source */}
                     <SourcePill source={probe?.source} />

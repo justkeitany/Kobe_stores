@@ -650,6 +650,16 @@ class FFmpegManager:
         self._lock = asyncio.Lock()
         self._reaper_task: Optional[asyncio.Task] = None
 
+    def active_stream_count(self) -> int:
+        """Streams currently running/starting — i.e. open upstream connections.
+
+        Used by the playlist health features to back off: probing a channel opens
+        another connection to the same provider, and connection-limited accounts
+        (e.g. an M3USe trial) reject it with "multiple connections detected" and
+        can disrupt the live stream. So health checks skip while anything plays.
+        """
+        return sum(1 for sp in self._streams.values() if sp.status in ("running", "starting"))
+
     def _ensure_reaper(self):
         if self._reaper_task is None or self._reaper_task.done():
             self._reaper_task = asyncio.create_task(self._reaper())

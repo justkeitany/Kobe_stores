@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_admin
 from app.database import AsyncSessionLocal, get_db
+from app.ffmpeg_manager import ffmpeg_manager
 from app.models import Playlist
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
@@ -40,12 +41,16 @@ _LOGO_SAMPLE = 6
 # what actually tells you a playlist has gone bad.
 _PROBE_SAMPLE = 6
 _PROBE_TIMEOUT = 10
-# Max concurrent channel probes when the View modal asks for per-channel status.
-_PROBE_CONCURRENCY = 20
+# Max concurrent channel probes. Kept low because each probe opens a connection
+# to the same upstream the player uses; connection-limited accounts (M3USe
+# trial) reject parallel connections with "multiple connections detected".
+_PROBE_CONCURRENCY = 2
 # How often the background sweep re-checks every saved playlist.
 _SWEEP_INTERVAL = 24 * 3600
 # Delay the first sweep so it doesn't compete with app startup.
 _SWEEP_STARTUP_DELAY = 90
+# When the sweep is skipped because a stream is playing, retry this soon.
+_SWEEP_SKIP_RETRY = 5 * 60
 
 
 class PlaylistCreate(BaseModel):
@@ -223,8 +228,14 @@ async def _assess_channels(channels: list[dict]) -> tuple[int, int]:
     idxs = _sample_indices(len(channels), _PROBE_SAMPLE)
     if not idxs:
         return (0, 0)
+    sem = asyncio.Semaphore(_PROBE_CONCURRENCY)
+
+    async def one(client: httpx.AsyncClient, url: str) -> bool:
+        async with sem:
+            return await _probe_channel(client, url)
+
     async with httpx.AsyncClient(follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
-        results = await asyncio.gather(*(_probe_channel(client, channels[i]["url"]) for i in idxs))
+        results = await asyncio.gather(*(one(client, channels[i]["url"]) for i in idxs))
     return (sum(results), len(results))
 
 
@@ -255,6 +266,12 @@ async def _refresh_meta(p: Playlist) -> None:
         p.last_error = "Playlist has no channels"
         return
 
+    # Don't probe channels while a stream is playing — each probe opens another
+    # upstream connection and a connection-limited account would reject the
+    # player's stream ("multiple connections detected"). Keep the prior health.
+    if ffmpeg_manager.active_stream_count() > 0:
+        return
+
     alive, sampled = await _assess_channels(channels)
     p.health = f"{alive}/{sampled} live"
     if alive == 0:
@@ -278,10 +295,20 @@ async def _sweep_all() -> None:
 
 async def playlist_health_loop() -> None:
     """Background task: re-check all playlists daily so dead feeds surface on
-    their own without the operator manually hitting Refresh."""
+    their own without the operator manually hitting Refresh.
+
+    Skips while anything is playing — the sweep probes channels, which opens
+    upstream connections that a connection-limited account can't spare without
+    disrupting the live stream. When it skips it retries in a few minutes rather
+    than waiting the full day.
+    """
     await asyncio.sleep(_SWEEP_STARTUP_DELAY)
     while True:
         try:
+            if ffmpeg_manager.active_stream_count() > 0:
+                logger.info("Playlist health sweep skipped — a stream is active")
+                await asyncio.sleep(_SWEEP_SKIP_RETRY)
+                continue
             await _sweep_all()
         except asyncio.CancelledError:
             break
@@ -371,6 +398,14 @@ async def probe_playlist_channels(
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(404, "Playlist not found")
+
+    # Don't probe while a stream is playing: each probe opens another upstream
+    # connection, and a connection-limited account (M3USe trial) would reject the
+    # player's own stream with "multiple connections detected". Signal the UI to
+    # skip live status rather than disrupt playback.
+    if ffmpeg_manager.active_stream_count() > 0:
+        return {"playlist_id": p.id, "skipped": True, "statuses": []}
+
     try:
         channels = _parse_m3u(await _fetch_m3u(p.url))
     except httpx.HTTPError as exc:
@@ -385,7 +420,7 @@ async def probe_playlist_channels(
 
     async with httpx.AsyncClient(follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
         statuses = await asyncio.gather(*(one(c["url"]) for c in channels))
-    return {"playlist_id": p.id, "statuses": statuses}
+    return {"playlist_id": p.id, "skipped": False, "statuses": statuses}
 
 
 @router.delete("/{playlist_id}", status_code=204)
