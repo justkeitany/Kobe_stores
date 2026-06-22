@@ -1,11 +1,13 @@
 import asyncio
+import difflib
 import logging
+import re
 from datetime import datetime, timezone, timedelta
 from typing import Optional
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from pydantic import BaseModel
-from sqlalchemy import select, delete
+from sqlalchemy import select, delete, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from lxml import etree
 from app.auth import get_current_admin
@@ -241,6 +243,137 @@ async def map_stream_to_epg(
     stream.epg_channel_id = data.epg_channel_id
     await db.commit()
     return {"ok": True}
+
+
+# ── Auto-mapping ────────────────────────────────────────────────────────────
+# Feed channel IDs look like "5 Action.uk", "ABC.ca", "Acapulco Shore Pluto TV.us"
+# — a display name plus a country suffix, with many near-duplicate variants
+# (HD, +1, casing, spacing). We normalise both sides to a comparable key.
+
+_COUNTRY_SUFFIX = re.compile(r"\.[a-z]{2,3}$")
+# Quality / feed-region / provider noise that shouldn't affect identity.
+_NOISE = re.compile(
+    r"\b("
+    r"hd|sd|fhd|uhd|4k|"
+    r"east|eastern|west|western|pacific|atlantic|central|mountain|feed|"
+    r"plus\s*1|"
+    r"pluto\s*tv|pluto|samsung\s*tv\s*plus|samsung|plex|roku|tubi|stirr|xumo|"
+    r"channel|network|tv"
+    r")\b"
+)
+
+
+def _norm(name: str, drop_noise: bool) -> str:
+    """Normalise a channel name/id to a comparison key."""
+    s = name.lower()
+    s = _COUNTRY_SUFFIX.sub("", s)          # drop ".uk" / ".ca" / ".us" suffix
+    s = s.replace("&", " and ")
+    s = re.sub(r"\+\s*1", " plus1 ", s)      # keep +1 as a distinct token first
+    if drop_noise:
+        s = s.replace("plus1", " ")
+        s = _NOISE.sub(" ", s)
+    s = re.sub(r"[^a-z0-9]+", " ", s)        # strip punctuation
+    return " ".join(s.split())
+
+
+class AutoMapResult(BaseModel):
+    total_streams: int
+    considered: int
+    matched: int
+    applied: bool
+    samples: list[dict]
+    unmatched: list[str]
+
+
+@router.post("/automap", response_model=AutoMapResult)
+async def automap(
+    only_unmapped: bool = True,
+    dry_run: bool = False,
+    cutoff: float = 0.9,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_admin),
+):
+    """Best-effort link streams to EPG channel IDs by matching names.
+
+    For each stream we try, in order: exact normalised match, exact match with
+    quality/provider noise stripped, then a fuzzy match above `cutoff`. When
+    several feed IDs collapse to the same key we keep the one with the most
+    programmes (the fullest guide). Conservative by design — anything we're not
+    confident about is left unmapped so it can be fixed by hand.
+    """
+    # Programme count per feed channel_id — used to break ties between variants.
+    counts = dict((await db.execute(
+        select(EpgData.channel_id, func.count()).group_by(EpgData.channel_id)
+    )).all())
+
+    # Build normalised indexes, preferring the id with the most programmes.
+    full_index: dict[str, str] = {}
+    core_index: dict[str, str] = {}
+
+    def _offer(index: dict[str, str], key: str, cid: str):
+        if not key:
+            return
+        cur = index.get(key)
+        if cur is None or counts.get(cid, 0) > counts.get(cur, 0):
+            index[key] = cid
+
+    for cid in counts:
+        _offer(full_index, _norm(cid, drop_noise=False), cid)
+        _offer(core_index, _norm(cid, drop_noise=True), cid)
+
+    full_keys = list(full_index.keys())
+
+    # Candidate streams.
+    q = select(Stream)
+    if only_unmapped:
+        q = q.where((Stream.epg_channel_id.is_(None)) | (Stream.epg_channel_id == ""))
+    streams = (await db.execute(q)).scalars().all()
+
+    matched = 0
+    samples: list[dict] = []
+    unmatched: list[str] = []
+
+    for s in streams:
+        nf = _norm(s.name, drop_noise=False)
+        nc = _norm(s.name, drop_noise=True)
+        cid = None
+        method = None
+
+        if nf in full_index:
+            cid, method = full_index[nf], "exact"
+        elif nc in core_index:
+            cid, method = core_index[nc], "core"
+        else:
+            near = difflib.get_close_matches(nf, full_keys, n=1, cutoff=cutoff)
+            if near:
+                cid, method = full_index[near[0]], "fuzzy"
+
+        if cid is None:
+            unmatched.append(s.name)
+            continue
+
+        matched += 1
+        if not dry_run:
+            s.epg_channel_id = cid
+        if len(samples) < 60:
+            samples.append({
+                "stream": s.name,
+                "epg_channel_id": cid,
+                "method": method,
+                "programmes": counts.get(cid, 0),
+            })
+
+    if not dry_run and matched:
+        await db.commit()
+
+    return AutoMapResult(
+        total_streams=len(streams) if only_unmapped else len(streams),
+        considered=len(streams),
+        matched=matched,
+        applied=(not dry_run),
+        samples=samples,
+        unmatched=unmatched[:200],
+    )
 
 
 @router.get("/now/{channel_id}")
