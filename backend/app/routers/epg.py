@@ -251,12 +251,16 @@ async def map_stream_to_epg(
 # (HD, +1, casing, spacing). We normalise both sides to a comparable key.
 
 _COUNTRY_SUFFIX = re.compile(r"\.[a-z]{2,3}$")
-# Quality / feed-region / provider noise that shouldn't affect identity.
+# Quality / provider noise that shouldn't affect channel identity. NOTE we
+# deliberately strip "east/eastern" (the default schedule most US streams want,
+# and how .ca feeds label the ET feed) and "feed", but NOT pacific/west/central/
+# mountain — those are genuinely different timezones and must stay distinct so
+# an Eastern stream never collapses onto a Pacific feed. "+1" (timeshift) is
+# likewise kept as a token so base channels never match their +1 variant.
 _NOISE = re.compile(
     r"\b("
     r"hd|sd|fhd|uhd|4k|"
-    r"east|eastern|west|western|pacific|atlantic|central|mountain|feed|"
-    r"plus\s*1|"
+    r"east|eastern|feed|"
     r"pluto\s*tv|pluto|samsung\s*tv\s*plus|samsung|plex|roku|tubi|stirr|xumo|"
     r"channel|network|tv"
     r")\b"
@@ -268,9 +272,8 @@ def _norm(name: str, drop_noise: bool) -> str:
     s = name.lower()
     s = _COUNTRY_SUFFIX.sub("", s)          # drop ".uk" / ".ca" / ".us" suffix
     s = s.replace("&", " and ")
-    s = re.sub(r"\+\s*1", " plus1 ", s)      # keep +1 as a distinct token first
+    s = re.sub(r"\+\s*1", " plus1 ", s)      # timeshift kept as a token in BOTH forms
     if drop_noise:
-        s = s.replace("plus1", " ")
         s = _NOISE.sub(" ", s)
     s = re.sub(r"[^a-z0-9]+", " ", s)        # strip punctuation
     return " ".join(s.split())
@@ -289,7 +292,7 @@ class AutoMapResult(BaseModel):
 async def automap(
     only_unmapped: bool = True,
     dry_run: bool = False,
-    cutoff: float = 0.9,
+    cutoff: float = 0.92,
     db: AsyncSession = Depends(get_db),
     _=Depends(get_current_admin),
 ):
