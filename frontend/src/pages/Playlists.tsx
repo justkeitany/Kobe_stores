@@ -6,6 +6,7 @@ import {
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
+import { useInfiniteRender } from "../hooks/useInfiniteRender";
 import clsx from "clsx";
 
 interface Playlist {
@@ -394,7 +395,6 @@ interface Category { id: number; name: string; }
 function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () => void }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
 
@@ -443,12 +443,13 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
       .filter(({ c }) => !q || c.name.toLowerCase().includes(q));
   }, [channels, search]);
 
-  // Paginate the rendered rows — a big playlist (10k+ channels) renders far
-  // too many DOM nodes to scroll smoothly if shown all at once.
-  const PAGE = 60;
-  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
-  const cur = Math.min(page, pages - 1);
-  const shown = rows.slice(cur * PAGE, cur * PAGE + PAGE);
+  // Render incrementally — a big playlist (10k+ channels) mounts far too many
+  // DOM nodes to scroll smoothly if shown all at once. Grow the visible slice
+  // as the user scrolls; reset to the top when the search changes.
+  const { visible: shown, hasMore, sentinelRef } = useInfiniteRender(rows, {
+    step: 60,
+    resetKey: search,
+  });
 
   const selectableVisible = rows.filter(({ c }) => !isImported(c));
 
@@ -556,7 +557,7 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
                 className="input pl-10"
                 placeholder="Search channels…"
                 value={search}
-                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
+                onChange={(e) => setSearch(e.target.value)}
               />
             </div>
           </div>
@@ -623,14 +624,17 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
               })}
             </div>
           )}
+          {!isLoading && !isError && hasMore && (
+            <div ref={sentinelRef} className="flex items-center justify-center py-5 text-on-surface-variant">
+              <Loader2 size={18} className="animate-spin" />
+            </div>
+          )}
         </div>
 
-        {/* Pagination */}
-        {!isLoading && !isError && pages > 1 && (
-          <div className="shrink-0 flex items-center justify-center gap-3 px-lg py-sm border-t border-outline-variant text-body-sm">
-            <button className="btn-secondary py-1" onClick={() => setPage(Math.max(0, cur - 1))} disabled={cur === 0}>Prev</button>
-            <span className="text-on-surface-variant">Page {cur + 1} of {pages} · {rows.length} channels</span>
-            <button className="btn-secondary py-1" onClick={() => setPage(Math.min(pages - 1, cur + 1))} disabled={cur >= pages - 1}>Next</button>
+        {/* Count */}
+        {!isLoading && !isError && rows.length > 0 && (
+          <div className="shrink-0 flex items-center justify-center px-lg py-sm border-t border-outline-variant text-body-sm text-on-surface-variant">
+            Showing {shown.length} of {rows.length} channels
           </div>
         )}
       </div>
@@ -700,6 +704,8 @@ function ChannelLogo({ logo, name, size = 48 }: { logo: string; name: string; si
       src={logo}
       alt=""
       onError={() => setFailed(true)}
+      loading="lazy"
+      decoding="async"
       className="shrink-0 object-contain border border-outline-variant rounded-md p-1 bg-white"
       style={box}
     />

@@ -4,6 +4,7 @@ import { Loader2, RefreshCw, AlertCircle, ExternalLink, Tv } from "lucide-react"
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
+import { useInfiniteRender } from "../hooks/useInfiniteRender";
 import clsx from "clsx";
 
 interface Channel {
@@ -18,8 +19,11 @@ interface Channel {
   url?: string;
 }
 
-const PAGE = 24;
 type Health = "online" | "offline" | "geo" | "checking";
+
+// Surface what viewers can actually watch first — online, then still-checking,
+// then geo-blocked, then dead.
+const HEALTH_ORDER: Record<Health, number> = { online: 0, checking: 1, geo: 2, offline: 3 };
 
 const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
   online:   { label: "Online",         cls: "bg-[#1f3a2a] text-[#5edc8a]", dot: "bg-[#5edc8a]" },
@@ -31,7 +35,6 @@ const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
 export default function Channels() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(0);
   const [working, setWorking] = useState<Set<string>>(new Set());
   const [probed, setProbed] = useState<Record<string, Health>>({});
 
@@ -53,12 +56,18 @@ export default function Channels() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return q ? channels.filter((c) => c.name.toLowerCase().includes(q)) : channels;
-  }, [channels, search]);
+    const list = q ? channels.filter((c) => c.name.toLowerCase().includes(q)) : channels.slice();
+    // Stable sort: working channels float to the top, original order kept within a tier.
+    return list
+      .map((c, i) => ({ c, i }))
+      .sort((a, b) => HEALTH_ORDER[healthOf(a.c)] - HEALTH_ORDER[healthOf(b.c)] || a.i - b.i)
+      .map((x) => x.c);
+  }, [channels, search, probed]);
 
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE));
-  const cur = Math.min(page, pages - 1);
-  const shown = filtered.slice(cur * PAGE, cur * PAGE + PAGE);
+  const { visible: shown, hasMore, sentinelRef } = useInfiniteRender(filtered, {
+    step: 48,
+    resetKey: search,
+  });
 
   async function reportIssue(c: Channel) {
     setWorking((w) => new Set(w).add(c.key));
@@ -109,7 +118,7 @@ export default function Channels() {
         <div className="relative w-full sm:w-72">
           <MIcon name="search" size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-on-surface-variant pointer-events-none" />
           <input className="input pl-10" placeholder="Search channels…" value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(0); }} />
+            onChange={(e) => setSearch(e.target.value)} />
         </div>
       </div>
 
@@ -161,11 +170,9 @@ export default function Channels() {
             })}
           </div>
 
-          {pages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-2 text-body-sm">
-              <button className="btn-secondary py-1" onClick={() => setPage(Math.max(0, cur - 1))} disabled={cur === 0}>Prev</button>
-              <span className="text-on-surface-variant">Page {cur + 1} of {pages}</span>
-              <button className="btn-secondary py-1" onClick={() => setPage(Math.min(pages - 1, cur + 1))} disabled={cur >= pages - 1}>Next</button>
+          {hasMore && (
+            <div ref={sentinelRef} className="flex items-center justify-center py-6 text-on-surface-variant">
+              <Loader2 size={18} className="animate-spin" />
             </div>
           )}
         </>
@@ -184,7 +191,7 @@ function Logo({ logo }: { logo?: string | null }) {
     );
   }
   return (
-    <img src={logo} alt="" onError={() => setFailed(true)}
+    <img src={logo} alt="" onError={() => setFailed(true)} loading="lazy" decoding="async"
       className="w-16 h-16 rounded-lg object-contain border border-outline-variant bg-white p-1" />
   );
 }
