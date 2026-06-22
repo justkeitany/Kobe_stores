@@ -347,9 +347,14 @@ async def automap(
         elif nc in core_index:
             cid, method = core_index[nc], "core"
         else:
-            near = difflib.get_close_matches(nf, full_keys, n=1, cutoff=cutoff)
-            if near:
-                cid, method = full_index[near[0]], "fuzzy"
+            # Fuzzy, but only accept a candidate whose numbers match exactly —
+            # otherwise "ITV+1"~"ITV4 +1" or "Fox Sports"~"Fox Sports 2" sneak
+            # through. "Film 4"~"Film4" still passes (same number set).
+            want = set(re.findall(r"\d+", nf))
+            for cand in difflib.get_close_matches(nf, full_keys, n=5, cutoff=cutoff):
+                if set(re.findall(r"\d+", cand)) == want:
+                    cid, method = full_index[cand], "fuzzy"
+                    break
 
         if cid is None:
             unmatched.append(s.name)
