@@ -240,7 +240,47 @@ async def _assess_channels(channels: list[dict]) -> tuple[int, int]:
     return (sum(results), len(results))
 
 
-async def _refresh_meta(p: Playlist) -> None:
+# Playlists whose name starts with this share a dedupe group: a channel URL is
+# kept only in the lowest-id (earliest-created, most specific) member and
+# dropped from the others, so the same stream isn't listed/imported twice.
+_DEDUPE_GROUP_PREFIX = "Kobe Store"
+
+
+async def _dedupe_exclude_urls(db: AsyncSession, p: Playlist) -> set[str]:
+    """URLs owned by a higher-priority member of this playlist's dedupe group.
+
+    Membership is by name prefix; priority is by id (lower id wins). Returns an
+    empty set for playlists outside the group, so nothing else is affected.
+    """
+    if not (p.name or "").startswith(_DEDUPE_GROUP_PREFIX):
+        return set()
+    others = (await db.execute(
+        select(Playlist).where(
+            Playlist.name.like(f"{_DEDUPE_GROUP_PREFIX}%"),
+            Playlist.id < p.id,
+        )
+    )).scalars().all()
+    urls: set[str] = set()
+    for o in others:
+        try:
+            for c in _parse_m3u(await _fetch_m3u(o.url)):
+                urls.add(c["url"])
+        except (httpx.HTTPError, ValueError):
+            continue  # a sibling being down shouldn't break this playlist
+    return urls
+
+
+async def _channels_for(db: AsyncSession, p: Playlist) -> list[dict]:
+    """Parse a playlist's feed and drop channels claimed by higher-priority
+    siblings in its dedupe group."""
+    channels = _parse_m3u(await _fetch_m3u(p.url))
+    exclude = await _dedupe_exclude_urls(db, p)
+    if exclude:
+        channels = [c for c in channels if c["url"] not in exclude]
+    return channels
+
+
+async def _refresh_meta(p: Playlist, db: AsyncSession) -> None:
     """Re-fetch the feed, refresh cached card metadata, and assess channel health.
 
     Network/parse failures are recorded on ``last_error`` rather than raised, so
@@ -252,7 +292,7 @@ async def _refresh_meta(p: Playlist) -> None:
     """
     p.last_refreshed = datetime.now(timezone.utc)
     try:
-        channels = _parse_m3u(await _fetch_m3u(p.url))
+        channels = await _channels_for(db, p)
     except (httpx.HTTPError, ValueError) as exc:
         logger.warning("playlist %s refresh failed: %s", p.url, exc)
         p.last_error = "Could not fetch playlist (it may be down or invalid)."
@@ -293,7 +333,7 @@ async def _sweep_all() -> None:
     async with AsyncSessionLocal() as db:
         playlists = (await db.execute(select(Playlist))).scalars().all()
         for p in playlists:
-            await _refresh_meta(p)
+            await _refresh_meta(p, db)
             await db.commit()
         if playlists:
             logger.info("Playlist health sweep refreshed %d playlists", len(playlists))
@@ -346,8 +386,9 @@ async def create_playlist(
         raise HTTPException(400, "URL must start with http:// or https://")
 
     p = Playlist(name=name, url=url, description=(data.description or "").strip() or None)
-    await _refresh_meta(p)
     db.add(p)
+    await db.flush()  # assign an id so dedupe-group priority (lower id wins) is correct
+    await _refresh_meta(p, db)
     await db.commit()
     await db.refresh(p)
     return _serialize(p)
@@ -363,7 +404,7 @@ async def refresh_playlist(
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(404, "Playlist not found")
-    await _refresh_meta(p)
+    await _refresh_meta(p, db)
     await db.commit()
     await db.refresh(p)
     return _serialize(p)
@@ -380,7 +421,7 @@ async def list_playlist_channels(
     if not p:
         raise HTTPException(404, "Playlist not found")
     try:
-        channels = _parse_m3u(await _fetch_m3u(p.url))
+        channels = await _channels_for(db, p)
     except httpx.HTTPError as exc:
         logger.warning("playlist %s channel fetch failed: %s", p.url, exc)
         raise HTTPException(502, "Could not fetch playlist channels")
@@ -413,7 +454,7 @@ async def probe_playlist_channels(
         return {"playlist_id": p.id, "skipped": True, "statuses": []}
 
     try:
-        channels = _parse_m3u(await _fetch_m3u(p.url))
+        channels = await _channels_for(db, p)
     except httpx.HTTPError as exc:
         logger.warning("playlist %s probe fetch failed: %s", p.url, exc)
         raise HTTPException(502, "Could not fetch playlist channels")

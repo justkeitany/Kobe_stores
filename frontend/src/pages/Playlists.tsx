@@ -394,6 +394,7 @@ interface Category { id: number; name: string; }
 function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () => void }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
 
@@ -441,6 +442,13 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
       .map((c, i) => ({ c, i }))
       .filter(({ c }) => !q || c.name.toLowerCase().includes(q));
   }, [channels, search]);
+
+  // Paginate the rendered rows — a big playlist (10k+ channels) renders far
+  // too many DOM nodes to scroll smoothly if shown all at once.
+  const PAGE = 60;
+  const pages = Math.max(1, Math.ceil(rows.length / PAGE));
+  const cur = Math.min(page, pages - 1);
+  const shown = rows.slice(cur * PAGE, cur * PAGE + PAGE);
 
   const selectableVisible = rows.filter(({ c }) => !isImported(c));
 
@@ -548,7 +556,7 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
                 className="input pl-10"
                 placeholder="Search channels…"
                 value={search}
-                onChange={(e) => setSearch(e.target.value)}
+                onChange={(e) => { setSearch(e.target.value); setPage(0); }}
               />
             </div>
           </div>
@@ -577,7 +585,7 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
           )}
           {!isLoading && !isError && rows.length > 0 && (
             <div className="border border-outline-variant rounded-lg divide-y divide-outline-variant overflow-hidden">
-              {rows.map(({ c, i }) => {
+              {shown.map(({ c, i }) => {
                 const added = isImported(c);
                 const checked = selected.has(i);
                 const probe = probes?.[i];
@@ -616,6 +624,15 @@ function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () 
             </div>
           )}
         </div>
+
+        {/* Pagination */}
+        {!isLoading && !isError && pages > 1 && (
+          <div className="shrink-0 flex items-center justify-center gap-3 px-lg py-sm border-t border-outline-variant text-body-sm">
+            <button className="btn-secondary py-1" onClick={() => setPage(Math.max(0, cur - 1))} disabled={cur === 0}>Prev</button>
+            <span className="text-on-surface-variant">Page {cur + 1} of {pages} · {rows.length} channels</span>
+            <button className="btn-secondary py-1" onClick={() => setPage(Math.min(pages - 1, cur + 1))} disabled={cur >= pages - 1}>Next</button>
+          </div>
+        )}
       </div>
     </div>
   );
