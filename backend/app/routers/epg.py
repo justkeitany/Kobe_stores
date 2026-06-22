@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional
 import aiohttp
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
@@ -120,6 +120,40 @@ async def fetch_and_parse_epg(source_id: int, url: str):
 
     except Exception as e:
         logger.error(f"EPG fetch failed for source {source_id}: {e}")
+
+
+async def epg_loop() -> None:
+    """Re-fetch each enabled EPG source once its update_interval_hours elapses.
+
+    XMLTV feeds only carry a few days of programmes, so a source must be
+    refreshed periodically or the guide goes stale. We tick every 10 minutes
+    and refresh any source whose last_updated is missing or older than its
+    configured interval.
+    """
+    TICK = 600  # seconds between due-checks
+    while True:
+        try:
+            now = datetime.now(timezone.utc)
+            due: list[tuple[int, str]] = []
+            async with AsyncSessionLocal() as db:
+                result = await db.execute(
+                    select(EpgSource).where(EpgSource.is_enabled == True)  # noqa: E712
+                )
+                for src in result.scalars().all():
+                    interval = timedelta(hours=max(1, src.update_interval_hours or 24))
+                    last = src.last_updated
+                    if last is not None and last.tzinfo is None:
+                        last = last.replace(tzinfo=timezone.utc)
+                    if last is None or now - last >= interval:
+                        due.append((src.id, src.url))
+
+            for sid, url in due:
+                await fetch_and_parse_epg(sid, url)
+        except asyncio.CancelledError:
+            break
+        except Exception as e:  # never let the loop die on a transient error
+            logger.error("EPG refresh loop failed: %s", e)
+        await asyncio.sleep(TICK)
 
 
 @router.get("/sources")

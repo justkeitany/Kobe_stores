@@ -52,6 +52,9 @@ async def lifespan(app: FastAPI):
     ai_task = asyncio.create_task(digest_loop())
     ai_monitor_task = asyncio.create_task(monitor_loop())
 
+    from app.routers.epg import epg_loop
+    epg_task = asyncio.create_task(epg_loop())
+
     yield
     # Shutdown
     logger.info("Shutting down...")
@@ -59,6 +62,7 @@ async def lifespan(app: FastAPI):
     playlist_task.cancel()
     ai_task.cancel()
     ai_monitor_task.cancel()
+    epg_task.cancel()
     from app.ffmpeg_manager import ffmpeg_manager
     await ffmpeg_manager.stop_all()
     await close_redis()
