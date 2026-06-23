@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, RefreshCw, AlertCircle, ExternalLink, Tv, Play } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle, Tv, Play } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";

@@ -27,7 +27,7 @@ export default function Player({ url, title }: { url: string; title?: string }) 
   const [currentLevel, setCurrentLevel] = useState(-1); // -1 = auto
   const [showQuality, setShowQuality] = useState(false);
   const [showControls, setShowControls] = useState(true);
-  const hideTimer = useRef<ReturnType<typeof setTimeout>>();
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Initialize HLS
   useEffect(() => {
