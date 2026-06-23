@@ -440,7 +440,10 @@ async def get_playlist(
     return Response(
         content=content,
         media_type="audio/x-mpegurl",
-        headers={"Content-Disposition": f'attachment; filename="playlist.m3u"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="playlist.m3u"',
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
     )
 
 
