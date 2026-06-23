@@ -135,36 +135,65 @@ async def probe_channel(data: ProbeIn, db: AsyncSession = Depends(get_db), _=Dep
 
 
 # ── 15-minute diagnostic sweep ────────────────────────────────────────────
-# Probes every imported stream and updates its ChannelHealth so the Channels
-# page always has fresh online/offline/geo/dead status without the AI.
+# Probes all imported streams + previously-probed playlist URLs every 15 min.
+# Fast HTTP-only probe (no ffprobe/FFmpeg) — full diagnostics available via
+# the per-channel Diagnose button.
 
 async def channels_diag_loop() -> None:
-    """Lightweight sweep: probes every imported stream every 15 min."""
+    """Fast sweep: probes all known URLs every 15 min at 50 concurrent."""
     import asyncio, httpx
 
     while True:
         try:
             from app.database import AsyncSessionLocal
-            from app.models import Stream, ChannelHealth
+            from app.models import Stream, ChannelHealth, Playlist
             from app.routers.playlists import _probe_status
-            from sqlalchemy import select
+            from sqlalchemy import select, func
             from datetime import datetime, timezone
 
             async with AsyncSessionLocal() as db:
+                # All imported stream URLs
                 streams = (await db.execute(
                     select(Stream.id, Stream.name, Stream.stream_url)
                     .where(Stream.is_enabled == True)
                 )).all()
-                if not streams:
-                    await asyncio.sleep(900)
-                    continue
 
-                sem = asyncio.Semaphore(20)
+                # All previously-probed playlist channel URLs
+                probed = (await db.execute(
+                    select(ChannelHealth.url)
+                )).scalars().all()
+
+                # Also add a rotating sample of unprobed playlist channels
+                pls = (await db.execute(select(Playlist))).scalars().all()
+                unprobed_sample = []
+                for pl in pls:
+                    if not pl.channels:
+                        continue
+                    from app.routers.playlists import _sample_indices
+                    idxs = _sample_indices(len(pl.channels), 10)  # 10 per playlist
+                    for i in idxs:
+                        url = pl.channels[i].get("url") if i < len(pl.channels) else None
+                        if url and url not in probed:
+                            unprobed_sample.append((0, pl.channels[i].get("name", "?"), url))
+
+                all_targets = list(streams) + [(0, "", u) for u in probed] + unprobed_sample
+                # Dedup by URL
+                seen_urls = set()
+                unique_targets = []
+                for sid, name, url in all_targets:
+                    if url and url not in seen_urls:
+                        seen_urls.add(url)
+                        unique_targets.append((sid, name, url))
+
+                logger.info("Diag sweep: %d targets (%d streams + %d probed + %d new)",
+                           len(unique_targets), len(streams), len(probed), len(unprobed_sample))
+
+                sem = asyncio.Semaphore(50)
                 async def probe_one(sid, name, url):
                     async with sem:
                         try:
                             async with httpx.AsyncClient(
-                                timeout=15, follow_redirects=True,
+                                timeout=8, follow_redirects=True,
                                 headers={"User-Agent": "Mozilla/5.0"}
                             ) as client:
                                 r = await _probe_status(client, url)
@@ -173,7 +202,7 @@ async def channels_diag_loop() -> None:
                         except Exception:
                             return (sid, name, url, "dead")
 
-                tasks = [probe_one(sid, name, url) for sid, name, url in streams]
+                tasks = [probe_one(sid, name, url) for sid, name, url in unique_targets]
                 results = await asyncio.gather(*tasks)
                 now = datetime.now(timezone.utc)
                 counts = {"online": 0, "offline": 0, "geo": 0, "dead": 0}
@@ -190,7 +219,7 @@ async def channels_diag_loop() -> None:
                         db.add(ChannelHealth(url=url, status=status, last_checked=now))
 
                 await db.commit()
-                logger.info("Diag sweep: %s", " ".join(f"{k}={v}" for k, v in counts.items()))
+                logger.info("Diag sweep done: %s", " ".join(f"{k}={v}" for k, v in sorted(counts.items())))
 
         except asyncio.CancelledError:
             break
