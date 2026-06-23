@@ -147,9 +147,10 @@ export default function WatchPage() {
     else document.exitFullscreen().catch(() => {});
   };
 
-  const seek = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const seek = (e: React.MouseEvent | React.TouchEvent | React.ChangeEvent<HTMLInputElement>) => {
     const v = videoRef.current; if (!v) return;
-    const t = parseFloat(e.target.value);
+    const target = e.target as HTMLInputElement;
+    const t = parseFloat(target.value);
     v.currentTime = t;
     setCurrentTime(t);
     setSeeking(false);
