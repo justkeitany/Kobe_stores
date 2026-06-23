@@ -598,7 +598,8 @@ async def serve_live(
     # when it stops polling, the manager's reaper stops FFmpeg after the idle
     # window (long enough that a rebuffering player isn't killed mid-stall).
     sp = await ffmpeg_manager.start_stream(
-        stream_id, [r.url for r in refs], stream.name, client_key, stream.quality
+        stream_id, [r.url for r in refs], stream.name, client_key, stream.quality,
+        proxy_country=stream.proxy_country,
     )
 
     no_cache = {"Cache-Control": "no-cache, no-store, must-revalidate"}

@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 from typing import AsyncIterator, Dict, Optional
 from app.config import settings
 from app.pluto_stream import resolve as resolve_pluto_url
+from app import proxy_resolver
 
 try:
     import psutil  # CPU guardrail for ABR transcoding
@@ -320,9 +321,15 @@ transcode_governor = TranscodeGovernor()
 
 
 class StreamProcess:
-    def __init__(self, stream_id: int, sources: list[str], stream_name: str, quality: str = "auto"):
+    def __init__(self, stream_id: int, sources: list[str], stream_name: str,
+                 quality: str = "auto", proxy_country: Optional[str] = None):
         self.stream_id = stream_id
         self.quality = quality if quality in VALID_QUALITIES else "auto"
+        # ISO country code for proxy-assisted playlist resolution (None = off).
+        self.proxy_country = proxy_country
+        # FFmpeg input URL + proxy args, computed (async) once per start().
+        self._resolved_input: str = ""
+        self._pargs: list[str] = []
         # Adaptive HLS (one shared multi-variant ladder, player-driven). Decided
         # at first start(): only when quality is "auto" and the governor allows.
         self.multivariant: bool = False
@@ -417,7 +424,7 @@ class StreamProcess:
             "-loglevel", "warning",
             *FFMPEG_INPUT_BUFFER_ARGS,
             *FFMPEG_HTTP_RESILIENCE_ARGS,
-            "-i", resolve_pluto_url(self.current_url),
+            "-i", self._resolved_input,
             "-filter_complex",
             "[0:v]split=2[a][b];[a]scale=-2:720[v720o];[b]scale=-2:480[v480o]",
             # v0 — source passthrough (no transcode)
@@ -464,7 +471,7 @@ class StreamProcess:
             "-loglevel", "warning",
             *FFMPEG_INPUT_BUFFER_ARGS,
             *FFMPEG_HTTP_RESILIENCE_ARGS,
-            "-i", resolve_pluto_url(self.current_url),
+            "-i", self._resolved_input,
             "-vn",
             "-c:a", "aac", "-b:a", "128k", "-ac", "2",
             "-flush_packets", "1",
@@ -495,9 +502,11 @@ class StreamProcess:
             # applied to the output and did nothing for a dropping source).
             *FFMPEG_INPUT_BUFFER_ARGS,
             *FFMPEG_HTTP_RESILIENCE_ARGS,
+            # Proxy headers for 403-fallback streams (empty otherwise).
+            *self._pargs,
             # Pluto channel URLs are rewritten to the jmp2.uk resolver, which
             # redirects to a working stream. Non-Pluto URLs pass through.
-            "-i", resolve_pluto_url(self.current_url),
+            "-i", self._resolved_input,
             # Stream copy ('auto') or transcode down to the selected quality tier.
             *_codec_args(self.quality),
             # HLS output — flush each packet and hold a deeper segment window so
@@ -519,12 +528,22 @@ class StreamProcess:
                 return True
             try:
                 self.status = "starting"
+                # Resolve the FFmpeg input once per start: Pluto rewrite + (for
+                # proxy_country streams) fetch the playlist via the regional proxy
+                # and use the resolved URL. _pargs is non-empty only in 403
+                # fallback, where FFmpeg pulls everything through the proxy.
+                self._resolved_input = await proxy_resolver.resolve_input(
+                    self.current_url, self.stream_id, self.proxy_country
+                )
+                self._pargs = await proxy_resolver.proxy_args(
+                    self.stream_id, self.proxy_country
+                )
                 # Adaptive HLS when quality is auto and the governor has room;
                 # otherwise a single stream (passthrough for auto, transcode for
                 # an explicit tier). Decided once, kept across crash-restarts.
                 # Detect audio-only sources (radio/Icecast) so they never hit the
                 # video ladder, which would crash with rc=1. Probed once, cached.
-                self.audio_only = not await _source_has_video(self.current_url)
+                self.audio_only = not await _source_has_video(self._resolved_input)
                 if self.quality == "auto" and not self._holds_mv and not self.audio_only:
                     transcode_governor.start()
                     if await transcode_governor.try_acquire_mv():
@@ -596,14 +615,25 @@ class StreamProcess:
 
                 if self.process and self.process.returncode is not None:
                     returncode = self.process.returncode
+                    err_text = ""
                     if self.process.stderr:
                         try:
                             stderr = await asyncio.wait_for(
                                 self.process.stderr.read(2048), timeout=1
                             )
                             self.last_error = stderr.decode(errors="replace")
+                            err_text = self.last_error
                         except asyncio.TimeoutError:
                             pass
+
+                    # 403 on a segment CDN that IS geo-gated — promote to
+                    # full-proxy routing so the next respawn pulls everything
+                    # through the proxy. One-shot: fallback expires in 1 h.
+                    if self.proxy_country and "403" in err_text and \
+                       "Forbidden" in err_text and not self._pargs:
+                        asyncio.create_task(
+                            proxy_resolver.trip_fallback(self.stream_id)
+                        )
 
                     logger.warning(
                         f"Stream {self.stream_id} crashed (rc={returncode}), "
@@ -695,27 +725,31 @@ class FFmpegManager:
                 await asyncio.sleep(2)
 
     async def get_or_create(
-        self, stream_id: int, sources: list[str], stream_name: str, quality: str = "auto"
+        self, stream_id: int, sources: list[str], stream_name: str,
+        quality: str = "auto", proxy_country: Optional[str] = None,
     ) -> StreamProcess:
         async with self._lock:
             sp = self._streams.get(stream_id)
             if sp is None:
-                sp = StreamProcess(stream_id, sources, stream_name, quality)
+                sp = StreamProcess(stream_id, sources, stream_name, quality, proxy_country)
                 self._streams[stream_id] = sp
             elif sp.status not in ("running", "starting"):
-                # Pick up edited source pools / quality the next time it (re)starts.
+                # Pick up edited source pools / quality / proxy_country the next
+                # time it (re)starts.
                 if sources:
                     sp.sources = [s for s in sources if s] or [""]
                     sp.source_index = 0
                 sp.quality = quality if quality in VALID_QUALITIES else "auto"
+                sp.proxy_country = proxy_country
             return sp
 
     async def start_stream(
         self, stream_id: int, sources: list[str], stream_name: str,
         client_key: str = "viewer", quality: str = "auto",
+        proxy_country: Optional[str] = None,
     ) -> StreamProcess:
         self._ensure_reaper()
-        sp = await self.get_or_create(stream_id, sources, stream_name, quality)
+        sp = await self.get_or_create(stream_id, sources, stream_name, quality, proxy_country)
         sp.heartbeat(client_key)
         # Channel switch: free this viewer's previous channel BEFORE starting the
         # new one, so a connection-limited upstream (M3USe trial) never sees two

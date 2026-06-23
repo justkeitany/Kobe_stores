@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Settings, Save, Copy, Link, KeyRound, Eye, EyeOff,
   Globe, Server as ServerIcon, Loader2, CheckCircle2, AlertCircle,
+  Shield, RotateCcw,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { xtreamBaseUrl } from "../lib/api";
@@ -33,6 +34,15 @@ export default function SettingsPage() {
   const [showNew, setShowNew]           = useState(false);
   const [savingPass, setSavingPass]     = useState(false);
 
+  // ── Proxy pool ───────────────────────────────────────────────
+  const [proxyRaw, setProxyRaw]         = useState("");
+  const [proxyGeo, setProxyGeo]         = useState<any[]>([]);
+  const [proxyCount, setProxyCount]     = useState(0);
+  const [proxyBwUsed, setProxyBwUsed]   = useState(0);
+  const [proxyBwQuota, setProxyBwQuota] = useState(0);
+  const [savingProxy, setSavingProxy]   = useState(false);
+  const [resettingBw, setResettingBw]   = useState(false);
+
   function applyDomainData(d: any) {
     setMode(d.mode === "domain" ? "domain" : "ip");
     setDomainInput(d.domain || "");
@@ -49,6 +59,13 @@ export default function SettingsPage() {
       setHlsListSize(s.hls_list_size || "6");
       setMaxRetry(s.max_retry || "5");
       setHealthCheck(s.health_check || "30");
+    }).catch(() => {});
+    api.get("/settings/proxy/pool").then((r) => {
+      setProxyRaw(r.data.raw || "");
+      setProxyGeo(r.data.geo || []);
+      setProxyCount(r.data.count || 0);
+      setProxyBwUsed(r.data.bandwidth_used || 0);
+      setProxyBwQuota(r.data.bandwidth_quota || 0);
     }).catch(() => {});
   }, []);
 
@@ -126,6 +143,33 @@ export default function SettingsPage() {
   async function copy(text: string) {
     const ok = await copyToClipboard(text);
     ok ? toast.success("Copied") : toast.error("Copy failed");
+  }
+
+  async function saveProxy() {
+    setSavingProxy(true);
+    try {
+      const r = await api.put("/settings/proxy/pool", { raw: proxyRaw });
+      setProxyGeo(r.data.geo || []);
+      setProxyCount(r.data.count || 0);
+      toast.success(`${r.data.count} proxy(s) saved & geo-detected`);
+    } catch {
+      toast.error("Failed to save proxy pool");
+    } finally {
+      setSavingProxy(false);
+    }
+  }
+
+  async function resetProxyBw() {
+    setResettingBw(true);
+    try {
+      await api.post("/settings/proxy/reset", { action: "reset_bandwidth" });
+      setProxyBwUsed(0);
+      toast.success("Proxy bandwidth counter reset");
+    } catch {
+      toast.error("Failed to reset");
+    } finally {
+      setResettingBw(false);
+    }
   }
 
   // Xtream links use the dedicated player port (8080) in IP mode, or the domain if set.
@@ -263,6 +307,53 @@ export default function SettingsPage() {
         <EndpointRow label="Player API"   value={`${base}/player_api.php?username=admin&password=YOUR_PASS`} onCopy={copy} />
         <EndpointRow label="XMLTV EPG"    value={`${base}/xmltv.php?username=admin&password=YOUR_PASS`} onCopy={copy} />
         <EndpointRow label="Live Stream"  value={`${base}/live/admin/YOUR_PASS/{stream_id}.m3u8`} onCopy={copy} />
+      </div>
+
+      {/* ── Proxy Pool ────────────────────────────────────────── */}
+      <div className="card space-y-4">
+        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <Shield size={14} className="text-gray-400" /> Residential Proxy Pool
+        </h2>
+        <p className="text-xs text-gray-400">
+          One <code>host:port:user:pass</code> per line (user:pass optional).
+          Used ONLY to resolve geo-blocked M3U8 playlists; segments flow direct.
+        </p>
+        <textarea
+          className="input font-mono text-xs h-32 resize-y"
+          value={proxyRaw}
+          onChange={(e) => setProxyRaw(e.target.value)}
+          placeholder={`31.59.20.176:6754:xkoaapub:eac08smczt5p\n31.56.127.193:7684:xkoaapub:eac08smczt5p`}
+        />
+        {proxyGeo.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-gray-600">Geo-detected ({proxyCount} proxies)</p>
+            <div className="flex flex-wrap gap-1.5">
+              {proxyGeo.map((p: any, i: number) => (
+                <span key={i} className="inline-flex items-center gap-1 text-[11px] bg-surface-container border border-outline-variant rounded-full px-2 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" />
+                  {p.host}:{p.port}{' '}
+                  <span className="text-on-surface-variant/60">[{p.country || '??'}]</span>
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+        <div className="flex items-center gap-3 flex-wrap">
+          <button className="btn-primary" onClick={saveProxy} disabled={savingProxy}>
+            <Save size={13} /> {savingProxy ? "Saving…" : "Save Proxies"}
+          </button>
+          <span className="text-xs text-on-surface-variant">
+            Proxy data: {proxyBwUsed > 1024 * 1024
+              ? `${(proxyBwUsed / 1024 / 1024).toFixed(1)} MB`
+              : `${(proxyBwUsed / 1024).toFixed(0)} KB`}{' '}
+            of {proxyBwQuota > 1024 * 1024 * 1024
+              ? `${(proxyBwQuota / 1024 / 1024 / 1024).toFixed(1)} GB`
+              : `${(proxyBwQuota / 1024 / 1024).toFixed(0)} MB`}
+          </span>
+          <button className="btn-secondary text-[11px] px-2 py-1" onClick={resetProxyBw} disabled={resettingBw}>
+            <RotateCcw size={11} /> {resettingBw ? "…" : "Reset counter"}
+          </button>
+        </div>
       </div>
 
       {/* ── Change Password ───────────────────────────────────── */}

@@ -42,6 +42,7 @@ async def get_db() -> AsyncSession:
 _COLUMN_MIGRATIONS = (
     "ALTER TABLE streams ADD COLUMN IF NOT EXISTS delivery_mode VARCHAR(20) NOT NULL DEFAULT 'restream'",
     "ALTER TABLE streams ADD COLUMN IF NOT EXISTS quality VARCHAR(10) NOT NULL DEFAULT 'auto'",
+    "ALTER TABLE streams ADD COLUMN IF NOT EXISTS proxy_country VARCHAR(8)",
     "ALTER TABLE playlists ADD COLUMN IF NOT EXISTS health VARCHAR(255)",
     "ALTER TABLE playlists ADD COLUMN IF NOT EXISTS channels JSON",
 )

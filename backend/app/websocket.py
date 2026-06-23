@@ -11,6 +11,7 @@ import psutil
 from fastapi import WebSocket, WebSocketDisconnect
 from app.ffmpeg_manager import ffmpeg_manager
 from app.viewers import live_counts
+from app import proxy_resolver
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +49,8 @@ async def stats_sender(websocket: WebSocket):
                     "uptime_seconds": round(time.time() - psutil.boot_time()),
                     "active_streams": counts["active_streams"],
                     "active_connections": counts["active_connections"],
+                    "proxy_bandwidth_used": int(await proxy_resolver.bw_used()),
+                    "proxy_bandwidth_quota": int(await proxy_resolver.bw_quota()),
                     "streams": [
                         {
                             "id":      s["stream_id"],

@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 async def get_stats(_=Depends(get_current_admin)):
     """Snapshot of CPU, RAM, disk, active streams."""
     import psutil
+    from app import proxy_resolver
     cpu = psutil.cpu_percent(interval=0.5)
     ram = psutil.virtual_memory()
     disk = psutil.disk_usage("/")
@@ -34,6 +35,8 @@ async def get_stats(_=Depends(get_current_admin)):
         "net_bytes_recv": net.bytes_recv,
         "active_stream_count": len(running),
         "streams": active_streams,
+        "proxy_bandwidth_used": await proxy_resolver.bw_used(),
+        "proxy_bandwidth_quota": await proxy_resolver.bw_quota(),
     }
 
 

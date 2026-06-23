@@ -9,6 +9,8 @@ export interface ServerStats {
   bw_in_kbps: number;
   uptime_seconds?: number;
   active_streams: number;
+  proxy_bandwidth_used?: number;
+  proxy_bandwidth_quota?: number;
   streams: Array<{ id: number; status: string; viewers: number }>;
 }
 

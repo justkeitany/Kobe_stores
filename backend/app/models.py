@@ -45,6 +45,12 @@ class Stream(Base):
     #   auto | low (480p) | medium (720p) | high (1080p)
     quality = Column(String(10), default="auto", nullable=False)
 
+    # Optional ISO country code (e.g. "GB", "US"). When set, the initial M3U8
+    # playlist is resolved THROUGH a residential proxy in that country to bypass
+    # geo-blocks; heavy segment traffic still flows direct (app/proxy_resolver.py).
+    # Null = no proxy (default behaviour).
+    proxy_country = Column(String(8), nullable=True)
+
     # Stream status
     status = Column(String(50), default="idle")  # idle, running, error, stopped
     last_error = Column(Text, nullable=True)
