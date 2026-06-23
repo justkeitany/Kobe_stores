@@ -159,7 +159,9 @@ async def _probe_channel(client: httpx.AsyncClient, url: str) -> bool:
             if r.status_code != 200:
                 return False
             ctype = r.headers.get("content-type", "").lower()
-            if any(k in ctype for k in ("video", "octet", "mp2t", "mpegts")):
+            # Accept audio too — radio feeds (Icecast AAC/MP3) are live streams
+            # even though they carry no video; matches _probe_status's set.
+            if any(k in ctype for k in ("video", "audio", "mpeg", "octet", "mp2t", "mpegts", "ogg", "aac", "icecast")):
                 return True
             async for chunk in r.aiter_bytes():
                 head = chunk[:800].decode("utf-8", "replace")
