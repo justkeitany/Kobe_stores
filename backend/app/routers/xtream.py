@@ -369,11 +369,7 @@ async def get_playlist(
         rows = result.all()
 
         # Also serve playlist channels directly so imports aren't required.
-        # A playlist channel shows up in the player as soon as its playlist is
-        # added — no import step. Uses the playlist's group-title as the category.
-        import urllib.parse
         from app.models import Playlist
-        stream_urls: set[str] = {r[0].stream_url for r in rows}
         pl_result = await db.execute(
             select(Playlist).where(Playlist.name != "").order_by(Playlist.id)
         )
@@ -411,14 +407,11 @@ async def get_playlist(
 
     # Append playlist channels (not yet imported as streams).
     # Each playlist becomes a category group-title.
-    # Duplicate URLs (channels already imported above) are skipped.
+    # No dedup — every channel from every playlist is included.
     for pl in playlists:
         if not pl.channels:
             continue
         for c in pl.channels:
-            if c["url"] in stream_urls:
-                continue
-            stream_urls.add(c["url"])
             safe_name = c["name"].replace('"', "").replace("'", "")
             safe_logo = (c.get("logo") or "").replace('"', "")
             cat = pl.name
@@ -427,7 +420,7 @@ async def get_playlist(
             # Balanced: player fetches the upstream URL directly (no restream).
             # For a playlist channel to get the buffering pipeline it must
             # still be imported as a stream with delivery_mode=restream.
-            final_url = urllib.parse.quote(c["url"], safe=":/?&=%")
+            final_url = quote(c["url"], safe=":/?&=%")
             lines.append(
                 f'#EXTINF:-1 tvg-id="" '
                 f'tvg-name="{safe_name}" '
