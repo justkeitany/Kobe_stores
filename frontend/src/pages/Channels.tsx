@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, RefreshCw, AlertCircle, Tv, Play } from "lucide-react";
 import toast from "react-hot-toast";
-import api from "../lib/api";
+import api, { mintStreamToken } from "../lib/api";
 import { MIcon } from "../components/MIcon";
 import clsx from "clsx";
 
@@ -160,11 +160,17 @@ export default function Channels() {
                       {busy ? "Diagnosing…" : "Diagnose"}
                     </button>
                     <button
-                      onClick={() => {
-                        if (c.imported && c.stream_id != null) {
-                          nav(`/watch?url=${encodeURIComponent(`/live/kobe/mzeekobe100/${c.stream_id}.m3u8`)}&name=${encodeURIComponent(c.name)}`);
-                        } else if (c.url) {
-                          nav(`/watch?url=${encodeURIComponent(`/live/pl/kobe/mzeekobe100?url=${encodeURIComponent(c.url)}`)}&name=${encodeURIComponent(c.name)}`);
+                      onClick={async () => {
+                        try {
+                          const token =
+                            c.imported && c.stream_id != null
+                              ? await mintStreamToken({ stream_id: c.stream_id })
+                              : c.url
+                              ? await mintStreamToken({ url: c.url })
+                              : null;
+                          if (token) nav(`/watch?t=${token}&name=${encodeURIComponent(c.name)}`);
+                        } catch (e: any) {
+                          toast.error(e?.response?.data?.detail || "Couldn't open this channel");
                         }
                       }}
                       className="w-full inline-flex items-center justify-center gap-1 text-[12px] text-on-surface-variant hover:text-on-surface transition-colors py-1"

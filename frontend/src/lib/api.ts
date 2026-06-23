@@ -54,4 +54,11 @@ export function xtreamBaseUrl(serverUrl?: string | null): string {
   return `${protocol}//${hostname}:${XTREAM_PORT}`;
 }
 
+// Mint an encrypted, expiring play token for the web player. Keeps the upstream
+// URL and credentials out of the shareable /watch link.
+export async function mintStreamToken(req: { stream_id?: number; url?: string }): Promise<string> {
+  const { data } = await api.post("/stream/token", req);
+  return data.token as string;
+}
+
 export default api;

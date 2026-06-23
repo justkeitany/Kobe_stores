@@ -16,6 +16,7 @@ from app.websocket import stats_sender
 from app.routers import auth, streams, categories, bouquets, epg, server, settings as settings_router, domain as domain_router
 from app.routers.users import router as users_router
 from app.routers.xtream import router as xtream_router
+from app.routers.stream_token import router as stream_token_router
 from app.routers.proxy import router as proxy_router
 from app.routers.pluto import router as pluto_router
 from app.routers.freestreams import router as freestreams_router
@@ -108,6 +109,9 @@ app.include_router(domain_router.router)
 
 # Xtream Codes API (no PHP — pure FastAPI)
 app.include_router(xtream_router)
+
+# Encrypted play-token minting for the web player (/api/stream/token)
+app.include_router(stream_token_router)
 
 # YouTube live-stream proxy (/proxy/stream)
 app.include_router(proxy_router)

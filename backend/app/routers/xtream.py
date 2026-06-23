@@ -26,6 +26,7 @@ from app.youtube import is_youtube_url, proxy_resolve
 from app.sources import source_refs, source_urls, pick_source_for_user
 from app.redis_client import get_redis
 from app.viewers import track_viewer, untrack_viewer
+from app.stream_token import verify_stream_token
 from urllib.parse import quote, urlparse
 
 router = APIRouter(tags=["xtream"])
@@ -482,7 +483,7 @@ def _rewrite_playlist(path: str, stream_id: int, prefix: str = "") -> str:
     return "\n".join(out) + "\n"
 
 
-def _build_master_playlist(stream_id: int, prefix: str = "") -> str:
+def _build_master_playlist(stream_id: int, prefix: str = "", variant_name: Optional[str] = None) -> str:
     """Master playlist for adaptive (multi-variant) HLS.
 
     We emit it ourselves (rather than reuse FFmpeg's) so the source/passthrough
@@ -490,7 +491,13 @@ def _build_master_playlist(stream_id: int, prefix: str = "") -> str:
     included. Variant URIs point back at this endpoint (?v=N) so each poll still
     heartbeats the stream; segments are served directly by Nginx. Listed lowest
     bitrate first for a fast startup, then the player ramps up.
+
+    The variant URIs are relative, so they resolve against the request path's
+    directory. ``variant_name`` is the filename stem to reference: the stream id
+    for the cred routes (/live/{u}/{p}/{id}.m3u8), or the play token for the
+    token route (/live/t/{token}.m3u8) so the ?v=N polls keep carrying it.
     """
+    name = variant_name if variant_name is not None else str(stream_id)
     lines = ["#EXTM3U", "#EXT-X-VERSION:3"]
     order = sorted(range(len(MULTIVARIANT_RUNGS)), key=lambda i: MULTIVARIANT_RUNGS[i]["bandwidth"])
     for i in order:
@@ -499,7 +506,7 @@ def _build_master_playlist(stream_id: int, prefix: str = "") -> str:
         if rung.get("resolution"):
             inf += f",RESOLUTION={rung['resolution']}"
         lines.append(inf)
-        lines.append(f"{stream_id}.m3u8?v={i}")
+        lines.append(f"{name}.m3u8?v={i}")
     return "\n".join(lines) + "\n"
 
 
@@ -678,6 +685,25 @@ async def serve_live(
         raise HTTPException(400, "Invalid stream ID")
     ext = stream_file.rsplit(".", 1)[-1].lower() if "." in stream_file else ""
 
+    return await _serve_imported(
+        stream_id, ext, request, v, username, user_data,
+        variant_name=str(stream_id),
+        self_m3u8=f"/live/{username}/{password}/{stream_id}.m3u8",
+    )
+
+
+async def _serve_imported(
+    stream_id: int, ext: str, request: Request, v: Optional[int],
+    username: str, user_data: dict, *, variant_name: str, self_m3u8: str,
+):
+    """Deliver an imported (DB-backed) stream.
+
+    Shared by the Xtream credential route (serve_live) and the encrypted-token
+    route (serve_token_live). ``variant_name`` is the relative filename the
+    master playlist references for its ?v=N variants, and ``self_m3u8`` is where
+    bare/.ts requests redirect — both differ between the cred and token routes
+    (see _build_master_playlist).
+    """
     async with AsyncSessionLocal() as db:
         result = await db.execute(
             select(Stream).options(selectinload(Stream.sources)).where(Stream.id == stream_id)
@@ -782,7 +808,7 @@ async def serve_live(
             if v is None:
                 await _wait_for_file(sp.variant_playlist(0))
                 return Response(
-                    content=_build_master_playlist(stream_id),
+                    content=_build_master_playlist(stream_id, variant_name=variant_name),
                     media_type="application/vnd.apple.mpegurl",
                     headers=no_cache,
                 )
@@ -816,9 +842,87 @@ async def serve_live(
 
     # .ts (or extensionless) — send the player to the heartbeat-tracked playlist.
     # Relative redirect keeps the player on the same host:port it connected to.
-    return RedirectResponse(
-        url=f"/live/{username}/{password}/{stream_id}.m3u8", status_code=302
+    return RedirectResponse(url=self_m3u8, status_code=302)
+
+
+async def _serve_upstream(url: str, ext: str, request: Request, self_m3u8: str):
+    """Restream a raw upstream URL through FFmpeg and serve its HLS playlist.
+
+    The token route's equivalent of serve_playlist_restream(_file): same synthetic
+    negative stream_id and single-rendition pipeline, but the upstream URL stays
+    inside the encrypted token instead of being exposed in the request URL.
+    """
+    if not is_url_allowed(url):
+        raise HTTPException(400, "URL not allowed")
+
+    client_key = _client_key(request)
+
+    import hashlib
+    stream_id = -(int(hashlib.md5(url.encode()).hexdigest()[:12], 16) % 10_000_000)
+
+    try:
+        name = urlparse(url).path.rsplit("/", 1)[-1] or "stream"
+    except Exception:
+        name = "stream"
+
+    # start_stream both launches FFmpeg if needed and refreshes the heartbeat, so
+    # each playlist poll keeps the stream alive (same model as serve_live).
+    sp = await ffmpeg_manager.start_stream(
+        stream_id, [url], name, client_key, "auto", allow_multivariant=False,
     )
+    if sp.status not in ("running", "starting"):
+        raise HTTPException(503, "Stream could not be started")
+
+    no_cache = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
+    if ext == "m3u8":
+        playlist_path = sp.hls_playlist
+        await _wait_for_file(playlist_path)
+        try:
+            content = _rewrite_playlist(playlist_path, stream_id, prefix="pl")
+        except FileNotFoundError:
+            raise HTTPException(503, "Stream is starting, please retry")
+        return Response(
+            content=content,
+            media_type="application/vnd.apple.mpegurl",
+            headers=no_cache,
+        )
+
+    return RedirectResponse(url=self_m3u8, status_code=302)
+
+
+@router.get("/live/t/{token_file}")
+async def serve_token_live(
+    token_file: str, request: Request, v: Optional[int] = Query(None),
+):
+    """Play a stream from an encrypted, expiring token instead of credentials.
+
+    The token (minted by /api/stream/token) hides the upstream URL / stream id
+    and dies after its TTL, so a copied watch link can't be reused indefinitely
+    or traced back to the real source.
+    """
+    token, _, ext = token_file.rpartition(".")  # token keeps its full Fernet body
+    if not token:
+        raise HTTPException(400, "Invalid link")
+    data = verify_stream_token(token)
+    if not data:
+        raise HTTPException(401, "Invalid or expired link")
+
+    ext = ext.lower()
+    self_m3u8 = f"/live/t/{token}.m3u8"
+
+    if "sid" in data:
+        # Token authorizes this specific stream, so use an admin-style context
+        # (no bouquet limit, unlimited connections).
+        user_data = {"bouquet_id": None, "max_connections_int": 0}
+        return await _serve_imported(
+            int(data["sid"]), ext, request, v, "web", user_data,
+            variant_name=token, self_m3u8=self_m3u8,
+        )
+    if "u" in data:
+        return await _serve_upstream(data["u"], ext, request, self_m3u8)
+
+    raise HTTPException(400, "Bad token")
 
 
 # ── /xmltv.php — XMLTV EPG output ─────────────────────────────────────────

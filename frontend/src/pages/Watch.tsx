@@ -16,6 +16,7 @@ export default function WatchPage() {
   const [params] = useSearchParams();
   const nav = useNavigate();
   const url = params.get("url") || "";
+  const token = params.get("t") || "";
   const name = params.get("name") || "Stream";
 
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -44,12 +45,16 @@ export default function WatchPage() {
   // Init HLS
   useEffect(() => {
     const video = videoRef.current;
-    if (!video || !url) return;
+    if (!video || (!url && !token)) return;
 
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     setLoading(true); setError(null); setLevels([]); setCurrentLevel(-1);
 
-    const hlsUrl = url.startsWith("/") ? `${window.location.origin}${url}` : url;
+    // Encrypted play token (preferred): the upstream URL/creds stay server-side.
+    // Fall back to a raw `url` param for older links.
+    const hlsUrl = token
+      ? `${window.location.origin}/live/t/${token}.m3u8`
+      : url.startsWith("/") ? `${window.location.origin}${url}` : url;
 
     if (Hls.isSupported()) {
       const hls = new Hls({ enableWorker: true, backBufferLength: 90 });
@@ -91,7 +96,7 @@ export default function WatchPage() {
     }
 
     return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
-  }, [url]);
+  }, [url, token]);
 
   // Time update
   useEffect(() => {
