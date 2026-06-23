@@ -26,7 +26,7 @@ from app.youtube import is_youtube_url, proxy_resolve
 from app.sources import source_refs, source_urls, pick_source_for_user
 from app.redis_client import get_redis
 from app.viewers import track_viewer, untrack_viewer
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 router = APIRouter(tags=["xtream"])
 logger = logging.getLogger(__name__)
