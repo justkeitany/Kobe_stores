@@ -589,7 +589,9 @@ class StreamProcess:
             # redirects to a working stream. Non-Pluto URLs pass through.
             "-i", self._resolved_input,
             # Stream copy ('auto') or transcode down to the selected quality tier.
-            *_codec_args(self.quality),
+            # _effective_quality may be promoted from 'auto' to a single 720p tier
+            # for heavy sources (see start()); falls back to self.quality.
+            *_codec_args(getattr(self, "_effective_quality", None) or self.quality),
             # HLS output — flush each packet and hold a deeper segment window so
             # players have more buffered ahead of the live edge.
             "-flush_packets", "1",
@@ -627,30 +629,31 @@ class StreamProcess:
                 # Skip for playlist streams (allow_multivariant=False) — ffprobe
                 # can take 10+ seconds on high-latency upstreams and is only
                 # needed when multi-variant might select a video transcoder.
+                # Single constant rendition per channel — NO adaptive ladder.
+                # The multi-variant ladder made the picture pulse (the player
+                # flips between copy/720p/480p, each a different resolution) and
+                # rebuffered on every switch. Instead we pick ONE rendition and
+                # hold it: small/low-bitrate sources pass straight through (copy,
+                # ~0 CPU); genuinely heavy sources (1080p+/>3 Mbps) get a single
+                # 720p transcode that fits a ~4 Mbps line. Audio-only sources
+                # (radio) keep their own pipeline.
                 self.audio_only = False
-                wants_ladder = False
+                self.multivariant = False
+                self._effective_quality = self.quality
                 if self.allow_multivariant or self.quality != "auto":
                     has_video, height, bitrate = await _probe_source(self._resolved_input)
                     self.audio_only = not has_video
-                    wants_ladder = _source_wants_ladder(height, bitrate)
-                    if self.allow_multivariant and self.quality == "auto" and not self.audio_only:
+                    if self.quality == "auto" and not self.audio_only:
+                        if _source_wants_ladder(height, bitrate):
+                            self._effective_quality = "medium"  # single 720p downscale
+                        decision = ("720p transcode" if self._effective_quality == "medium"
+                                    else "passthrough (no transcode)")
                         logger.info(
                             f"Stream {self.stream_id}: source {height or '?'}p "
-                            f"{(bitrate // 1000) if bitrate else '?'}kbps -> "
-                            f"{'adaptive ladder' if wants_ladder else 'passthrough (no transcode)'}"
+                            f"{(bitrate // 1000) if bitrate else '?'}kbps -> {decision}"
                         )
-                # Only spin up the (CPU-heavy, lag-prone) transcode ladder for
-                # genuinely heavy sources; small/low-bitrate feeds pass through.
-                if (self.quality == "auto" and self.allow_multivariant and wants_ladder
-                        and not self._holds_mv and not self.audio_only):
-                    transcode_governor.start()
-                    if await transcode_governor.try_acquire_mv():
-                        self.multivariant = True
-                        self._holds_mv = True
                 self._reset_hls_dir()
-                if self.multivariant:
-                    cmd = self._build_multivariant_cmd()
-                elif self.audio_only:
+                if self.audio_only:
                     cmd = self._build_audio_cmd()
                 else:
                     cmd = self._build_ffmpeg_cmd()
