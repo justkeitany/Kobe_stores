@@ -1,0 +1,306 @@
+#EXTM3U x-tvg-url="https://raw.githubusercontent.com/dp247/Freeview-EPG/master/epg.xml" cache="500"
+# ============================================================
+# UK RADIO - single category "UK Radio" (logos preserved)
+# AAC streams only | 100 streams | media-ice.musicradio.com
+# Import via panel: Streams > Import M3U (auto-creates category)
+# ============================================================
+
+#EXTINF:-1 tvg-id="CapitalUK" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital UK" group-title="UK Radio",Capital UK
+https://media-ice.musicradio.com/CapitalUK
+
+#EXTINF:-1 tvg-id="CapitalAnthems" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Anthems" group-title="UK Radio",Capital Anthems
+https://media-ice.musicradio.com/CapitalAnthems
+
+#EXTINF:-1 tvg-id="CapitalDance" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Dance" group-title="UK Radio",Capital Dance
+https://media-ice.musicradio.com/CapitalDance
+
+#EXTINF:-1 tvg-id="CapitalChill" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Chill" group-title="UK Radio",Capital Chill
+https://media-ice.musicradio.com/CapitalChill
+
+#EXTINF:-1 tvg-id="BigTop40" tvg-logo="" tvg-name="The Big Top 40 Show" group-title="UK Radio",The Big Top 40 Show
+https://media-ice.musicradio.com/BigTop40
+
+#EXTINF:-1 tvg-id="CapitalLondon" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital London" group-title="UK Radio",Capital London
+https://media-ice.musicradio.com/Capital
+
+#EXTINF:-1 tvg-id="CapitalBrighton" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Brighton" group-title="UK Radio",Capital Brighton
+https://media-ice.musicradio.com/CapitalBrighton
+
+#EXTINF:-1 tvg-id="CapitalSouthCoast" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital South Coast" group-title="UK Radio",Capital South Coast
+https://media-ice.musicradio.com/CapitalSouthCoast
+
+#EXTINF:-1 tvg-id="CapitalNorthOxfordshire" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital North Oxfordshire" group-title="UK Radio",Capital North Oxfordshire
+https://media-ice.musicradio.com/CapitalNorthOxfordshire
+
+#EXTINF:-1 tvg-id="CapitalStratford" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Stratford" group-title="UK Radio",Capital Stratford
+https://media-ice.musicradio.com/CapitalStratford
+
+#EXTINF:-1 tvg-id="CapitalBirmingham" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Birmingham" group-title="UK Radio",Capital Birmingham
+https://media-ice.musicradio.com/CapitalBirmingham
+
+#EXTINF:-1 tvg-id="CapitalCoventry" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Coventry" group-title="UK Radio",Capital Coventry
+https://media-ice.musicradio.com/CapitalCoventry
+
+#EXTINF:-1 tvg-id="CapitalDerbyshire" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Derbyshire" group-title="UK Radio",Capital Derbyshire
+https://media-ice.musicradio.com/CapitalDerbyshire
+
+#EXTINF:-1 tvg-id="CapitalLeicestershire" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Leicestershire" group-title="UK Radio",Capital Leicestershire
+https://media-ice.musicradio.com/CapitalLeicestershire
+
+#EXTINF:-1 tvg-id="CapitalNottinghamshire" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Nottinghamshire" group-title="UK Radio",Capital Nottinghamshire
+https://media-ice.musicradio.com/CapitalNottinghamshire
+
+#EXTINF:-1 tvg-id="CapitalRugby" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Rugby" group-title="UK Radio",Capital Rugby
+https://media-ice.musicradio.com/CapitalRugby
+
+#EXTINF:-1 tvg-id="CapitalWarwick" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Warwick" group-title="UK Radio",Capital Warwick
+https://media-ice.musicradio.com/CapitalWarwick
+
+#EXTINF:-1 tvg-id="CapitalSouthEastStaffordshire" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital South East Staffordshire" group-title="UK Radio",Capital South East Staffordshire
+https://media-ice.musicradio.com/CapitalSouthEastStaffordshire
+
+#EXTINF:-1 tvg-id="CapitalManchester" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Manchester" group-title="UK Radio",Capital Manchester
+https://media-ice.musicradio.com/CapitalManchester
+
+#EXTINF:-1 tvg-id="CapitalLiverpool" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Liverpool" group-title="UK Radio",Capital Liverpool
+https://media-ice.musicradio.com/CapitalLiverpool
+
+#EXTINF:-1 tvg-id="CapitalWirral" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Wirral" group-title="UK Radio",Capital Wirral
+https://media-ice.musicradio.com/CapitalWirral
+
+#EXTINF:-1 tvg-id="CapitalLancashireBurnley" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Lancashire - Burnley" group-title="UK Radio",Capital Lancashire - Burnley
+https://media-ice.musicradio.com/CapitalBurnley
+
+#EXTINF:-1 tvg-id="CapitalLancashirePreston" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Lancashire - Preston" group-title="UK Radio",Capital Lancashire - Preston
+https://media-ice.musicradio.com/CapitalPreston
+
+#EXTINF:-1 tvg-id="CapitalTeesside" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital North East (Teesside)" group-title="UK Radio",Capital North East Teesside
+https://media-ice.musicradio.com/CapitalTeesside
+
+#EXTINF:-1 tvg-id="CapitalTyneWear" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital North East (Tyne and Wear)" group-title="UK Radio",Capital North East Tyne & Wear
+https://media-ice.musicradio.com/CapitalTyneWear
+
+#EXTINF:-1 tvg-id="CapitalYorkshireEast" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Yorkshire (East)" group-title="UK Radio",Capital Yorkshire East
+https://media-ice.musicradio.com/CapitalYorkshireEast
+
+#EXTINF:-1 tvg-id="CapitalYorkshireSouthWest" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Yorkshire (South and West)" group-title="UK Radio",Capital Yorkshire South & West
+https://media-ice.musicradio.com/CapitalYorkshireSouthWest
+
+#EXTINF:-1 tvg-id="CapitalSouthWales" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital South Wales" group-title="UK Radio",Capital South Wales
+https://media-ice.musicradio.com/CapitalSouthWales
+
+#EXTINF:-1 tvg-id="CapitalCymru" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital North Wales - Anglesey & Gwynedd" group-title="UK Radio",Capital North Wales
+https://media-ice.musicradio.com/CapitalCymru
+
+#EXTINF:-1 tvg-id="CapitalWalesCoast" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital North Wales - North Wales Coast" group-title="UK Radio",Capital North Wales Coast
+https://media-ice.musicradio.com/CapitalWalesCoast
+
+#EXTINF:-1 tvg-id="CapitalWrexham" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Wrexham & Cheshire" group-title="UK Radio",Capital Wrexham & Cheshire
+https://media-ice.musicradio.com/CapitalWrexham
+
+#EXTINF:-1 tvg-id="CapitalEdinburgh" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Edinburgh" group-title="UK Radio",Capital Edinburgh
+https://media-ice.musicradio.com/CapitalEdinburgh
+
+#EXTINF:-1 tvg-id="CapitalGlasgow" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital.png" tvg-name="Capital Glasgow" group-title="UK Radio",Capital Glasgow
+https://media-ice.musicradio.com/CapitalGlasgow
+
+#EXTINF:-1 tvg-id="CapitalXTRANational" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital-Xtra.png" tvg-name="Capital XTRA UK" group-title="UK Radio",Capital XTRA UK
+https://media-ice.musicradio.com/CapitalXTRANational
+
+#EXTINF:-1 tvg-id="CapitalXTRALondon" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital-Xtra.png" tvg-name="Capital XTRA London" group-title="UK Radio",Capital XTRA London
+https://media-ice.musicradio.com/CapitalXTRALondon
+
+#EXTINF:-1 tvg-id="CapitalXTRAReloaded" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Capital-Xtra.png" tvg-name="Capital XTRA Reloaded" group-title="UK Radio",Capital XTRA Reloaded
+https://media-ice.musicradio.com/CapitalXTRAReloaded
+
+#EXTINF:-1 tvg-id="SmoothUK" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth UK" group-title="UK Radio",Smooth UK
+https://media-ice.musicradio.com/SmoothUK
+
+#EXTINF:-1 tvg-id="Smooth70s" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth 70s" group-title="UK Radio",Smooth 70s
+https://media-ice.musicradio.com/Smooth70s
+
+#EXTINF:-1 tvg-id="Smooth80s" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth 80s" group-title="UK Radio",Smooth 80s
+https://media-ice.musicradio.com/Smooth80s
+
+#EXTINF:-1 tvg-id="SmoothChill" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Chill" group-title="UK Radio",Smooth Chill
+https://media-ice.musicradio.com/SmoothChill
+
+#EXTINF:-1 tvg-id="SmoothRelax" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Relax" group-title="UK Radio",Smooth Relax
+https://media-ice.musicradio.com/SmoothRelax
+
+#EXTINF:-1 tvg-id="SmoothSoul" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Soul" group-title="UK Radio",Smooth Soul
+https://media-ice.musicradio.com/SmoothSoul
+
+#EXTINF:-1 tvg-id="SmoothCountry" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Country" group-title="UK Radio",Smooth Country
+https://media-ice.musicradio.com/SmoothCountry
+
+#EXTINF:-1 tvg-id="SmoothXmas" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Christmas" group-title="UK Radio",Smooth Christmas
+https://media-ice.musicradio.com/SmoothXmas
+
+#EXTINF:-1 tvg-id="SmoothLondon" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth London" group-title="UK Radio",Smooth London
+https://media-ice.musicradio.com/SmoothLondon
+
+#EXTINF:-1 tvg-id="SmoothBerkshire" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Berkshire and North Hampshire" group-title="UK Radio",Smooth Berkshire
+https://media-ice.musicradio.com/SmoothBerkshire
+
+#EXTINF:-1 tvg-id="SmoothHampshire" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Hampshire" group-title="UK Radio",Smooth Hampshire
+https://media-ice.musicradio.com/SmoothHampshire
+
+#EXTINF:-1 tvg-id="SmoothKent" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Kent" group-title="UK Radio",Smooth Kent
+https://media-ice.musicradio.com/SmoothKent
+
+#EXTINF:-1 tvg-id="SmoothSussex" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Sussex" group-title="UK Radio",Smooth Sussex
+https://media-ice.musicradio.com/SmoothSussex
+
+#EXTINF:-1 tvg-id="SmoothEssex" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Essex" group-title="UK Radio",Smooth Essex
+https://media-ice.musicradio.com/SmoothEssex
+
+#EXTINF:-1 tvg-id="SmoothHerts" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Herts, Beds and Bucks" group-title="UK Radio",Smooth Herts
+https://media-ice.musicradio.com/SmoothHerts
+
+#EXTINF:-1 tvg-id="SmoothDorset" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Dorset" group-title="UK Radio",Smooth Dorset
+https://media-ice.musicradio.com/SmoothDorset
+
+#EXTINF:-1 tvg-id="SmoothNorfolk" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Norfolk" group-title="UK Radio",Smooth Norfolk
+https://media-ice.musicradio.com/SmoothNorfolk
+
+#EXTINF:-1 tvg-id="SmoothSuffolk" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Suffolk" group-title="UK Radio",Smooth Suffolk
+https://media-ice.musicradio.com/SmoothSuffolk
+
+#EXTINF:-1 tvg-id="SmoothWestMids" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth West Midlands" group-title="UK Radio",Smooth West Midlands
+https://media-ice.musicradio.com/SmoothWestMids
+
+#EXTINF:-1 tvg-id="SmoothEastMids" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth East Midlands" group-title="UK Radio",Smooth East Midlands
+https://media-ice.musicradio.com/SmoothEastMids
+
+#EXTINF:-1 tvg-id="SmoothDerby" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Derby" group-title="UK Radio",Smooth Derby
+https://media-ice.musicradio.com/SmoothDerby
+
+#EXTINF:-1 tvg-id="SmoothNorthants" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Northants" group-title="UK Radio",Smooth Northants
+https://media-ice.musicradio.com/SmoothNorthants
+
+#EXTINF:-1 tvg-id="SmoothBristol" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Bristol and Bath" group-title="UK Radio",Smooth Bristol
+https://media-ice.musicradio.com/SmoothBristol
+
+#EXTINF:-1 tvg-id="SmoothGloucester" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Gloucester" group-title="UK Radio",Smooth Gloucester
+https://media-ice.musicradio.com/SmoothGloucester
+
+#EXTINF:-1 tvg-id="SmoothWiltshire" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Wiltshire" group-title="UK Radio",Smooth Wiltshire
+https://media-ice.musicradio.com/SmoothWiltshire
+
+#EXTINF:-1 tvg-id="SmoothPlymouth" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Plymouth" group-title="UK Radio",Smooth Plymouth
+https://media-ice.musicradio.com/SmoothPlymouth
+
+#EXTINF:-1 tvg-id="SmoothNorthWest" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth North West" group-title="UK Radio",Smooth North West
+https://media-ice.musicradio.com/SmoothNorthWest
+
+#EXTINF:-1 tvg-id="SmoothLakeDistrict" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Lake District" group-title="UK Radio",Smooth Lake District
+https://media-ice.musicradio.com/SmoothLakeDistrict
+
+#EXTINF:-1 tvg-id="SmoothNorthEastN" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth North East (Tyne & Wear)" group-title="UK Radio",Smooth North East Tyne & Wear
+https://media-ice.musicradio.com/SmoothNorthEastN
+
+#EXTINF:-1 tvg-id="SmoothNorthEastS" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth North East (Teeside)" group-title="UK Radio",Smooth North East Teesside
+https://media-ice.musicradio.com/SmoothNorthEastS
+
+#EXTINF:-1 tvg-id="SmoothNorthWales" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth North Wales and Cheshire" group-title="UK Radio",Smooth North Wales
+https://media-ice.musicradio.com/SmoothNorthWales
+
+#EXTINF:-1 tvg-id="SmoothSouthWales" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth South Wales" group-title="UK Radio",Smooth South Wales
+https://media-ice.musicradio.com/SmoothSouthWales
+
+#EXTINF:-1 tvg-id="SmoothScotland" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Smooth-Radio.png" tvg-name="Smooth Scotland" group-title="UK Radio",Smooth Scotland
+https://media-ice.musicradio.com/SmoothScotland
+
+#EXTINF:-1 tvg-id="HeartUK" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart UK" group-title="UK Radio",Heart UK
+https://media-ice.musicradio.com/HeartUK
+
+#EXTINF:-1 tvg-id="HeartLondon" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart London" group-title="UK Radio",Heart London
+https://media-ice.musicradio.com/HeartLondon
+
+#EXTINF:-1 tvg-id="Heart80s" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart-80s.png" tvg-name="Heart 80s" group-title="UK Radio",Heart 80s
+https://media-ice.musicradio.com/Heart80s
+
+#EXTINF:-1 tvg-id="Heart90s" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart 90s" group-title="UK Radio",Heart 90s
+https://media-ice.musicradio.com/Heart90s
+
+#EXTINF:-1 tvg-id="Heart00s" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart 00s" group-title="UK Radio",Heart 00s
+https://media-ice.musicradio.com/Heart00s
+
+#EXTINF:-1 tvg-id="Heart10s" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart 10s" group-title="UK Radio",Heart 10s
+https://media-ice.musicradio.com/Heart10s
+
+#EXTINF:-1 tvg-id="HeartDance" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart-Dance.png" tvg-name="Heart Dance" group-title="UK Radio",Heart Dance
+https://media-ice.musicradio.com/HeartDance
+
+#EXTINF:-1 tvg-id="HeartLove" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart Love" group-title="UK Radio",Heart Love
+https://media-ice.musicradio.com/HeartLove
+
+#EXTINF:-1 tvg-id="HeartMusicals" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart Musicals" group-title="UK Radio",Heart Musicals
+https://media-ice.musicradio.com/HeartMusicals
+
+#EXTINF:-1 tvg-id="HeartXmas" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart Xmas" group-title="UK Radio",Heart Xmas
+https://media-ice.musicradio.com/HeartXmas
+
+#EXTINF:-1 tvg-id="HeartEdinburgh" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart Scotland - East" group-title="UK Radio",Heart Scotland East
+https://media-ice.musicradio.com/HeartEdinburgh
+
+#EXTINF:-1 tvg-id="HeartGlasgow" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart Scotland - West" group-title="UK Radio",Heart Scotland West
+https://media-ice.musicradio.com/HeartGlasgow
+
+#EXTINF:-1 tvg-id="HeartNorthWales" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Heart.png" tvg-name="Heart Wales (North)" group-title="UK Radio",Heart North Wales
+https://media-ice.musicradio.com/HeartNorthWales
+
+#EXTINF:-1 tvg-id="LBCUK" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/LBC.png" tvg-name="LBC UK" group-title="UK Radio",LBC UK
+https://media-ice.musicradio.com/LBCUK
+
+#EXTINF:-1 tvg-id="LBCLondon" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/LBC.png" tvg-name="LBC London" group-title="UK Radio",LBC London
+https://media-ice.musicradio.com/LBCLondon
+
+#EXTINF:-1 tvg-id="LBCNewsUK" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/LBC-News.png" tvg-name="LBC News UK" group-title="UK Radio",LBC News UK
+https://media-ice.musicradio.com/LBCNewsUK
+
+#EXTINF:-1 tvg-id="LBCNewsLondon" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/LBC-News.png" tvg-name="LBC News London" group-title="UK Radio",LBC News London
+https://media-ice.musicradio.com/LBCNewsLondon
+
+#EXTINF:-1 tvg-id="LBCNews" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/LBC-News.png" tvg-name="LBC News" group-title="UK Radio",LBC News
+https://media-ice.musicradio.com/LBC1152
+
+#EXTINF:-1 tvg-id="RadioXUK" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Radio-X.png" tvg-name="Radio X UK" group-title="UK Radio",Radio X UK
+https://media-ice.musicradio.com/RadioXUK
+
+#EXTINF:-1 tvg-id="RadioXLondon" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Radio-X.png" tvg-name="Radio X London" group-title="UK Radio",Radio X London
+https://media-ice.musicradio.com/RadioXLondon
+
+#EXTINF:-1 tvg-id="RadioXManchester" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Radio-X.png" tvg-name="Radio X Manchester" group-title="UK Radio",Radio X Manchester
+https://media-ice.musicradio.com/RadioXManchester
+
+#EXTINF:-1 tvg-id="RadioXClassicRock" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Radio-X.png" tvg-name="Radio X Classic Rock" group-title="UK Radio",Radio X Classic Rock
+https://media-ice.musicradio.com/RadioXClassicRock
+
+#EXTINF:-1 tvg-id="RadioX90s" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Radio-X.png" tvg-name="RadioX 90s" group-title="UK Radio",Radio X 90s
+https://media-ice.musicradio.com/RadioX90s
+
+#EXTINF:-1 tvg-id="RadioX90sManchester" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Radio-X.png" tvg-name="Radio X 90s Manchester" group-title="UK Radio",Radio X 90s Manchester
+https://media-ice.musicradio.com/RadioX90sManchester
+
+#EXTINF:-1 tvg-id="RadioX00s" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Radio-X.png" tvg-name="RadioX 00s" group-title="UK Radio",Radio X 00s
+https://media-ice.musicradio.com/RadioX00s
+
+#EXTINF:-1 tvg-id="RadioXChilled" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Radio-X.png" tvg-name="RadioX Chilled" group-title="UK Radio",Radio X Chilled
+https://media-ice.musicradio.com/RadioXChilled
+
+#EXTINF:-1 tvg-id="ClassicFM" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Classic-FM.png" tvg-name="Classic FM" group-title="UK Radio",Classic FM
+https://media-ice.musicradio.com/ClassicFM
+
+#EXTINF:-1 tvg-id="ClassicFMCalm" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Classic-FM.png" tvg-name="ClassicFM Calm" group-title="UK Radio",Classic FM Calm
+https://media-ice.musicradio.com/ClassicFMCalm
+
+#EXTINF:-1 tvg-id="ClassicFMMovies" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Classic-FM.png" tvg-name="ClassicFM Movies" group-title="UK Radio",Classic FM Movies
+https://media-ice.musicradio.com/ClassicFMMovies
+
+#EXTINF:-1 tvg-id="GoldLondon" tvg-logo="https://raw.githubusercontent.com/dp247/mediaportal-uk-logos/master/Radio/Gold-Radio.png" tvg-name="Gold London" group-title="UK Radio",Gold London
+https://media-ice.musicradio.com/Gold
+
+#EXTINF:-1 tvg-id="RivieraRadio" tvg-logo="" tvg-name="Riviera Radio" group-title="UK Radio",Riviera Radio
+https://media-ice.musicradio.com/RivieraRadio
