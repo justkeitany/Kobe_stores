@@ -474,3 +474,22 @@ async def import_m3u(
 
     await db.commit()
     return {"imported": imported, "skipped": skipped, "total": len(channels)}
+
+
+# ── Stream diagnostics ────────────────────────────────────────────────────
+
+@router.post("/{stream_id}/diagnose")
+async def diagnose_stream(
+    stream_id: int,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_admin),
+):
+    """Run a full diagnostic on a stream: DNS, HTTP, ffprobe, FFmpeg startup."""
+    result = await db.execute(select(Stream).where(Stream.id == stream_id))
+    stream = result.scalar_one_or_none()
+    if not stream:
+        raise HTTPException(404, "Stream not found")
+
+    from app.stream_diag import diagnose
+    diag = await diagnose(stream.stream_url, stream.name, stream.id)
+    return diag.to_dict()
