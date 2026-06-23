@@ -56,7 +56,8 @@ async def list_channels(db: AsyncSession = Depends(get_db), _=Depends(get_curren
             return health[primary_url]          # last probe result
         if imported and live_status == "error":
             return "offline"
-        return "checking"                        # not probed yet
+        # Default: online if from a healthy playlist, pending if not yet refreshed.
+        return "online" if not imported else "checking"
 
     out: list[dict] = []
     imported_urls: set[str] = set()
