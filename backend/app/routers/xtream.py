@@ -407,7 +407,7 @@ async def get_playlist(
 
     # Append playlist channels (not yet imported as streams).
     # Each playlist becomes a category group-title.
-    # No dedup — every channel from every playlist is included.
+    # Route through /live/pl/ restream so every channel gets FFmpeg buffering.
     for pl in playlists:
         if not pl.channels:
             continue
@@ -417,10 +417,9 @@ async def get_playlist(
             cat = pl.name
             if c.get("category"):
                 cat = f"{pl.name} - {c['category']}"
-            # Balanced: player fetches the upstream URL directly (no restream).
-            # For a playlist channel to get the buffering pipeline it must
-            # still be imported as a stream with delivery_mode=restream.
-            final_url = quote(c["url"], safe=":/?&=%")
+            # Restream the URL through FFmpeg (same buffering pipeline as
+            # imported streams: ABR, 2s segments, input resilience).
+            final_url = f"{base_url}/live/pl/{username}/{password}?url={quote(c['url'], safe='')}"
             lines.append(
                 f'#EXTINF:-1 tvg-id="" '
                 f'tvg-name="{safe_name}" '
@@ -470,7 +469,7 @@ async def _tracked_ts(inner, username: str, client_key: str, stream_id: int):
         await untrack_viewer(username, client_key, stream_id)
 
 
-def _rewrite_playlist(path: str, stream_id: int) -> str:
+def _rewrite_playlist(path: str, stream_id: int, prefix: str = "") -> str:
     """Read FFmpeg's HLS playlist and point segment lines at Nginx (/hls/<id>/)."""
     with open(path) as f:
         lines = f.read().splitlines()
@@ -483,7 +482,7 @@ def _rewrite_playlist(path: str, stream_id: int) -> str:
     return "\n".join(out) + "\n"
 
 
-def _build_master_playlist(stream_id: int) -> str:
+def _build_master_playlist(stream_id: int, prefix: str = "") -> str:
     """Master playlist for adaptive (multi-variant) HLS.
 
     We emit it ourselves (rather than reuse FFmpeg's) so the source/passthrough
@@ -504,7 +503,7 @@ def _build_master_playlist(stream_id: int) -> str:
     return "\n".join(lines) + "\n"
 
 
-def _rewrite_variant(path: str, stream_id: int, v: int) -> str:
+def _rewrite_variant(path: str, stream_id: int, v: int, prefix: str = "") -> str:
     """Point a variant's segment lines at Nginx (/hls/<id>/v<N>/)."""
     with open(path) as f:
         lines = f.read().splitlines()
@@ -523,6 +522,140 @@ async def _wait_for_file(path: str, tries: int = 20, delay: float = 0.5) -> bool
             return True
         await asyncio.sleep(delay)
     return False
+
+
+# ── Playlist-channel restream proxy ──────────────────────────────────────
+# Every playlist channel is served through FFmpeg so it inherits the same
+# buffering pipeline (ABR, 2s HLS segments, input resilience, browser UA) as
+# imported streams. The player sees /live/pl/{user}/{pass}?url=... instead of
+# a raw upstream URL. Synthetic negative stream_ids prevent collisions with
+# real streams in the DB and skip viewer-connection tracking.
+
+def is_url_allowed(u: str) -> bool:
+    """Basic guard: block loopback, private IPs, and non-stream schemes."""
+    try:
+        p = urlparse(u)
+    except Exception:
+        return False
+    if p.scheme not in ("http", "https", "rtmp", "rtsp"):
+        return False
+    if p.hostname in ("127.0.0.1", "localhost", "::1"):
+        return False
+    return True
+
+
+@router.get("/live/pl/{username}/{password}")
+async def serve_playlist_restream(
+    username: str,
+    password: str,
+    request: Request,
+    url: str = Query(..., description="Upstream stream URL to restream"),
+):
+    user_data = await _check_credentials(username, password)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+    if not is_url_allowed(url):
+        raise HTTPException(400, "URL not allowed")
+
+    client_key = _client_key(request)
+
+    # Per-user connection limit.
+    if not await _enforce_connection_limit(
+        username, user_data.get("max_connections_int", 0), client_key
+    ):
+        raise HTTPException(429, "Connection limit reached")
+
+    # Synthetic negative ID → no DB writes, no viewer tracking.
+    stream_id = -(abs(hash(url)) % 10_000_000)
+
+    # Extract a human-readable name from the URL path for logs.
+    try:
+        from urllib.parse import urlparse as _urlparse
+        path = _urlparse(url).path
+        name = path.rsplit("/", 1)[-1] or "stream"
+    except Exception:
+        name = "stream"
+
+    sp = await ffmpeg_manager.start_stream(
+        stream_id, [url], name, client_key, "auto"
+    )
+
+    if sp.status not in ("running", "starting"):
+        raise HTTPException(503, "Stream could not be started")
+
+    return RedirectResponse(
+        url=f"/live/pl/{username}/{password}/{stream_id}.m3u8",
+        status_code=302,
+    )
+
+
+@router.get("/live/pl/{username}/{password}/{stream_file}")
+async def serve_playlist_restream_file(
+    username: str,
+    password: str,
+    stream_file: str,
+    request: Request,
+):
+    """HLS playlist and segment delivery for playlist-proxied streams."""
+    user_data = await _check_credentials(username, password)
+    if not user_data:
+        raise HTTPException(401, "Unauthorized")
+
+    # Parse stream_file (e.g. "-12345.m3u8" or "-12345.ts")
+    parts = stream_file.rsplit(".", 1)
+    stream_id = int(parts[0])
+    ext = parts[1] if len(parts) > 1 else ""
+    v_str = request.query_params.get("v")
+
+    client_key = _client_key(request)
+    sp = await ffmpeg_manager.get_or_create(stream_id, [], "playlist", "auto")
+    if sp.status not in ("running", "starting"):
+        raise HTTPException(503, "Stream is not active")
+
+    sp.heartbeat(client_key)
+    no_cache = {"Cache-Control": "no-cache, no-store, must-revalidate"}
+
+    if ext == "m3u8":
+        if sp.multivariant:
+            v = int(v_str) if v_str else None
+            if v is None:
+                await _wait_for_file(sp.variant_playlist(0))
+                return Response(
+                    content=_build_master_playlist(stream_id),
+                    media_type="application/vnd.apple.mpegurl",
+                    headers=no_cache,
+                )
+            if v < 0 or v >= len(MULTIVARIANT_RUNGS):
+                raise HTTPException(404, "Unknown variant")
+            variant_path = sp.variant_playlist(v)
+            await _wait_for_file(variant_path)
+            try:
+                content = _rewrite_variant(variant_path, stream_id, v, prefix="pl")
+            except FileNotFoundError:
+                raise HTTPException(503, "Stream is starting, please retry")
+            return Response(
+                content=content,
+                media_type="application/vnd.apple.mpegurl",
+                headers=no_cache,
+            )
+        playlist_path = sp.hls_playlist
+        await _wait_for_file(playlist_path)
+        try:
+            content = _rewrite_playlist(playlist_path, stream_id, prefix="pl")
+        except FileNotFoundError:
+            raise HTTPException(503, "Stream is starting, please retry")
+        return Response(
+            content=content,
+            media_type="application/vnd.apple.mpegurl",
+            headers=no_cache,
+        )
+
+    # .ts or bare — redirect to .m3u8
+    base_url = await _base_url(request)
+    return RedirectResponse(
+        url=f"{base_url}/live/pl/{username}/{password}/{stream_id}.m3u8",
+        status_code=302,
+    )
 
 
 @router.get("/live/{username}/{password}/{stream_file}")
