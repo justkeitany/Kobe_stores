@@ -79,23 +79,27 @@ export default function ServerPage() {
       </div>
 
       {/* Proxy bandwidth gauge */}
-      {stats && stats.proxy_bandwidth_quota > 0 && (
+      {stats && (stats.proxy_bandwidth_quota ?? 0) > 0 && (() => {
+        const pbw = stats.proxy_bandwidth_used ?? 0;
+        const pbq = stats.proxy_bandwidth_quota ?? 0;
+        return (
         <div className="bg-surface-container-low border border-outline-variant rounded-md p-md flex items-center gap-4">
           <span className="text-[12px] font-medium shrink-0">Proxy data used</span>
           <div className="flex-1 bg-on-surface/10 rounded-full h-2 overflow-hidden">
             <div className="h-full bg-gradient-to-r from-blue-400 to-purple-500 rounded-full transition-all"
-              style={{ width: `${Math.min(100, (stats.proxy_bandwidth_used / stats.proxy_bandwidth_quota) * 100)}%` }} />
+              style={{ width: `${Math.min(100, (pbw / pbq) * 100)}%` }} />
           </div>
           <span className="text-[11px] font-mono text-on-surface-variant shrink-0">
-            {stats.proxy_bandwidth_used > 1024 * 1024
-              ? `${(stats.proxy_bandwidth_used / 1024 / 1024).toFixed(1)} MB`
-              : `${(stats.proxy_bandwidth_used / 1024).toFixed(0)} KB`}{' '}
-            / {stats.proxy_bandwidth_quota > 1024 * 1024 * 1024
-              ? `${(stats.proxy_bandwidth_quota / 1024 / 1024 / 1024).toFixed(1)} GB`
-              : `${(stats.proxy_bandwidth_quota / 1024 / 1024).toFixed(0)} MB`}
+            {pbw > 1024 * 1024
+              ? `${(pbw / 1024 / 1024).toFixed(1)} MB`
+              : `${(pbw / 1024).toFixed(0)} KB`}{' '}
+            / {pbq > 1024 * 1024 * 1024
+              ? `${(pbq / 1024 / 1024 / 1024).toFixed(1)} GB`
+              : `${(pbq / 1024 / 1024).toFixed(0)} MB`}
           </span>
         </div>
-      )}
+        );
+      })()}
 
       {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-gutter">
