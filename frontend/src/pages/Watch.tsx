@@ -178,7 +178,7 @@ export default function WatchPage() {
 
       {/* Video area */}
       <div className="flex-1 relative bg-black" onClick={togglePlay}>
-        <video ref={videoRef} className="w-full h-full object-contain" playsInline muted={muted} />
+        <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain" playsInline muted={muted} />
 
         {loading && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/60">
