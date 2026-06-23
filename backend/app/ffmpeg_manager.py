@@ -49,10 +49,13 @@ FFMPEG_INPUT_BUFFER_ARGS = [
 # alive across the hiccup instead. All are http-protocol INPUT options and MUST
 # precede -i. A browser UA also stops upstreams that throttle FFmpeg's default
 # "Lavf/…" agent. Harmless on the stable CDN sources.
-FFMPEG_HTTP_RESILIENCE_ARGS = [
-    "-user_agent",
+_BROWSER_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
+)
+
+FFMPEG_HTTP_RESILIENCE_ARGS = [
+    "-user_agent", _BROWSER_UA,
     "-reconnect", "1",
     "-reconnect_streamed", "1",
     # NOTE: deliberately NOT -reconnect_at_eof — it conflicts with the HLS
@@ -125,6 +128,10 @@ async def _probe_source(url: str) -> tuple:
     try:
         proc = await asyncio.create_subprocess_exec(
             ffprobe, "-v", "error",
+            # Same browser UA as the real fetch — some origins stall on or reject
+            # the default Lavf UA, which would make the probe time out and the
+            # source fall back to passthrough even when it's a heavy 1080p feed.
+            "-user_agent", _BROWSER_UA,
             "-select_streams", "v:0",
             "-show_entries", "stream=codec_type,height:format=bit_rate",
             "-of", "default=noprint_wrappers=1",
