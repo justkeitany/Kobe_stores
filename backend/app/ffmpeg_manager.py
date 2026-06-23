@@ -31,9 +31,9 @@ logger = logging.getLogger(__name__)
 # and discarded corrupt packets keep the muxer from stalling, and -re paces the
 # input at native rate. These are all input options, placed before -i.
 FFMPEG_INPUT_BUFFER_ARGS = [
-    "-fflags", "+genpts+discardcorrupt",
-    "-analyzeduration", "2000000",
-    "-probesize", "2000000",
+    "-fflags", "+genpts+discardcorrupt+nobuffer",
+    "-analyzeduration", "1000000",
+    "-probesize", "1000000",
     "-thread_queue_size", "4096",
     "-re",
 ]
