@@ -168,12 +168,39 @@ export default function WatchPage() {
   };
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50 bg-black flex flex-col"
+    <div ref={containerRef} className="fixed inset-0 z-50 bg-black overflow-hidden"
       onMouseMove={keepControls}>
 
-      {/* Top bar */}
+      {/* Video fills the whole container at a constant size; the control bars
+          overlay on top (absolute) so showing/hiding them never resizes it. */}
+      <video ref={videoRef} onClick={togglePlay}
+        className="absolute inset-0 w-full h-full object-contain" playsInline muted={muted} />
+
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60">
+          <div className="flex flex-col items-center gap-3">
+            <Loader2 size={40} className="animate-spin text-white" />
+            <p className="text-white/70">Loading stream…</p>
+          </div>
+        </div>
+      )}
+
+      {error && (
+        <div className="absolute inset-0 flex items-center justify-center bg-black/80">
+          <div className="flex flex-col items-center gap-3 px-6 text-center">
+            <AlertCircle size={40} className="text-red-400" />
+            <p className="text-white font-medium text-lg">Playback Error</p>
+            <p className="text-white/60">{error}</p>
+            <button onClick={() => { setError(null); setLoading(true); }} className="mt-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors">
+              Retry
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Top bar (overlay) */}
       {showControls && (
-        <div className="flex items-center gap-4 px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
+        <div className="absolute top-0 left-0 right-0 flex items-center gap-4 px-4 py-3 bg-gradient-to-b from-black/80 to-transparent">
           <button onClick={() => nav(-1)} className="text-white/80 hover:text-white transition-colors" title="Back">
             <ChevronLeft size={24} />
           </button>
@@ -181,36 +208,9 @@ export default function WatchPage() {
         </div>
       )}
 
-      {/* Video area */}
-      <div className="flex-1 relative bg-black" onClick={togglePlay}>
-        <video ref={videoRef} className="absolute inset-0 w-full h-full object-contain" playsInline muted={muted} />
-
-        {loading && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/60">
-            <div className="flex flex-col items-center gap-3">
-              <Loader2 size={40} className="animate-spin text-white" />
-              <p className="text-white/70">Loading stream…</p>
-            </div>
-          </div>
-        )}
-
-        {error && (
-          <div className="absolute inset-0 flex items-center justify-center bg-black/80">
-            <div className="flex flex-col items-center gap-3 px-6 text-center">
-              <AlertCircle size={40} className="text-red-400" />
-              <p className="text-white font-medium text-lg">Playback Error</p>
-              <p className="text-white/60">{error}</p>
-              <button onClick={() => { setError(null); setLoading(true); }} className="mt-2 px-6 py-2.5 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-colors">
-                Retry
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* Bottom control bar — always visible */}
+      {/* Bottom control bar (overlay) */}
       {showControls && !loading && (
-        <div className="bg-gradient-to-t from-black/95 to-transparent">
+        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/95 to-transparent">
           {/* Progress bar */}
           <div className="px-4">
             <input
@@ -280,8 +280,11 @@ export default function WatchPage() {
               )}
             </div>
 
-            {/* Quality selector */}
-            {levels.length > 1 && (
+            {/* Quality selector — only when the stream actually offers multiple
+                renditions (Auto + ≥2). Channels now serve a single constant
+                rendition, so this stays hidden rather than showing a useless
+                "Auto / 0kbps" menu. */}
+            {levels.length > 2 && (
               <div className="relative">
                 <button onClick={() => { setShowQuality(!showQuality); setShowSpeed(false); }}
                   className="flex items-center gap-1 text-white/80 hover:text-white text-xs font-medium px-2.5 py-1.5 rounded bg-white/10 hover:bg-white/20 transition-colors">
