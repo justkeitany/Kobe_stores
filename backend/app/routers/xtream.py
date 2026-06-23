@@ -368,6 +368,17 @@ async def get_playlist(
         result = await db.execute(q)
         rows = result.all()
 
+        # Also serve playlist channels directly so imports aren't required.
+        # A playlist channel shows up in the player as soon as its playlist is
+        # added — no import step. Uses the playlist's group-title as the category.
+        import urllib.parse
+        from app.models import Playlist
+        stream_urls: set[str] = {r[0].stream_url for r in rows}
+        pl_result = await db.execute(
+            select(Playlist).where(Playlist.name != "").order_by(Playlist.id)
+        )
+        playlists = pl_result.scalars().all()
+
     lines = ["#EXTM3U"]
     for stream, cat in rows:
         cat_name = cat.name if cat else "Uncategorized"
@@ -397,6 +408,33 @@ async def get_playlist(
             f'group-title="{cat_name}",{stream.name}'
         )
         lines.append(stream_url)
+
+    # Append playlist channels (not yet imported as streams).
+    # Each playlist becomes a category group-title.
+    # Duplicate URLs (channels already imported above) are skipped.
+    for pl in playlists:
+        if not pl.channels:
+            continue
+        for c in pl.channels:
+            if c["url"] in stream_urls:
+                continue
+            stream_urls.add(c["url"])
+            logo = (c.get("logo") or "").strip()
+            safe_name = c["name"].replace('"', "'")
+            cat = pl.name
+            if c.get("category"):
+                cat = f"{pl.name} - {c['category']}"
+            # Balanced: player fetches the upstream URL directly (no restream).
+            # For a playlist channel to get the buffering pipeline it must
+            # still be imported as a stream with delivery_mode=restream.
+            final_url = urllib.parse.quote(c["url"], safe=":/?&=%")
+            lines.append(
+                f'#EXTINF:-1 tvg-id="" '
+                f'tvg-name="{safe_name}" '
+                f'tvg-logo="{logo}" '
+                f'group-title="{cat}",{safe_name}'
+            )
+            lines.append(final_url)
 
     content = "\n".join(lines)
     return Response(

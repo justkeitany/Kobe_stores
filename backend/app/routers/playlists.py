@@ -300,7 +300,7 @@ async def _refresh_meta(p: Playlist, db: AsyncSession) -> None:
     # Cache the channel list (capped) for the Channels page aggregation.
     p.channels = [
         {"name": c["name"], "logo": c.get("logo") or "", "url": c["url"], "category": c.get("category") or ""}
-        for c in channels[:800]
+        for c in channels[:5000]
     ]
 
     if not channels:
