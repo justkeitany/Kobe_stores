@@ -477,6 +477,22 @@ async def delete_playlist(
     if not p:
         raise HTTPException(404, "Playlist not found")
 
+    # Save the M3U link for future re-use before cascading the delete.
+    from app.models import Settings
+    import json
+    saved = await db.execute(
+        select(Settings).where(Settings.key == "deleted_playlist_urls")
+    )
+    row = saved.scalar_one_or_none()
+    archive: list = json.loads(row.value) if (row and row.value) else []
+    # Keep at most 50 entries; newest first.
+    archive.insert(0, {"name": p.name, "url": p.url, "deleted_at": datetime.now(timezone.utc).isoformat()})
+    archive = archive[:50]
+    if row:
+        row.value = json.dumps(archive)
+    else:
+        db.add(Settings(key="deleted_playlist_urls", value=json.dumps(archive)))
+
     # Cascade: delete the category that was auto-created for this playlist
     # (same name), its bouquet references, and all streams imported into it.
     cat_result = await db.execute(
@@ -497,3 +513,23 @@ async def delete_playlist(
 
     await db.delete(p)
     await db.commit()
+
+
+@router.get("/deleted/urls")
+async def list_deleted_urls(
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_admin),
+):
+    """Recently-deleted playlist URLs available for one-click restoration."""
+    import json
+    from app.models import Settings
+    saved = await db.execute(
+        select(Settings).where(Settings.key == "deleted_playlist_urls")
+    )
+    row = saved.scalar_one_or_none()
+    if not row or not row.value:
+        return []
+    try:
+        return json.loads(row.value)
+    except (ValueError, TypeError):
+        return []

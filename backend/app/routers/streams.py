@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models import Stream, StreamCategory, StreamSource
+from app.models import Stream, StreamCategory, StreamSource, BouquetCategory
 from app.ffmpeg_manager import ffmpeg_manager, VALID_QUALITIES
 from app.youtube import is_youtube_url, clean_youtube_url, proxy_resolve
 from app.pluto_stream import resolve as resolve_pluto_url, is_pluto_url
@@ -330,9 +330,23 @@ async def delete_stream(
     stream = result.scalar_one_or_none()
     if not stream:
         raise HTTPException(404, "Stream not found")
+    cat_id = stream.category_id
     # Stop FFmpeg if running
     await ffmpeg_manager.stop_stream(stream_id)
     await db.delete(stream)
+    # If this was the last stream in its category, clean up the orphan.
+    if cat_id:
+        remaining = await db.execute(
+            select(func.count()).select_from(Stream).where(Stream.category_id == cat_id)
+        )
+        if remaining.scalar() == 0:
+            await db.execute(
+                delete(BouquetCategory).where(BouquetCategory.category_id == cat_id)
+            )
+            cat = await db.execute(select(StreamCategory).where(StreamCategory.id == cat_id))
+            c = cat.scalar_one_or_none()
+            if c:
+                await db.delete(c)
     await db.commit()
 
 
