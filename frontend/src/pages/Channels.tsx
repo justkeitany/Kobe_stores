@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, RefreshCw, AlertCircle, Tv, Play } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
-import Player from "../components/Player";
 import clsx from "clsx";
 
 const PAGE_SIZE = 36;
@@ -40,7 +40,7 @@ export default function Channels() {
   const [page, setPage] = useState(0);
   const [working, setWorking] = useState<Set<string>>(new Set());
   const [probed, setProbed] = useState<Record<string, Health>>({});
-  const [player, setPlayer] = useState<{ url: string; name: string } | null>(null);
+  const nav = useNavigate();
 
   const { data: channels = [], isLoading } = useQuery<Channel[]>({
     queryKey: ["all-channels"],
@@ -162,9 +162,9 @@ export default function Channels() {
                     <button
                       onClick={() => {
                         if (c.imported && c.stream_id != null) {
-                          setPlayer({ url: `/hls/${c.stream_id}/master.m3u8`, name: c.name });
+                          nav(`/watch?url=${encodeURIComponent(`/hls/${c.stream_id}/master.m3u8`)}&name=${encodeURIComponent(c.name)}`);
                         } else if (c.url) {
-                          setPlayer({ url: `/live/pl/kobe/mzeekobe100?url=${encodeURIComponent(c.url)}`, name: c.name });
+                          nav(`/watch?url=${encodeURIComponent(`/live/pl/kobe/mzeekobe100?url=${encodeURIComponent(c.url)}`)}&name=${encodeURIComponent(c.name)}`);
                         }
                       }}
                       className="w-full inline-flex items-center justify-center gap-1 text-[12px] text-on-surface-variant hover:text-on-surface transition-colors py-1"
@@ -185,19 +185,6 @@ export default function Channels() {
             </div>
           )}
         </>
-      )}
-
-      {/* Player Modal */}
-      {player && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPlayer(null)}>
-          <div className="w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
-            <div className="flex items-center justify-between mb-2">
-              <p className="text-white/80 text-sm truncate flex-1">{player.name}</p>
-              <button onClick={() => setPlayer(null)} className="text-white/60 hover:text-white text-xl leading-none px-2">&times;</button>
-            </div>
-            <Player url={player.url} title={player.name} />
-          </div>
-        </div>
       )}
     </div>
   );

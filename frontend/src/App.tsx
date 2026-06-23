@@ -12,6 +12,7 @@ import PlutoTV from "./pages/PlutoTV";
 import FreeStreamsTV from "./pages/FreeStreamsTV";
 import Playlists from "./pages/Playlists";
 import Channels from "./pages/Channels";
+import Watch from "./pages/Watch";
 import Categories from "./pages/Categories";
 import Bouquets from "./pages/Bouquets";
 import EPG from "./pages/EPG";
@@ -62,6 +63,7 @@ export default function App() {
             <Route path="freestreams/:provider" element={<FreeStreamsTV />} />
             <Route path="playlists" element={<Playlists />} />
             <Route path="channels" element={<Channels />} />
+            <Route path="watch" element={<Watch />} />
             <Route path="categories" element={<Categories />} />
             <Route path="bouquets" element={<Bouquets />} />
             <Route path="epg" element={<EPG />} />
