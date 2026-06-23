@@ -516,13 +516,13 @@ class StreamProcess:
             # clean, uniform 2.0s segments instead of ragged 1.0–2.3s ones (which
             # destabilise the player's buffer math and cause micro-stalls).
             "-map", "[v720o]", "-map", "0:a:0?",
-            "-c:v:1", "libx264", "-preset", "veryfast", "-threads", str(ABR_TRANSCODE_THREADS),
+            "-c:v:1", "libx264", "-preset", "ultrafast", "-threads", str(ABR_TRANSCODE_THREADS),
             "-force_key_frames:v:1", "expr:gte(t,n_forced*2)", "-sc_threshold:v:1", "0",
             "-b:v:1", "1250k", "-maxrate:v:1", "1450k", "-bufsize:v:1", "3000k",
             "-c:a:1", "aac", "-b:a:1", "128k",
             # v2 — 480p (same uniform-segment treatment)
             "-map", "[v480o]", "-map", "0:a:0?",
-            "-c:v:2", "libx264", "-preset", "veryfast", "-threads", str(ABR_TRANSCODE_THREADS),
+            "-c:v:2", "libx264", "-preset", "ultrafast", "-threads", str(ABR_TRANSCODE_THREADS),
             "-force_key_frames:v:2", "expr:gte(t,n_forced*2)", "-sc_threshold:v:2", "0",
             "-b:v:2", "600k", "-maxrate:v:2", "750k", "-bufsize:v:2", "1500k",
             "-c:a:2", "aac", "-b:a:2", "96k",
@@ -589,9 +589,7 @@ class StreamProcess:
             # redirects to a working stream. Non-Pluto URLs pass through.
             "-i", self._resolved_input,
             # Stream copy ('auto') or transcode down to the selected quality tier.
-            # _effective_quality may be promoted from 'auto' to a single 720p tier
-            # for heavy sources (see start()); falls back to self.quality.
-            *_codec_args(getattr(self, "_effective_quality", None) or self.quality),
+            *_codec_args(self.quality),
             # HLS output — flush each packet and hold a deeper segment window so
             # players have more buffered ahead of the live edge.
             "-flush_packets", "1",
@@ -621,39 +619,42 @@ class StreamProcess:
                 self._pargs = await proxy_resolver.proxy_args(
                     self.stream_id, self.proxy_country
                 )
-                # Adaptive HLS when quality is auto and the governor has room;
-                # otherwise a single stream (passthrough for auto, transcode for
-                # an explicit tier). Decided once, kept across crash-restarts.
-                # Detect audio-only sources (radio/Icecast) so they never hit the
-                # video ladder, which would crash with rc=1. Probed once, cached.
-                # Skip for playlist streams (allow_multivariant=False) — ffprobe
-                # can take 10+ seconds on high-latency upstreams and is only
-                # needed when multi-variant might select a video transcoder.
-                # Single constant rendition per channel — NO adaptive ladder.
-                # The multi-variant ladder made the picture pulse (the player
-                # flips between copy/720p/480p, each a different resolution) and
-                # rebuffered on every switch. Instead we pick ONE rendition and
-                # hold it: small/low-bitrate sources pass straight through (copy,
-                # ~0 CPU); genuinely heavy sources (1080p+/>3 Mbps) get a single
-                # 720p transcode that fits a ~4 Mbps line. Audio-only sources
-                # (radio) keep their own pipeline.
+                # Decide the delivery shape for this source (kept across restarts):
+                #   - audio-only (radio/Icecast) -> dedicated audio pipeline
+                #     (the video ladder/scale would crash rc=1). Probed once.
+                #   - heavy video (1080p+ or >3 Mbps) -> adaptive ladder so the
+                #     viewer can drop to 720p/480p to beat buffering. The ladder
+                #     rungs are real downscales (never upscaled — small sources
+                #     are excluded below) and use the ultrafast encoder so they
+                #     keep real-time and never lag behind the live edge.
+                #   - everything else (small/low-bitrate) -> single passthrough
+                #     copy (~0 CPU); transcoding it would only add lag.
+                # Skip the probe for playlist streams (allow_multivariant=False) —
+                # ffprobe can take 10+s on high-latency upstreams.
                 self.audio_only = False
-                self.multivariant = False
-                self._effective_quality = self.quality
+                wants_ladder = False
                 if self.allow_multivariant or self.quality != "auto":
                     has_video, height, bitrate = await _probe_source(self._resolved_input)
                     self.audio_only = not has_video
-                    if self.quality == "auto" and not self.audio_only:
-                        if _source_wants_ladder(height, bitrate):
-                            self._effective_quality = "medium"  # single 720p downscale
-                        decision = ("720p transcode" if self._effective_quality == "medium"
-                                    else "passthrough (no transcode)")
+                    wants_ladder = _source_wants_ladder(height, bitrate)
+                    if self.allow_multivariant and self.quality == "auto" and not self.audio_only:
                         logger.info(
                             f"Stream {self.stream_id}: source {height or '?'}p "
-                            f"{(bitrate // 1000) if bitrate else '?'}kbps -> {decision}"
+                            f"{(bitrate // 1000) if bitrate else '?'}kbps -> "
+                            f"{'adaptive ladder (1080/720/480)' if wants_ladder else 'passthrough (no transcode)'}"
                         )
+                # Only spin up the (CPU-heavy) ladder for genuinely heavy sources,
+                # and only while the governor has a slot free.
+                if (self.quality == "auto" and self.allow_multivariant and wants_ladder
+                        and not self._holds_mv and not self.audio_only):
+                    transcode_governor.start()
+                    if await transcode_governor.try_acquire_mv():
+                        self.multivariant = True
+                        self._holds_mv = True
                 self._reset_hls_dir()
-                if self.audio_only:
+                if self.multivariant:
+                    cmd = self._build_multivariant_cmd()
+                elif self.audio_only:
                     cmd = self._build_audio_cmd()
                 else:
                     cmd = self._build_ffmpeg_cmd()
