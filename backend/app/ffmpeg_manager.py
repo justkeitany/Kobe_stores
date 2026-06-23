@@ -104,6 +104,75 @@ ERROR_RETRY_COOLDOWN = 60
 # Caches whether a source URL carries a video track. None is never stored — only
 # definitive True/False — so a failed probe doesn't get memoised as a wrong answer.
 _VIDEO_PROBE_CACHE: Dict[str, bool] = {}
+# (has_video, height, bitrate) per resolved URL — drives both audio-only routing
+# and the "is this source heavy enough to bother transcoding?" decision.
+_SOURCE_PROBE_CACHE: Dict[str, tuple] = {}
+
+
+async def _probe_source(url: str) -> tuple:
+    """Probe a source once: returns (has_video, height, bitrate).
+
+    Used to (a) route audio-only sources to the audio pipeline and (b) decide
+    whether a source is large enough to benefit from the transcode ladder. On any
+    probe failure we assume a normal video source (True, 0, 0) so a transient blip
+    never mis-routes a real channel. Cached per resolved URL.
+    """
+    resolved = resolve_pluto_url(url)
+    if resolved in _SOURCE_PROBE_CACHE:
+        return _SOURCE_PROBE_CACHE[resolved]
+    ffprobe = os.path.join(os.path.dirname(settings.FFMPEG_PATH), "ffprobe")
+    result = (True, 0, 0)
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            ffprobe, "-v", "error",
+            "-select_streams", "v:0",
+            "-show_entries", "stream=codec_type,height:format=bit_rate",
+            "-of", "default=noprint_wrappers=1",
+            resolved,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=12)
+        if proc.returncode == 0:
+            text = out.decode(errors="replace")
+            has_video = "codec_type=video" in text
+            height = bitrate = 0
+            for line in text.splitlines():
+                k, _, v = line.partition("=")
+                v = v.strip()
+                if v in ("", "N/A"):
+                    continue
+                try:
+                    if k == "height":
+                        height = int(v)
+                    elif k == "bit_rate":
+                        bitrate = int(v)
+                except ValueError:
+                    pass
+            result = (has_video, height, bitrate)
+            _SOURCE_PROBE_CACHE[resolved] = result
+        # rc != 0 → couldn't read the source; leave uncached, assume video.
+    except (asyncio.TimeoutError, Exception):
+        result = (True, 0, 0)
+    return result
+
+
+def _source_wants_ladder(height: int, bitrate: int) -> bool:
+    """Whether a source is heavy enough to warrant the transcode ladder.
+
+    Small / low-bitrate feeds (≤720p, ≤~3 Mbps) play markedly smoother passed
+    straight through: no encoder lag (the transcoded rungs were falling ~10s
+    behind the live edge) and no pointless upscaling (a 540p source was being
+    blown up to 720p). Only genuinely heavy sources — 1080p+, or anything that
+    wouldn't fit a ~4 Mbps line with headroom — get downscaled so weak viewers
+    still have a low rung. This is what makes ordinary channels behave like the
+    rock-solid low-bitrate Free streams.
+    """
+    if bitrate and bitrate > 3_000_000:
+        return True
+    if height and height >= 1080:
+        return True
+    return False
 
 
 async def _source_has_video(url: str) -> bool:
@@ -552,9 +621,20 @@ class StreamProcess:
                 # can take 10+ seconds on high-latency upstreams and is only
                 # needed when multi-variant might select a video transcoder.
                 self.audio_only = False
+                wants_ladder = False
                 if self.allow_multivariant or self.quality != "auto":
-                    self.audio_only = not await _source_has_video(self._resolved_input)
-                if (self.quality == "auto" and self.allow_multivariant
+                    has_video, height, bitrate = await _probe_source(self._resolved_input)
+                    self.audio_only = not has_video
+                    wants_ladder = _source_wants_ladder(height, bitrate)
+                    if self.allow_multivariant and self.quality == "auto" and not self.audio_only:
+                        logger.info(
+                            f"Stream {self.stream_id}: source {height or '?'}p "
+                            f"{(bitrate // 1000) if bitrate else '?'}kbps -> "
+                            f"{'adaptive ladder' if wants_ladder else 'passthrough (no transcode)'}"
+                        )
+                # Only spin up the (CPU-heavy, lag-prone) transcode ladder for
+                # genuinely heavy sources; small/low-bitrate feeds pass through.
+                if (self.quality == "auto" and self.allow_multivariant and wants_ladder
                         and not self._holds_mv and not self.audio_only):
                     transcode_governor.start()
                     if await transcode_governor.try_acquire_mv():
