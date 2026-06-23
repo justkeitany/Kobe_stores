@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, RefreshCw, AlertCircle, ExternalLink, Tv } from "lucide-react";
+import { Loader2, RefreshCw, AlertCircle, ExternalLink, Tv, Play } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
+import Player from "../components/Player";
 import clsx from "clsx";
 
 const PAGE_SIZE = 36;
@@ -39,6 +40,7 @@ export default function Channels() {
   const [page, setPage] = useState(0);
   const [working, setWorking] = useState<Set<string>>(new Set());
   const [probed, setProbed] = useState<Record<string, Health>>({});
+  const [player, setPlayer] = useState<{ url: string; name: string } | null>(null);
 
   const { data: channels = [], isLoading } = useQuery<Channel[]>({
     queryKey: ["all-channels"],
@@ -157,14 +159,18 @@ export default function Channels() {
                       {busy ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
                       {busy ? "Diagnosing…" : "Diagnose"}
                     </button>
-                    {c.imported && c.stream_id != null ? (
-                      <button onClick={() => window.open(`${window.location.origin}/hls/${c.stream_id}/master.m3u8`, "_blank")}
-                        className="w-full inline-flex items-center justify-center gap-1.5 text-[13px] text-on-surface-variant hover:text-on-surface transition-colors">
-                        Watch in browser <ExternalLink size={13} />
-                      </button>
-                    ) : (
-                      <p className="text-center text-[11px] text-on-surface-variant/60">Not imported to streams</p>
-                    )}
+                    <button
+                      onClick={() => {
+                        if (c.imported && c.stream_id != null) {
+                          setPlayer({ url: `/hls/${c.stream_id}/master.m3u8`, name: c.name });
+                        } else if (c.url) {
+                          setPlayer({ url: `/live/pl/kobe/mzeekobe100?url=${encodeURIComponent(c.url)}`, name: c.name });
+                        }
+                      }}
+                      className="w-full inline-flex items-center justify-center gap-1 text-[12px] text-on-surface-variant hover:text-on-surface transition-colors py-1"
+                    >
+                      <Play size={13} /> Watch
+                    </button>
                   </div>
                 </div>
               );
@@ -179,6 +185,19 @@ export default function Channels() {
             </div>
           )}
         </>
+      )}
+
+      {/* Player Modal */}
+      {player && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 p-4" onClick={() => setPlayer(null)}>
+          <div className="w-full max-w-5xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-white/80 text-sm truncate flex-1">{player.name}</p>
+              <button onClick={() => setPlayer(null)} className="text-white/60 hover:text-white text-xl leading-none px-2">&times;</button>
+            </div>
+            <Player url={player.url} title={player.name} />
+          </div>
+        </div>
       )}
     </div>
   );
