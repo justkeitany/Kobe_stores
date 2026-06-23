@@ -548,7 +548,12 @@ class StreamProcess:
                 # an explicit tier). Decided once, kept across crash-restarts.
                 # Detect audio-only sources (radio/Icecast) so they never hit the
                 # video ladder, which would crash with rc=1. Probed once, cached.
-                self.audio_only = not await _source_has_video(self._resolved_input)
+                # Skip for playlist streams (allow_multivariant=False) — ffprobe
+                # can take 10+ seconds on high-latency upstreams and is only
+                # needed when multi-variant might select a video transcoder.
+                self.audio_only = False
+                if self.allow_multivariant or self.quality != "auto":
+                    self.audio_only = not await _source_has_video(self._resolved_input)
                 if (self.quality == "auto" and self.allow_multivariant
                         and not self._holds_mv and not self.audio_only):
                     transcode_governor.start()
