@@ -419,8 +419,8 @@ async def get_playlist(
             if c["url"] in stream_urls:
                 continue
             stream_urls.add(c["url"])
-            logo = (c.get("logo") or "").strip()
-            safe_name = c["name"].replace('"', "'")
+            safe_name = c["name"].replace('"', "").replace("'", "")
+            safe_logo = (c.get("logo") or "").replace('"', "")
             cat = pl.name
             if c.get("category"):
                 cat = f"{pl.name} - {c['category']}"
@@ -431,7 +431,7 @@ async def get_playlist(
             lines.append(
                 f'#EXTINF:-1 tvg-id="" '
                 f'tvg-name="{safe_name}" '
-                f'tvg-logo="{logo}" '
+                f'tvg-logo="{safe_logo}" '
                 f'group-title="{cat}",{safe_name}'
             )
             lines.append(final_url)
