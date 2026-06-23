@@ -4,8 +4,9 @@ import { Loader2, RefreshCw, AlertCircle, ExternalLink, Tv } from "lucide-react"
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
-import { useInfiniteRender } from "../hooks/useInfiniteRender";
 import clsx from "clsx";
+
+const PAGE_SIZE = 36;
 
 interface Channel {
   key: string;
@@ -27,14 +28,15 @@ const HEALTH_ORDER: Record<Health, number> = { online: 0, checking: 1, geo: 2, o
 
 const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
   online:   { label: "Online",         cls: "bg-[#1f3a2a] text-[#5edc8a]", dot: "bg-[#5edc8a]" },
-  offline:  { label: "Offline",        cls: "bg-[#3a1f1f] text-[#ffb4ab]", dot: "bg-[#ffb4ab]" },
+  offline:  { label: "Offline",        cls: "bg-[#3d2e0a] text-[#f5a623]", dot: "bg-[#f5a623]" },
   geo:      { label: "Geo-restricted", cls: "bg-surface-container text-on-surface-variant", dot: "bg-[#9aa0a6]" },
   dead:     { label: "Dead",           cls: "bg-[#1a1a1a] text-[#ff6b6b]", dot: "bg-[#ff6b6b]" },
-  checking: { label: "Checking…",      cls: "bg-surface-container text-on-surface-variant/70", dot: "bg-on-surface-variant/40" },
+  checking: { label: "Pending",        cls: "bg-surface-container text-on-surface-variant/70", dot: "bg-on-surface-variant/40" },
 };
 
 export default function Channels() {
   const [search, setSearch] = useState("");
+  const [page, setPage] = useState(0);
   const [working, setWorking] = useState<Set<string>>(new Set());
   const [probed, setProbed] = useState<Record<string, Health>>({});
 
@@ -64,10 +66,12 @@ export default function Channels() {
       .map((x) => x.c);
   }, [channels, search, probed]);
 
-  const { visible: shown, hasMore, sentinelRef } = useInfiniteRender(filtered, {
-    step: 48,
-    resetKey: search,
-  });
+  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const cur = Math.min(page, pages - 1);
+  const shown = filtered.slice(cur * PAGE_SIZE, cur * PAGE_SIZE + PAGE_SIZE);
+
+  // Reset to page 0 on new search
+  useMemo(() => { setPage(0); }, [search]);
 
   async function reportIssue(c: Channel) {
     setWorking((w) => new Set(w).add(c.key));
@@ -125,32 +129,32 @@ export default function Channels() {
         <div className="py-16 text-center text-on-surface-variant">No channels. Add a playlist or import streams.</div>
       ) : (
         <>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
             {shown.map((c) => {
               const b = BADGE[healthOf(c)];
               const busy = working.has(c.key);
               return (
                 <div key={c.key} className="bg-surface-container-low border border-outline-variant rounded-md flex flex-col overflow-hidden">
-                  <div className="p-md flex flex-col items-center text-center gap-2 flex-1">
+                  <div className="p-3 flex flex-col items-center text-center gap-1.5 flex-1">
                     <div className="self-stretch flex items-center justify-between">
-                      <span className={clsx("inline-flex items-center gap-1.5 text-[11px] font-medium rounded-full px-2 py-0.5", b.cls)}>
+                      <span className={clsx("inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-2 py-0.5", b.cls)}>
                         <span className={clsx("w-1.5 h-1.5 rounded-full", b.dot)} /> {b.label}
                       </span>
-                      <button onClick={() => reportIssue(c)} disabled={busy} title="Re-check"
+                      <button onClick={() => reportIssue(c)} disabled={busy} title="Diagnose"
                         className="text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50">
-                        <RefreshCw size={15} className={clsx(busy && "animate-spin")} />
+                        <RefreshCw size={13} className={clsx(busy && "animate-spin")} />
                       </button>
                     </div>
                     <Logo logo={c.logo} />
-                    <p className="font-bold leading-tight line-clamp-2">{c.name}</p>
-                    <span className="text-[10px] font-code-label uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-full px-2 py-0.5 truncate max-w-full">
+                    <p className="font-semibold text-[13px] leading-tight line-clamp-2">{c.name}</p>
+                    <span className="text-[9px] font-code-label uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-full px-2 py-0.5 truncate max-w-full">
                       {c.source}
                     </span>
                   </div>
-                  <div className="border-t border-outline-variant p-3 space-y-2">
+                  <div className="border-t border-outline-variant p-2">
                     <button onClick={() => reportIssue(c)} disabled={busy}
-                      className="w-full inline-flex items-center justify-center gap-1.5 text-[13px] font-medium rounded-md border border-error/40 text-error py-2 hover:bg-error/10 transition-colors disabled:opacity-50">
-                      {busy ? <Loader2 size={14} className="animate-spin" /> : <AlertCircle size={14} />}
+                      className="w-full inline-flex items-center justify-center gap-1 text-[12px] font-medium rounded-md border border-error/40 text-error py-1.5 hover:bg-error/10 transition-colors disabled:opacity-50">
+                      {busy ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
                       {busy ? "Diagnosing…" : "Diagnose"}
                     </button>
                     {c.imported && c.stream_id != null ? (
@@ -167,9 +171,11 @@ export default function Channels() {
             })}
           </div>
 
-          {hasMore && (
-            <div ref={sentinelRef} className="flex items-center justify-center py-6 text-on-surface-variant">
-              <Loader2 size={18} className="animate-spin" />
+          {pages > 1 && (
+            <div className="flex items-center justify-center gap-3 pt-3 text-body-sm">
+              <button className="btn-secondary py-1 px-3" onClick={() => setPage(Math.max(0, cur - 1))} disabled={cur === 0}>Prev</button>
+              <span className="text-on-surface-variant">Page {cur + 1} of {pages}</span>
+              <button className="btn-secondary py-1 px-3" onClick={() => setPage(Math.min(pages - 1, cur + 1))} disabled={cur >= pages - 1}>Next</button>
             </div>
           )}
         </>
@@ -182,13 +188,13 @@ function Logo({ logo }: { logo?: string | null }) {
   const [failed, setFailed] = useState(false);
   if (!logo || failed) {
     return (
-      <div className="w-16 h-16 rounded-lg border border-outline-variant flex items-center justify-center bg-surface-container">
-        <Tv size={24} className="text-on-surface-variant" />
+      <div className="w-10 h-10 rounded-md border border-outline-variant flex items-center justify-center bg-surface-container">
+        <Tv size={16} className="text-on-surface-variant" />
       </div>
     );
   }
   return (
     <img src={logo} alt="" onError={() => setFailed(true)} loading="lazy" decoding="async"
-      className="w-16 h-16 rounded-lg object-contain border border-outline-variant bg-white p-1" />
+      className="w-10 h-10 rounded-md object-contain border border-outline-variant bg-white p-0.5" />
   );
 }
