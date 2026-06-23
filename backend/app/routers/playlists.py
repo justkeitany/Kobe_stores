@@ -18,13 +18,13 @@ from datetime import datetime, timezone
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth import get_current_admin
 from app.database import AsyncSessionLocal, get_db
 from app.ffmpeg_manager import ffmpeg_manager
-from app.models import Playlist
+from app.models import Playlist, Stream, StreamCategory, BouquetCategory
 
 router = APIRouter(prefix="/api/playlists", tags=["playlists"])
 logger = logging.getLogger(__name__)
@@ -476,5 +476,24 @@ async def delete_playlist(
     p = result.scalar_one_or_none()
     if not p:
         raise HTTPException(404, "Playlist not found")
+
+    # Cascade: delete the category that was auto-created for this playlist
+    # (same name), its bouquet references, and all streams imported into it.
+    cat_result = await db.execute(
+        select(StreamCategory).where(StreamCategory.name == p.name)
+    )
+    category = cat_result.scalar_one_or_none()
+    if category:
+        # Delete bouquet-category refs first (FK constraint)
+        await db.execute(
+            delete(BouquetCategory).where(BouquetCategory.category_id == category.id)
+        )
+        # Delete streams in this category
+        await db.execute(
+            delete(Stream).where(Stream.category_id == category.id)
+        )
+        # Delete the category itself
+        await db.delete(category)
+
     await db.delete(p)
     await db.commit()
