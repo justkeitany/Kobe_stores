@@ -566,7 +566,8 @@ async def serve_playlist_restream(
         raise HTTPException(429, "Connection limit reached")
 
     # Synthetic negative ID → no DB writes, no viewer tracking.
-    stream_id = -(abs(hash(url)) % 10_000_000)
+    import hashlib
+    stream_id = -(int(hashlib.md5(url.encode()).hexdigest()[:12], 16) % 10_000_000)
 
     # Extract a human-readable name from the URL path for logs.
     try:
