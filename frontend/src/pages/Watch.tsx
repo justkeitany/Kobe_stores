@@ -74,7 +74,8 @@ export default function WatchPage() {
 
       hls.on(Hls.Events.ERROR, (_ev, data) => {
         if (data.fatal) {
-          setError({ networkError: "Network error", mediaError: "Unsupported format", muxError: "Encoding error" }[data.type] || data.details);
+          const msgs: Record<string, string> = { networkError: "Network error", mediaError: "Unsupported format", muxError: "Encoding error" };
+          setError(msgs[data.type] || data.details);
           setLoading(false);
           hls.destroy();
           hlsRef.current = null;
