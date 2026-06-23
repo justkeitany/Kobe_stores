@@ -390,6 +390,38 @@ async def create_playlist(
     return _serialize(p)
 
 
+# ── Internal category feeds (cached in Redis) ─────────────────────────────
+
+@router.get("/category-feed/{category}")
+async def category_feed(category: str):
+    """Serve a cached M3U feed for one category (built from us/eng/index)."""
+    import json
+    from app.redis_client import get_redis
+    r = await get_redis()
+    data = await r.get(f"category_feed:{category}")
+    if not data:
+        raise HTTPException(404, f"No cached feed for category {category!r}")
+    channels = json.loads(data)
+    lines = ["#EXTM3U"]
+    for c in channels:
+        name = c["name"].replace('"', "").replace("'", "")
+        logo = (c.get("logo") or "").replace('"', "")
+        cat = c.get("category") or ""
+        lines.append(
+            f'#EXTINF:-1 tvg-id="" '
+            f'tvg-name="{name}" '
+            f'tvg-logo="{logo}" '
+            f'group-title="{cat}",{name}'
+        )
+        lines.append(c["url"])
+    return Response(
+        content="\n".join(lines),
+        media_type="audio/x-mpegurl",
+    )
+
+
+# ── CRUD ──────────────────────────────────────────────────────────────────
+
 @router.post("/{playlist_id}/refresh")
 async def refresh_playlist(
     playlist_id: int,
