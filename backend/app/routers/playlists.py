@@ -271,13 +271,9 @@ async def _dedupe_exclude_urls(db: AsyncSession, p: Playlist) -> set[str]:
 
 
 async def _channels_for(db: AsyncSession, p: Playlist) -> list[dict]:
-    """Parse a playlist's feed and drop channels claimed by higher-priority
-    siblings in its dedupe group."""
-    channels = _parse_m3u(await _fetch_m3u(p.url))
-    exclude = await _dedupe_exclude_urls(db, p)
-    if exclude:
-        channels = [c for c in channels if c["url"] not in exclude]
-    return channels
+    """Parse a playlist's feed and return all channels (no dedup — each
+    playlist keeps its full set regardless of overlap with siblings)."""
+    return _parse_m3u(await _fetch_m3u(p.url))
 
 
 async def _refresh_meta(p: Playlist, db: AsyncSession) -> None:
