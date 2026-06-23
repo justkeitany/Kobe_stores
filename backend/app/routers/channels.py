@@ -7,6 +7,7 @@ re-fetched). Playlist channels already imported as a stream are deduped out.
 The Channels page renders this; status is shown as online / offline / geo only.
 """
 import hashlib
+import logging
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
@@ -22,6 +23,7 @@ from app.models import AiEvent, ChannelHealth, Playlist, Stream, StreamCategory
 from app.sources import source_urls
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
+logger = logging.getLogger(__name__)
 
 
 class ProbeIn(BaseModel):
@@ -109,7 +111,7 @@ async def probe_channel(data: ProbeIn, db: AsyncSession = Depends(get_db), _=Dep
 
     async with httpx.AsyncClient(follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as client:
         r = await _probe_status(client, data.url)
-    status = {"ready": "online", "geo": "geo", "dead": "offline"}.get(r["status"], "offline")
+    status = {"ready": "online", "geo": "geo", "dead": "dead"}.get(r["status"], "offline")
     name = (data.name or "Channel").strip()
 
     # Persist so the card keeps the real status (and the sweep won't redo it soon).
@@ -129,3 +131,69 @@ async def probe_channel(data: ProbeIn, db: AsyncSession = Depends(get_db), _=Dep
                    data={"cause": "geo_blocked" if status == "geo" else status, "auto_applied": False}))
     await db.commit()
     return {"status": status, "source": r.get("source"), "note": note}
+
+
+# ── 15-minute diagnostic sweep ────────────────────────────────────────────
+# Probes every imported stream and updates its ChannelHealth so the Channels
+# page always has fresh online/offline/geo/dead status without the AI.
+
+async def channels_diag_loop() -> None:
+    """Lightweight sweep: probes every imported stream every 15 min."""
+    import asyncio, httpx
+
+    while True:
+        try:
+            from app.database import AsyncSessionLocal
+            from app.models import Stream, ChannelHealth
+            from app.routers.playlists import _probe_status
+            from sqlalchemy import select
+            from datetime import datetime, timezone
+
+            async with AsyncSessionLocal() as db:
+                streams = (await db.execute(
+                    select(Stream.id, Stream.name, Stream.stream_url)
+                    .where(Stream.is_enabled == True)
+                )).all()
+                if not streams:
+                    await asyncio.sleep(900)
+                    continue
+
+                sem = asyncio.Semaphore(20)
+                async def probe_one(sid, name, url):
+                    async with sem:
+                        try:
+                            async with httpx.AsyncClient(
+                                timeout=15, follow_redirects=True,
+                                headers={"User-Agent": "Mozilla/5.0"}
+                            ) as client:
+                                r = await _probe_status(client, url)
+                            status = {"ready": "online", "geo": "geo", "dead": "dead"}.get(r.get("status", ""), "offline")
+                            return (sid, name, url, status)
+                        except Exception:
+                            return (sid, name, url, "dead")
+
+                tasks = [probe_one(sid, name, url) for sid, name, url in streams]
+                results = await asyncio.gather(*tasks)
+                now = datetime.now(timezone.utc)
+                counts = {"online": 0, "offline": 0, "geo": 0, "dead": 0}
+
+                for sid, name, url, status in results:
+                    counts[status] = counts.get(status, 0) + 1
+                    existing = (await db.execute(
+                        select(ChannelHealth).where(ChannelHealth.url == url)
+                    )).scalar_one_or_none()
+                    if existing:
+                        existing.status = status
+                        existing.last_checked = now
+                    else:
+                        db.add(ChannelHealth(url=url, status=status, last_checked=now))
+
+                await db.commit()
+                logger.info("Diag sweep: %s", " ".join(f"{k}={v}" for k, v in counts.items()))
+
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("Diag sweep failed: %s", e)
+
+        await asyncio.sleep(900)  # 15 minutes

@@ -19,16 +19,17 @@ interface Channel {
   url?: string;
 }
 
-type Health = "online" | "offline" | "geo" | "checking";
+type Health = "online" | "offline" | "geo" | "dead" | "checking";
 
 // Surface what viewers can actually watch first — online, then still-checking,
-// then geo-blocked, then dead.
-const HEALTH_ORDER: Record<Health, number> = { online: 0, checking: 1, geo: 2, offline: 3 };
+// then geo-blocked, then offline, then dead (unreachable upstream).
+const HEALTH_ORDER: Record<Health, number> = { online: 0, checking: 1, geo: 2, offline: 3, dead: 4 };
 
 const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
   online:   { label: "Online",         cls: "bg-[#1f3a2a] text-[#5edc8a]", dot: "bg-[#5edc8a]" },
   offline:  { label: "Offline",        cls: "bg-[#3a1f1f] text-[#ffb4ab]", dot: "bg-[#ffb4ab]" },
   geo:      { label: "Geo-restricted", cls: "bg-surface-container text-on-surface-variant", dot: "bg-[#9aa0a6]" },
+  dead:     { label: "Dead",           cls: "bg-[#1a1a1a] text-[#ff6b6b]", dot: "bg-[#ff6b6b]" },
   checking: { label: "Checking…",      cls: "bg-surface-container text-on-surface-variant/70", dot: "bg-on-surface-variant/40" },
 };
 
@@ -49,7 +50,7 @@ export default function Channels() {
   }
 
   const counts = useMemo(() => {
-    const c = { online: 0, offline: 0, geo: 0, checking: 0 } as Record<Health, number>;
+    const c = { online: 0, offline: 0, geo: 0, dead: 0, checking: 0 } as Record<Health, number>;
     for (const ch of channels) c[probed[ch.key] || ch.health]++;
     return c;
   }, [channels, probed]);
@@ -73,22 +74,19 @@ export default function Channels() {
     setWorking((w) => new Set(w).add(c.key));
     try {
       if (c.imported && c.stream_id != null) {
-        const r = await api.post(`/ai/diagnose/${c.stream_id}`);
+        const r = await api.post(`/streams/${c.stream_id}/diagnose`);
         const d = r.data;
-        const fixed = d?.recommended_action && d.recommended_action !== "none";
-        toast.success(`${c.name}: ${String(d.cause || "checked").replace(/_/g, " ")}${fixed ? ` → ${d.recommended_action.replace(/_/g, " ")}` : ""}`, { duration: 6000 });
-        qc.invalidateQueries({ queryKey: ["ai-notifications"] });
-        qc.invalidateQueries({ queryKey: ["all-channels"] });
+        const firstSeg = d.timings?.first_segment_ms ? `${(d.timings.first_segment_ms / 1000).toFixed(1)}s` : "?";
+        const status = d.passed ? "PASS" : "FAIL";
+        toast.success(
+          `${c.name}: ${status} | DNS ${d.timings?.dns_ms || "?"}ms | First seg ${firstSeg}${d.errors?.length ? " | " + d.errors[0] : ""}`,
+          { duration: 8000 }
+        );
       } else {
         const r = await api.post("/channels/probe", { url: c.url, name: c.name });
         const st = r.data.status as Health | "skipped";
-        if (st === "skipped") {
-          toast(r.data.note);
-        } else {
-          setProbed((p) => ({ ...p, [c.key]: st }));
-          toast.success(`${c.name}: ${st} — ${r.data.note}`, { duration: 6000 });
-          qc.invalidateQueries({ queryKey: ["ai-notifications"] });
-        }
+        if (st !== "skipped") setProbed((p) => ({ ...p, [c.key]: st }));
+        toast.success(`${c.name}: ${st} — ${r.data.note}`, { duration: 6000 });
       }
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Couldn't check this channel");
@@ -154,7 +152,7 @@ export default function Channels() {
                     <button onClick={() => reportIssue(c)} disabled={busy}
                       className="w-full inline-flex items-center justify-center gap-1.5 text-[13px] font-medium rounded-md border border-error/40 text-error py-2 hover:bg-error/10 transition-colors disabled:opacity-50">
                       {busy ? <Loader2 size={14} className="animate-spin" /> : <AlertCircle size={14} />}
-                      {busy ? "AI checking…" : "Issues?"}
+                      {busy ? "Diagnosing…" : "Diagnose"}
                     </button>
                     {c.imported && c.stream_id != null ? (
                       <button onClick={() => window.open(`${window.location.origin}/hls/${c.stream_id}/master.m3u8`, "_blank")}
