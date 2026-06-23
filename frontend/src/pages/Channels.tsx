@@ -162,7 +162,7 @@ export default function Channels() {
                     <button
                       onClick={() => {
                         if (c.imported && c.stream_id != null) {
-                          nav(`/watch?url=${encodeURIComponent(`/hls/${c.stream_id}/master.m3u8`)}&name=${encodeURIComponent(c.name)}`);
+                          nav(`/watch?url=${encodeURIComponent(`/live/kobe/mzeekobe100/${c.stream_id}.m3u8`)}&name=${encodeURIComponent(c.name)}`);
                         } else if (c.url) {
                           nav(`/watch?url=${encodeURIComponent(`/live/pl/kobe/mzeekobe100?url=${encodeURIComponent(c.url)}`)}&name=${encodeURIComponent(c.name)}`);
                         }
