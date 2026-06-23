@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Loader2, RefreshCw, AlertCircle, ExternalLink, Tv } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
@@ -34,7 +34,6 @@ const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
 };
 
 export default function Channels() {
-  const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [working, setWorking] = useState<Set<string>>(new Set());
   const [probed, setProbed] = useState<Record<string, Health>>({});
