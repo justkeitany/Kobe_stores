@@ -128,7 +128,7 @@ export default function Player({ url, title }: { url: string; title?: string }) 
   // Auto-hide controls
   const showControlsTemp = useCallback(() => {
     setShowControls(true);
-    clearTimeout(hideTimer.current);
+    if (hideTimer.current) clearTimeout(hideTimer.current);
     if (playing) {
       hideTimer.current = setTimeout(() => setShowControls(false), 3000);
     }
