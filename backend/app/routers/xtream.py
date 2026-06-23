@@ -577,7 +577,8 @@ async def serve_playlist_restream(
         name = "stream"
 
     sp = await ffmpeg_manager.start_stream(
-        stream_id, [url], name, client_key, "auto"
+        stream_id, [url], name, client_key, "auto",
+        allow_multivariant=False,
     )
 
     if sp.status not in ("running", "starting"):
@@ -608,7 +609,8 @@ async def serve_playlist_restream_file(
     v_str = request.query_params.get("v")
 
     client_key = _client_key(request)
-    sp = await ffmpeg_manager.get_or_create(stream_id, [], "playlist", "auto")
+    sp = await ffmpeg_manager.get_or_create(stream_id, [], "playlist", "auto",
+        allow_multivariant=False)
     if sp.status not in ("running", "starting"):
         raise HTTPException(503, "Stream is not active")
 

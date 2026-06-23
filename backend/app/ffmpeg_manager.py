@@ -322,9 +322,14 @@ transcode_governor = TranscodeGovernor()
 
 class StreamProcess:
     def __init__(self, stream_id: int, sources: list[str], stream_name: str,
-                 quality: str = "auto", proxy_country: Optional[str] = None):
+                 quality: str = "auto", proxy_country: Optional[str] = None,
+                 allow_multivariant: bool = True):
         self.stream_id = stream_id
         self.quality = quality if quality in VALID_QUALITIES else "auto"
+        # If False, this stream always uses single-rendition passthrough HLS
+        # (stream-copy). Playlist proxy streams set this to avoid 65× CPU per
+        # viewer from multi-variant transcoding.
+        self.allow_multivariant = allow_multivariant
         # ISO country code for proxy-assisted playlist resolution (None = off).
         self.proxy_country = proxy_country
         # FFmpeg input URL + proxy args, computed (async) once per start().
@@ -544,7 +549,8 @@ class StreamProcess:
                 # Detect audio-only sources (radio/Icecast) so they never hit the
                 # video ladder, which would crash with rc=1. Probed once, cached.
                 self.audio_only = not await _source_has_video(self._resolved_input)
-                if self.quality == "auto" and not self._holds_mv and not self.audio_only:
+                if (self.quality == "auto" and self.allow_multivariant
+                        and not self._holds_mv and not self.audio_only):
                     transcode_governor.start()
                     if await transcode_governor.try_acquire_mv():
                         self.multivariant = True
@@ -727,11 +733,12 @@ class FFmpegManager:
     async def get_or_create(
         self, stream_id: int, sources: list[str], stream_name: str,
         quality: str = "auto", proxy_country: Optional[str] = None,
+        allow_multivariant: bool = True,
     ) -> StreamProcess:
         async with self._lock:
             sp = self._streams.get(stream_id)
             if sp is None:
-                sp = StreamProcess(stream_id, sources, stream_name, quality, proxy_country)
+                sp = StreamProcess(stream_id, sources, stream_name, quality, proxy_country, allow_multivariant)
                 self._streams[stream_id] = sp
             elif sp.status not in ("running", "starting"):
                 # Pick up edited source pools / quality / proxy_country the next
@@ -741,15 +748,17 @@ class FFmpegManager:
                     sp.source_index = 0
                 sp.quality = quality if quality in VALID_QUALITIES else "auto"
                 sp.proxy_country = proxy_country
+                sp.allow_multivariant = allow_multivariant
             return sp
 
     async def start_stream(
         self, stream_id: int, sources: list[str], stream_name: str,
         client_key: str = "viewer", quality: str = "auto",
         proxy_country: Optional[str] = None,
+        allow_multivariant: bool = True,
     ) -> StreamProcess:
         self._ensure_reaper()
-        sp = await self.get_or_create(stream_id, sources, stream_name, quality, proxy_country)
+        sp = await self.get_or_create(stream_id, sources, stream_name, quality, proxy_country, allow_multivariant)
         sp.heartbeat(client_key)
         # Channel switch: free this viewer's previous channel BEFORE starting the
         # new one, so a connection-limited upstream (M3USe trial) never sees two
