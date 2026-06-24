@@ -50,6 +50,9 @@ export default function WatchPage() {
     if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; }
     setLoading(true); setError(null); setLevels([]); setCurrentLevel(-1);
 
+    // Liveness watchdog handle (set up once hls.js is attached below).
+    let watchdog: ReturnType<typeof setInterval> | null = null;
+
     // Encrypted play token (preferred): the upstream URL/creds stay server-side.
     // Fall back to a raw `url` param for older links.
     const hlsUrl = token
@@ -64,7 +67,9 @@ export default function WatchPage() {
         backBufferLength: 90,
         maxBufferLength: 60,
         maxMaxBufferLength: 120,
-        liveSyncDurationCount: 6,
+        // Sit ~4 segments back: rides out jitter without falling off the back of
+        // the server's rolling (delete_segments) window.
+        liveSyncDurationCount: 4,
         maxLiveSyncPlaybackRate: 1.5,
         // Generous retry budget — a slow segment should wait/retry, not go fatal.
         manifestLoadingMaxRetry: 4,
@@ -116,6 +121,26 @@ export default function WatchPage() {
         hls.destroy();
         hlsRef.current = null;
       });
+
+      // Liveness watchdog — some live/audio (radio) streams make hls.js quietly
+      // stop fetching: it drains its buffer and freezes with no error event. If
+      // the video isn't advancing while it should be playing, force a reload and
+      // jump to the live edge so playback resumes instead of dying forever.
+      let lastT = 0, stalls = 0;
+      watchdog = setInterval(() => {
+        const v = videoRef.current, h = hlsRef.current;
+        if (!v || !h || v.paused || v.seeking || v.ended) { lastT = v ? v.currentTime : 0; stalls = 0; return; }
+        if (v.currentTime > lastT + 0.1) { lastT = v.currentTime; stalls = 0; return; }
+        if (++stalls < 2) return; // ~6s of no forward progress
+        stalls = 0;
+        try {
+          h.startLoad();
+          const edge = h.liveSyncPosition;
+          if (typeof edge === "number" && isFinite(edge) && edge > v.currentTime) v.currentTime = edge;
+          else if (v.buffered.length) { const e = v.buffered.end(v.buffered.length - 1); if (e > v.currentTime) v.currentTime = e - 0.3; }
+          v.play().catch(() => {});
+        } catch { /* ignore */ }
+      }, 3000);
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = hlsUrl;
       video.addEventListener("loadedmetadata", () => { setLoading(false); video.play().catch(() => {}); setPlaying(true); });
@@ -125,7 +150,7 @@ export default function WatchPage() {
       setLoading(false);
     }
 
-    return () => { if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
+    return () => { if (watchdog) clearInterval(watchdog); if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
   }, [url, token]);
 
   // Time update

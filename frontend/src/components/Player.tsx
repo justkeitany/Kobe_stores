@@ -45,6 +45,9 @@ export default function Player({ url, title }: { url: string; title?: string }) 
     setLevels([]);
     setCurrentLevel(-1);
 
+    // Liveness watchdog handle (set up once hls.js is attached below).
+    let watchdog: ReturnType<typeof setInterval> | null = null;
+
     const isNativeHls = video.canPlayType("application/vnd.apple.mpegurl");
     const hlsUrl = url.startsWith("/") ? `${window.location.origin}${url}` : url;
 
@@ -58,7 +61,10 @@ export default function Player({ url, title }: { url: string; title?: string }) 
         backBufferLength: 90,
         maxBufferLength: 60,
         maxMaxBufferLength: 120,
-        liveSyncDurationCount: 6,
+        // Sit ~4 segments back: enough to ride out jitter, but not so far that
+        // the server's rolling segment window (delete_segments) drops what we
+        // still need and opens a gap.
+        liveSyncDurationCount: 4,
         maxLiveSyncPlaybackRate: 1.5,
         // Generous retry budget — a slow segment should wait/retry, not go fatal.
         manifestLoadingMaxRetry: 4,
@@ -120,6 +126,26 @@ export default function Player({ url, title }: { url: string; title?: string }) 
       hls.on(Hls.Events.LEVEL_SWITCHED, (_ev, data) => {
         setCurrentLevel(data.level);
       });
+
+      // Liveness watchdog — some live/audio (radio) streams make hls.js quietly
+      // stop fetching: it drains its buffer and freezes with no error event. If
+      // the video isn't advancing while it should be playing, force a reload and
+      // jump to the live edge so playback resumes instead of dying forever.
+      let lastT = 0, stalls = 0;
+      watchdog = setInterval(() => {
+        const v = videoRef.current, h = hlsRef.current;
+        if (!v || !h || v.paused || v.seeking || v.ended) { lastT = v ? v.currentTime : 0; stalls = 0; return; }
+        if (v.currentTime > lastT + 0.1) { lastT = v.currentTime; stalls = 0; return; }
+        if (++stalls < 2) return; // ~6s of no forward progress
+        stalls = 0;
+        try {
+          h.startLoad();
+          const edge = h.liveSyncPosition;
+          if (typeof edge === "number" && isFinite(edge) && edge > v.currentTime) v.currentTime = edge;
+          else if (v.buffered.length) { const e = v.buffered.end(v.buffered.length - 1); if (e > v.currentTime) v.currentTime = e - 0.3; }
+          v.play().catch(() => {});
+        } catch { /* ignore */ }
+      }, 3000);
     } else if (isNativeHls) {
       // Safari — native HLS support
       video.src = hlsUrl;
@@ -138,6 +164,7 @@ export default function Player({ url, title }: { url: string; title?: string }) 
     }
 
     return () => {
+      if (watchdog) clearInterval(watchdog);
       if (hlsRef.current) {
         hlsRef.current.destroy();
         hlsRef.current = null;
