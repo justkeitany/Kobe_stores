@@ -418,6 +418,10 @@ class StreamProcess:
         # Set at start() by an ffprobe: audio-only sources (radio) skip the video
         # ladder entirely and use a plain audio HLS command.
         self.audio_only: bool = False
+        # Native height of the source (px), detected by the same start() probe.
+        # Used to label the passthrough/top rung of the adaptive ladder by its
+        # real resolution (e.g. "1080p") instead of a raw bitrate ("5000kbps").
+        self.source_height: int = 0
         # When the stream last exhausted its retries (dead source); gates respawns.
         self.gave_up_at: Optional[datetime] = None
         # Ordered failover chain. FFmpeg pulls one source at a time; on crash the
@@ -636,6 +640,7 @@ class StreamProcess:
                 if self.allow_multivariant or self.quality != "auto":
                     has_video, height, bitrate = await _probe_source(self._resolved_input)
                     self.audio_only = not has_video
+                    self.source_height = height or 0
                     wants_ladder = _source_wants_ladder(height, bitrate)
                     if self.allow_multivariant and self.quality == "auto" and not self.audio_only:
                         logger.info(

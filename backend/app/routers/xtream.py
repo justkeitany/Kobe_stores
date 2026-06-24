@@ -483,7 +483,8 @@ def _rewrite_playlist(path: str, stream_id: int, prefix: str = "") -> str:
     return "\n".join(out) + "\n"
 
 
-def _build_master_playlist(stream_id: int, prefix: str = "", variant_name: Optional[str] = None) -> str:
+def _build_master_playlist(stream_id: int, prefix: str = "", variant_name: Optional[str] = None,
+                           source_height: int = 0) -> str:
     """Master playlist for adaptive (multi-variant) HLS.
 
     We emit it ourselves (rather than reuse FFmpeg's) so the source/passthrough
@@ -503,8 +504,18 @@ def _build_master_playlist(stream_id: int, prefix: str = "", variant_name: Optio
     for i in order:
         rung = MULTIVARIANT_RUNGS[i]
         inf = f"#EXT-X-STREAM-INF:BANDWIDTH={rung['bandwidth']}"
-        if rung.get("resolution"):
-            inf += f",RESOLUTION={rung['resolution']}"
+        resolution = rung.get("resolution")
+        # The top rung is a source passthrough (no fixed resolution). Label it with
+        # the real probed source height so the player shows "1080p" instead of a
+        # raw bitrate. Fall back to 1080 when the probe didn't report a height —
+        # this rung only exists for heavy/HD sources that earned the ladder.
+        if not resolution:
+            h = source_height if source_height and source_height > 0 else 1080
+            w = round(h * 16 / 9)
+            if w % 2:
+                w += 1
+            resolution = f"{w}x{h}"
+        inf += f",RESOLUTION={resolution}"
         lines.append(inf)
         lines.append(f"{name}.m3u8?v={i}")
     return "\n".join(lines) + "\n"
@@ -631,7 +642,7 @@ async def serve_playlist_restream_file(
             if v is None:
                 await _wait_for_file(sp.variant_playlist(0))
                 return Response(
-                    content=_build_master_playlist(stream_id),
+                    content=_build_master_playlist(stream_id, source_height=sp.source_height),
                     media_type="application/vnd.apple.mpegurl",
                     headers=no_cache,
                 )
@@ -808,7 +819,8 @@ async def _serve_imported(
             if v is None:
                 await _wait_for_file(sp.variant_playlist(0))
                 return Response(
-                    content=_build_master_playlist(stream_id, variant_name=variant_name),
+                    content=_build_master_playlist(stream_id, variant_name=variant_name,
+                                                   source_height=sp.source_height),
                     media_type="application/vnd.apple.mpegurl",
                     headers=no_cache,
                 )

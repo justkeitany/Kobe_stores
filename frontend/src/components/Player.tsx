@@ -81,12 +81,15 @@ export default function Player({ url, title }: { url: string; title?: string }) 
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        const qs: QualityLevel[] = hls.levels.map((l, i) => ({
-          index: i,
-          height: l.height || 0,
-          bitrate: l.bitrate || 0,
-          label: l.height ? `${l.height}p` : `${Math.round((l.bitrate || 0) / 1000)}kbps`,
-        }));
+        const qs: QualityLevel[] = hls.levels
+          .map((l, i) => ({
+            index: i,
+            height: l.height || 0,
+            bitrate: l.bitrate || 0,
+            label: l.height ? `${l.height}p` : `${Math.round((l.bitrate || 0) / 1000)}kbps`,
+          }))
+          // Highest quality first so the menu reads Auto · 1080p · 720p · 480p.
+          .sort((a, b) => b.bitrate - a.bitrate);
         // Add auto option
         qs.unshift({ index: -1, height: 0, bitrate: 0, label: "Auto" });
         setLevels(qs);
