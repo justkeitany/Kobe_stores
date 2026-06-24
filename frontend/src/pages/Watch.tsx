@@ -96,9 +96,28 @@ export default function WatchPage() {
           .sort((a, b) => b.bitrate - a.bitrate)
           .forEach((q) => qs.push(q));
         setLevels(qs);
-        setLoading(false);
-        video.play().catch(() => {});
-        setPlaying(true);
+        // Pre-buffer before the first play: hold playback until a cushion of
+        // video is buffered ahead, so it opens smoothly instead of stalling on
+        // the opening frames. hls.js keeps filling the buffer while paused. A
+        // MAX_WAIT fallback starts anyway so a slow source never hangs on black.
+        // Steady-state buffering + quality (Hls config above) are unchanged.
+        const PREBUFFER_SECONDS = 6;
+        const MAX_WAIT_MS = 8000;
+        const waitStart = performance.now();
+        const startWhenBuffered = () => {
+          if (!videoRef.current) return;
+          const r = video.buffered;
+          const ready = r.length ? r.end(r.length - 1) - r.start(r.length - 1) : 0;
+          if (ready >= PREBUFFER_SECONDS || performance.now() - waitStart > MAX_WAIT_MS) {
+            setLoading(false);
+            video.play().catch(() => {});
+            setPlaying(true);
+          } else {
+            setLoading(true);
+            window.setTimeout(startWhenBuffered, 250);
+          }
+        };
+        startWhenBuffered();
       });
 
       hls.on(Hls.Events.LEVEL_SWITCHED, (_ev, data) => setCurrentLevel(data.level));
