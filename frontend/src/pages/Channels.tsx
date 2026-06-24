@@ -9,7 +9,7 @@ import clsx from "clsx";
 
 const PAGE_SIZE = 36;
 
-interface Channel {
+export interface Channel {
   key: string;
   stream_id: number | null;
   name: string;
@@ -21,13 +21,13 @@ interface Channel {
   url?: string;
 }
 
-type Health = "online" | "offline" | "geo" | "dead" | "checking";
+export type Health = "online" | "offline" | "geo" | "dead" | "checking";
 
 // Surface what viewers can actually watch first — online, then still-checking,
 // then geo-blocked, then offline, then dead (unreachable upstream).
 const HEALTH_ORDER: Record<Health, number> = { online: 0, checking: 1, geo: 2, offline: 3, dead: 4 };
 
-const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
+export const BADGE: Record<Health, { label: string; cls: string; dot: string }> = {
   online:   { label: "Online",         cls: "bg-[#1f3a2a] text-[#5edc8a]", dot: "bg-[#5edc8a]" },
   offline:  { label: "Offline",        cls: "bg-[#3d2e0a] text-[#f5a623]", dot: "bg-[#f5a623]" },
   geo:      { label: "Geo-restricted", cls: "bg-surface-container text-on-surface-variant", dot: "bg-[#9aa0a6]" },
@@ -196,7 +196,7 @@ export default function Channels() {
   );
 }
 
-function Logo({ logo }: { logo?: string | null }) {
+export function Logo({ logo }: { logo?: string | null }) {
   const [failed, setFailed] = useState(false);
   if (!logo || failed) {
     return (

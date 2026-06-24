@@ -35,10 +35,20 @@ def _key(prefix: str, val: str) -> str:
     return f"{prefix}_{hashlib.md5(val.encode()).hexdigest()[:10]}"
 
 
-@router.get("")
-async def list_channels(db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)):
+async def build_channel_rows(db: AsyncSession, category_ids: set[int] | None = None) -> list[dict]:
+    """Build the unified channel-directory rows.
+
+    ``category_ids`` is None for the full directory (every imported stream plus
+    all cached playlist channels). When a set is passed, only imported streams in
+    those categories are returned and the playlist-channels block is skipped — the
+    Premium channels page uses this to scope to a bouquet's categories. One source
+    of truth so the health/status logic can't drift between the two views.
+    """
     cats = {c.id: c.name for c in (await db.execute(select(StreamCategory))).scalars()}
-    streams = (await db.execute(select(Stream).options(selectinload(Stream.sources)))).scalars().all()
+    stream_q = select(Stream).options(selectinload(Stream.sources))
+    if category_ids is not None:
+        stream_q = stream_q.where(Stream.category_id.in_(category_ids))
+    streams = (await db.execute(stream_q)).scalars().all()
     live = {s["stream_id"]: s for s in await ffmpeg_manager.get_all_statuses()}
     # Real probed health (online | offline | geo) keyed by URL, from the sweep.
     health = {r.url: r.status for r in (await db.execute(select(ChannelHealth))).scalars().all()}
@@ -81,25 +91,32 @@ async def list_channels(db: AsyncSession = Depends(get_db), _=Depends(get_curren
         })
 
     # Playlist channels (cached) not already imported, deduped across playlists.
-    seen = set(imported_urls)
-    for p in (await db.execute(select(Playlist))).scalars().all():
-        for c in (p.channels or []):
-            url = c.get("url")
-            if not url or url in seen:
-                continue
-            seen.add(url)
-            out.append({
-                "key": _key("p", url),
-                "stream_id": None,
-                "name": c.get("name") or "Unnamed",
-                "logo": c.get("logo") or "",
-                "source": p.name,
-                "imported": False,
-                "is_enabled": True,
-                "health": resolve(url, False, True, None, 0),
-                "url": url,
-            })
+    # Skipped for a category-scoped (Premium) view — those come from streams only.
+    if category_ids is None:
+        seen = set(imported_urls)
+        for p in (await db.execute(select(Playlist))).scalars().all():
+            for c in (p.channels or []):
+                url = c.get("url")
+                if not url or url in seen:
+                    continue
+                seen.add(url)
+                out.append({
+                    "key": _key("p", url),
+                    "stream_id": None,
+                    "name": c.get("name") or "Unnamed",
+                    "logo": c.get("logo") or "",
+                    "source": p.name,
+                    "imported": False,
+                    "is_enabled": True,
+                    "health": resolve(url, False, True, None, 0),
+                    "url": url,
+                })
     return out
+
+
+@router.get("")
+async def list_channels(db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)):
+    return await build_channel_rows(db)
 
 
 @router.post("/probe")

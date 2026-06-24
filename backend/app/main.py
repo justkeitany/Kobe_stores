@@ -23,6 +23,7 @@ from app.routers.freestreams import router as freestreams_router
 from app.routers.playlists import router as playlists_router
 from app.routers.ai import router as ai_router
 from app.routers.channels import router as channels_router
+from app.routers.premium import router as premium_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -131,6 +132,7 @@ app.include_router(ai_router)
 
 # Unified channel directory (/api/channels)
 app.include_router(channels_router)
+app.include_router(premium_router)
 
 # ── WebSocket ──────────────────────────────────────────────────────────────
 @app.websocket("/ws/stats")

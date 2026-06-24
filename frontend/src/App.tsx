@@ -12,6 +12,8 @@ import PlutoTV from "./pages/PlutoTV";
 import FreeStreamsTV from "./pages/FreeStreamsTV";
 import Playlists from "./pages/Playlists";
 import Channels from "./pages/Channels";
+import PremiumPlaylists from "./pages/PremiumPlaylists";
+import PremiumChannels from "./pages/PremiumChannels";
 import Watch from "./pages/Watch";
 import Categories from "./pages/Categories";
 import Bouquets from "./pages/Bouquets";
@@ -63,6 +65,8 @@ export default function App() {
             <Route path="freestreams/:provider" element={<FreeStreamsTV />} />
             <Route path="playlists" element={<Playlists />} />
             <Route path="channels" element={<Channels />} />
+            <Route path="premium/playlists" element={<PremiumPlaylists />} />
+            <Route path="premium/channels" element={<PremiumChannels />} />
             <Route path="watch" element={<Watch />} />
             <Route path="categories" element={<Categories />} />
             <Route path="bouquets" element={<Bouquets />} />

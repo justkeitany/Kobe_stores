@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
   LayoutDashboard, Tv, FolderOpen, Package, Radio,
-  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo, LayoutGrid,
+  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo, LayoutGrid, Crown,
   type LucideIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -71,6 +71,14 @@ const nav: NavEntry[] = [
   },
   { label: "Playlists",  icon: ListVideo,       path: "/playlists" },
   { label: "Channels",   icon: LayoutGrid,      path: "/channels" },
+  {
+    label: "Premium",
+    icon: Crown,
+    children: [
+      { label: "Playlists", icon: ListVideo,  path: "/premium/playlists" },
+      { label: "Channels",  icon: LayoutGrid, path: "/premium/channels" },
+    ],
+  },
   { label: "Categories", icon: FolderOpen,      path: "/categories" },
   { label: "Bouquets",   icon: Package,         path: "/bouquets" },
   { label: "EPG",        icon: Radio,           path: "/epg" },

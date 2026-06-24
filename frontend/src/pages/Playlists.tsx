@@ -9,7 +9,7 @@ import { MIcon } from "../components/MIcon";
 import { useInfiniteRender } from "../hooks/useInfiniteRender";
 import clsx from "clsx";
 
-interface Playlist {
+export interface Playlist {
   id: number;
   name: string;
   url: string;
@@ -172,14 +172,14 @@ export default function Playlists() {
 
 /* ── Card ─────────────────────────────────────────────────────── */
 
-function PlaylistCard({
-  playlist, refreshing, onView, onRefresh, onDelete,
+export function PlaylistCard({
+  playlist, refreshing = false, onView, onRefresh, onDelete,
 }: {
   playlist: Playlist;
-  refreshing: boolean;
+  refreshing?: boolean;
   onView: () => void;
-  onRefresh: () => void;
-  onDelete: () => void;
+  onRefresh?: () => void;
+  onDelete?: () => void;
 }) {
   return (
     <div className="bg-surface-container-low border border-outline-variant rounded-md p-md flex flex-col gap-3">
@@ -242,26 +242,30 @@ function PlaylistCard({
 
       {/* Actions */}
       <div className="flex items-center gap-1.5 pt-0.5">
-        <button
-          onClick={onRefresh}
-          disabled={refreshing}
-          className="flex-1 inline-flex items-center justify-center gap-1.5 text-[12px] font-medium border border-outline-variant rounded px-2 py-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors disabled:opacity-50"
-        >
-          <RefreshCw size={13} className={clsx(refreshing && "animate-spin")} /> Refresh
-        </button>
+        {onRefresh && (
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            className="flex-1 inline-flex items-center justify-center gap-1.5 text-[12px] font-medium border border-outline-variant rounded px-2 py-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors disabled:opacity-50"
+          >
+            <RefreshCw size={13} className={clsx(refreshing && "animate-spin")} /> Refresh
+          </button>
+        )}
         <button
           onClick={onView}
           className="flex-1 inline-flex items-center justify-center gap-1.5 text-[12px] font-medium border border-outline-variant rounded px-2 py-1.5 text-on-surface-variant hover:bg-surface-container hover:text-on-surface transition-colors"
         >
           <Eye size={13} /> View
         </button>
-        <button
-          onClick={onDelete}
-          title="Delete"
-          className="shrink-0 inline-flex items-center justify-center border border-outline-variant rounded px-2 py-1.5 text-on-surface-variant hover:text-error hover:border-error/40 transition-colors"
-        >
-          <Trash2 size={13} />
-        </button>
+        {onDelete && (
+          <button
+            onClick={onDelete}
+            title="Delete"
+            className="shrink-0 inline-flex items-center justify-center border border-outline-variant rounded px-2 py-1.5 text-on-surface-variant hover:text-error hover:border-error/40 transition-colors"
+          >
+            <Trash2 size={13} />
+          </button>
+        )}
       </div>
     </div>
   );
@@ -392,7 +396,7 @@ function AddPlaylistModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 interface Stream { id: number; name: string; stream_url: string; }
 interface Category { id: number; name: string; }
 
-function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () => void }) {
+export function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () => void }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
