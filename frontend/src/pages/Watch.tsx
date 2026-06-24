@@ -57,8 +57,25 @@ export default function WatchPage() {
       : url.startsWith("/") ? `${window.location.origin}${url}` : url;
 
     if (Hls.isSupported()) {
-      const hls = new Hls({ enableWorker: true, backBufferLength: 90 });
+      const hls = new Hls({
+        enableWorker: true,
+        // Deep buffer + sit further from the live edge so jitter on a long-haul
+        // path is absorbed instead of stalling. Latency is invisible for live TV.
+        backBufferLength: 90,
+        maxBufferLength: 60,
+        maxMaxBufferLength: 120,
+        liveSyncDurationCount: 6,
+        maxLiveSyncPlaybackRate: 1.5,
+        // Generous retry budget — a slow segment should wait/retry, not go fatal.
+        manifestLoadingMaxRetry: 4,
+        manifestLoadingRetryDelay: 1000,
+        levelLoadingMaxRetry: 6,
+        levelLoadingRetryDelay: 1000,
+        fragLoadingMaxRetry: 8,
+        fragLoadingRetryDelay: 1000,
+      });
       hlsRef.current = hls;
+      let recoverAttempts = 0;
       hls.loadSource(hlsUrl);
       hls.attachMedia(video);
 
@@ -77,14 +94,27 @@ export default function WatchPage() {
 
       hls.on(Hls.Events.LEVEL_SWITCHED, (_ev, data) => setCurrentLevel(data.level));
 
+      hls.on(Hls.Events.FRAG_BUFFERED, () => {
+        recoverAttempts = 0; // healthy again — refill the recovery budget
+        setLoading(false);
+      });
+
       hls.on(Hls.Events.ERROR, (_ev, data) => {
-        if (data.fatal) {
-          const msgs: Record<string, string> = { networkError: "Network error", mediaError: "Unsupported format", muxError: "Encoding error" };
-          setError(msgs[data.type] || data.details);
-          setLoading(false);
-          hls.destroy();
-          hlsRef.current = null;
+        if (!data.fatal) return;
+        // Recover silently before surfacing an error — never die on a single
+        // network/media blip. Re-buffer, don't stop. Give up only after budget.
+        if (recoverAttempts < 6) {
+          recoverAttempts++;
+          setLoading(true);
+          if (data.type === Hls.ErrorTypes.MEDIA_ERROR) hls.recoverMediaError();
+          else hls.startLoad();
+          return;
         }
+        const msgs: Record<string, string> = { networkError: "Network error", mediaError: "Unsupported format", muxError: "Encoding error" };
+        setError(msgs[data.type] || data.details);
+        setLoading(false);
+        hls.destroy();
+        hlsRef.current = null;
       });
     } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
       video.src = hlsUrl;
