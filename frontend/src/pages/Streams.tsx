@@ -5,7 +5,10 @@ import { Plus, Trash2, Loader2, TestTube } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
+import { Pagination } from "../components/Pagination";
 import clsx from "clsx";
+
+const PAGE_SIZE = 36;
 
 interface Stream {
   id: number;
@@ -40,6 +43,7 @@ export default function Streams() {
   }, [searchParams]);
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Stream | null>(null);
+  const [page, setPage] = useState(0);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const { data: streams = [], isLoading } = useQuery<Stream[]>({
@@ -95,6 +99,12 @@ export default function Streams() {
     }
     e.target.value = "";
   }
+
+  const pages = Math.max(1, Math.ceil(streams.length / PAGE_SIZE));
+  const cur = Math.min(page, pages - 1);
+  const shownStreams = streams.slice(cur * PAGE_SIZE, cur * PAGE_SIZE + PAGE_SIZE);
+  // Reset to first page when the filters change.
+  useEffect(() => { setPage(0); }, [search, filterCat]);
 
   return (
     <div className="p-lg space-y-md">
@@ -170,7 +180,7 @@ export default function Streams() {
                   </td>
                 </tr>
               )}
-              {streams.map((s) => {
+              {shownStreams.map((s) => {
                 const cat = categories.find((c) => c.id === s.category_id);
                 const offline = !s.is_enabled || s.status === "error";
                 return (
@@ -250,11 +260,15 @@ export default function Streams() {
         {!isLoading && streams.length > 0 && (
           <div className="px-md py-2.5 bg-surface-container flex items-center justify-between border-t border-outline-variant">
             <p className="text-on-surface-variant text-[12px]">
-              Showing {streams.length.toLocaleString()} stream{streams.length === 1 ? "" : "s"}
+              Showing {shownStreams.length.toLocaleString()} of {streams.length.toLocaleString()} stream{streams.length === 1 ? "" : "s"}
             </p>
           </div>
         )}
       </div>
+
+      {!isLoading && streams.length > 0 && (
+        <Pagination page={cur + 1} totalPages={pages} onChange={(p) => setPage(p - 1)} />
+      )}
 
       {showModal && (
         <StreamModal

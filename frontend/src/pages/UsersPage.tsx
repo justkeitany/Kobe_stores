@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Loader2, Users, Key, Eye, EyeOff, RefreshCw, Copy } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { xtreamBaseUrl } from "../lib/api";
 import { copyToClipboard } from "../lib/clipboard";
 import { MIcon } from "../components/MIcon";
+import { Pagination } from "../components/Pagination";
 import clsx from "clsx";
+
+const PAGE_SIZE = 36;
 
 type UserTab = "all" | "active" | "expired";
 
@@ -33,6 +36,7 @@ export default function UsersPage() {
   const [tab, setTab] = useState<UserTab>("all");
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<IUser | null>(null);
+  const [page, setPage] = useState(0);
 
   const { data: users = [], isLoading } = useQuery<IUser[]>({
     queryKey: ["users", search],
@@ -72,6 +76,12 @@ export default function UsersPage() {
     if (tab === "expired") return isUserExpired(u);
     return true;
   });
+
+  const pages = Math.max(1, Math.ceil(visible.length / PAGE_SIZE));
+  const cur = Math.min(page, pages - 1);
+  const shownUsers = visible.slice(cur * PAGE_SIZE, cur * PAGE_SIZE + PAGE_SIZE);
+  // Reset to first page when the tab or filter changes.
+  useEffect(() => { setPage(0); }, [tab, search]);
 
   const tabs: { key: UserTab; label: string }[] = [
     { key: "all", label: "All" },
@@ -161,7 +171,7 @@ export default function UsersPage() {
                   </p>
                 </td></tr>
               )}
-              {visible.map((u) => (
+              {shownUsers.map((u) => (
                 <UserRow
                   key={u.id}
                   user={u}
@@ -176,11 +186,15 @@ export default function UsersPage() {
         {!isLoading && users.length > 0 && (
           <div className="px-md py-3 bg-surface-container border-t border-outline-variant">
             <p className="text-on-surface-variant text-[12px]">
-              Showing {visible.length.toLocaleString()} of {total.toLocaleString()} users
+              Showing {shownUsers.length.toLocaleString()} of {visible.length.toLocaleString()} users
             </p>
           </div>
         )}
       </div>
+
+      {!isLoading && visible.length > 0 && (
+        <Pagination page={cur + 1} totalPages={pages} onChange={(p) => setPage(p - 1)} />
+      )}
 
       {showModal && (
         <UserModal
