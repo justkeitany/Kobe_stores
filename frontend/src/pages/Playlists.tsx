@@ -73,6 +73,16 @@ export default function Playlists() {
     queryFn: () => api.get("/playlists").then((r) => r.data),
   });
 
+  // Premium playlists are shown only under Premium → Playlists; hide them here.
+  const { data: premiumPlaylists = [] } = useQuery<Playlist[]>({
+    queryKey: ["premium-playlists"],
+    queryFn: () => api.get("/premium/playlists").then((r) => r.data),
+  });
+  const premiumIds = useMemo(
+    () => new Set(premiumPlaylists.map((p) => p.id)),
+    [premiumPlaylists]
+  );
+
   const refreshMut = useMutation({
     mutationFn: (id: number) => api.post(`/playlists/${id}/refresh`).then((r) => r.data),
     onMutate: (id) => setRefreshingId(id),
@@ -90,15 +100,20 @@ export default function Playlists() {
     onError: () => toast.error("Delete failed"),
   });
 
+  const nonPremium = useMemo(
+    () => playlists.filter((p) => !premiumIds.has(p.id)),
+    [playlists, premiumIds]
+  );
+
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return playlists;
-    return playlists.filter(
+    if (!q) return nonPremium;
+    return nonPremium.filter(
       (p) =>
         p.name.toLowerCase().includes(q) ||
         (p.description || "").toLowerCase().includes(q)
     );
-  }, [playlists, search]);
+  }, [nonPremium, search]);
 
   return (
     <div className="p-lg space-y-md max-w-[1400px]">
@@ -109,7 +124,7 @@ export default function Playlists() {
           <p className="text-on-surface-variant text-[12px]">
             {isLoading
               ? "Loading playlists…"
-              : `${playlists.length} saved playlist${playlists.length === 1 ? "" : "s"}`}
+              : `${nonPremium.length} saved playlist${nonPremium.length === 1 ? "" : "s"}`}
           </p>
         </div>
         <button className="btn-primary" onClick={() => setShowAdd(true)}>
@@ -134,7 +149,7 @@ export default function Playlists() {
         <div className="py-16 flex justify-center text-on-surface-variant">
           <Loader2 size={24} className="animate-spin" />
         </div>
-      ) : playlists.length === 0 ? (
+      ) : nonPremium.length === 0 ? (
         <EmptyState onAdd={() => setShowAdd(true)} />
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center text-on-surface-variant">No playlists match your search.</div>

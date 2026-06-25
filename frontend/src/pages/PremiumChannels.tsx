@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Crown } from "lucide-react";
@@ -6,6 +7,9 @@ import api, { mintStreamToken } from "../lib/api";
 import { type Channel } from "./Channels";
 import { PremiumEmpty, type PremiumSummary } from "../components/PremiumEmpty";
 import { LogoCard } from "../components/LogoCard";
+import { Pagination } from "../components/Pagination";
+
+const PAGE_SIZE = 36;
 
 /**
  * Premium → Channels. The imported streams in the "Premium" bouquet's categories
@@ -15,12 +19,17 @@ import { LogoCard } from "../components/LogoCard";
  */
 export default function PremiumChannels() {
   const nav = useNavigate();
+  const [page, setPage] = useState(0);
 
   const { data: channels = [], isLoading } = useQuery<Channel[]>({
     queryKey: ["premium-channels"],
     queryFn: () => api.get("/premium/channels").then((r) => r.data),
     refetchInterval: 60_000,
   });
+
+  const pages = Math.max(1, Math.ceil(channels.length / PAGE_SIZE));
+  const cur = Math.min(page, pages - 1);
+  const shown = channels.slice(cur * PAGE_SIZE, cur * PAGE_SIZE + PAGE_SIZE);
   const { data: summary } = useQuery<PremiumSummary>({
     queryKey: ["premium-summary"],
     queryFn: () => api.get("/premium/summary").then((r) => r.data),
@@ -58,11 +67,16 @@ export default function PremiumChannels() {
       ) : channels.length === 0 ? (
         <PremiumEmpty summary={summary} kind="channels" />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5">
-          {channels.map((c) => (
-            <LogoCard key={c.key} name={c.name} logo={c.logo} onClick={() => watch(c)} />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5">
+            {shown.map((c) => (
+              <LogoCard key={c.key} name={c.name} logo={c.logo} onClick={() => watch(c)} />
+            ))}
+          </div>
+          <div className="pt-2">
+            <Pagination page={cur + 1} totalPages={pages} onChange={(p) => setPage(p - 1)} />
+          </div>
+        </>
       )}
     </div>
   );
