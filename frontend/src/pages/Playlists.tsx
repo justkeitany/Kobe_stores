@@ -411,16 +411,26 @@ function AddPlaylistModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 interface Stream { id: number; name: string; stream_url: string; }
 interface Category { id: number; name: string; }
 
-export function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClose: () => void }) {
+export function ChannelsModal({
+  playlist, onClose, channelsEndpoint, readOnly = false,
+}: {
+  playlist: Playlist;
+  onClose: () => void;
+  /** Override the channels source (premium playlists serve imported streams). */
+  channelsEndpoint?: string;
+  /** Hide import + per-channel probing (channels are already imported streams). */
+  readOnly?: boolean;
+}) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [selected, setSelected] = useState<Set<number>>(new Set());
   const [importing, setImporting] = useState(false);
 
+  const endpoint = channelsEndpoint ?? `/playlists/${playlist.id}/channels`;
   const { data: channels = [], isLoading, isError } = useQuery<PlaylistChannel[]>({
-    queryKey: ["playlist-channels", playlist.id],
+    queryKey: ["playlist-channels", endpoint],
     queryFn: () =>
-      api.get(`/playlists/${playlist.id}/channels`).then((r) => r.data.channels as PlaylistChannel[]),
+      api.get(endpoint).then((r) => r.data.channels as PlaylistChannel[]),
     staleTime: 5 * 60_000,
   });
 
@@ -434,7 +444,7 @@ export function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClo
     queryFn: () =>
       api.get(`/playlists/${playlist.id}/channels/probe`, { timeout: 180_000 })
         .then((r) => ({ skipped: !!r.data.skipped, statuses: (r.data.statuses ?? []) as ChannelProbe[] })),
-    enabled: channels.length > 0,
+    enabled: channels.length > 0 && !readOnly,
     staleTime: 60_000,
   });
   const probes = probeResp?.statuses;
@@ -546,24 +556,26 @@ export function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClo
           <p className="font-bold text-base">
             Channels {channels.length > 0 && <span className="text-on-surface-variant font-medium">({channels.length})</span>}
           </p>
-          <div className="flex items-center gap-sm">
-            {selectableVisible.length > 0 && (
-              selected.size > 0 ? (
-                <button className="btn-secondary text-[12px] py-1" onClick={() => setSelected(new Set())}>Clear</button>
-              ) : (
-                <button
-                  className="btn-secondary text-[12px] py-1"
-                  onClick={() => setSelected(new Set(selectableVisible.map((r) => r.i)))}
-                >
-                  Select all
-                </button>
-              )
-            )}
-            <button className="btn-primary py-1" onClick={importSelected} disabled={importing || selected.size === 0}>
-              {importing ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
-              Import ({selected.size})
-            </button>
-          </div>
+          {!readOnly && (
+            <div className="flex items-center gap-sm">
+              {selectableVisible.length > 0 && (
+                selected.size > 0 ? (
+                  <button className="btn-secondary text-[12px] py-1" onClick={() => setSelected(new Set())}>Clear</button>
+                ) : (
+                  <button
+                    className="btn-secondary text-[12px] py-1"
+                    onClick={() => setSelected(new Set(selectableVisible.map((r) => r.i)))}
+                  >
+                    Select all
+                  </button>
+                )
+              )}
+              <button className="btn-primary py-1" onClick={importSelected} disabled={importing || selected.size === 0}>
+                {importing ? <Loader2 size={15} className="animate-spin" /> : <Download size={15} />}
+                Import ({selected.size})
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Search */}
@@ -606,16 +618,16 @@ export function ChannelsModal({ playlist, onClose }: { playlist: Playlist; onClo
           {!isLoading && !isError && rows.length > 0 && (
             <div className="border border-outline-variant rounded-lg divide-y divide-outline-variant overflow-hidden">
               {shown.map(({ c, i }) => {
-                const added = isImported(c);
+                const added = !readOnly && isImported(c);
                 const checked = selected.has(i);
                 const probe = probes?.[i];
                 return (
                   <div
                     key={i}
-                    onClick={() => !added && toggle(i)}
+                    onClick={() => !readOnly && !added && toggle(i)}
                     className={clsx(
                       "flex items-center gap-3 px-3 py-2.5 transition-colors",
-                      added ? "opacity-60" : "cursor-pointer hover:bg-surface-container-low",
+                      added ? "opacity-60" : readOnly ? "" : "cursor-pointer hover:bg-surface-container-low",
                       checked && "bg-surface-container"
                     )}
                   >

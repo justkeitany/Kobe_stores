@@ -47,7 +47,14 @@ export default function PremiumPlaylists() {
         </div>
       )}
 
-      {viewing && <ChannelsModal playlist={viewing} onClose={() => setViewing(null)} />}
+      {viewing && (
+        <ChannelsModal
+          playlist={viewing}
+          onClose={() => setViewing(null)}
+          channelsEndpoint={`/premium/playlists/${viewing.id}/channels`}
+          readOnly
+        />
+      )}
     </div>
   );
 }
