@@ -2,8 +2,9 @@ import { useEffect, useRef, useState, useCallback } from "react";
 import Hls from "hls.js";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  Loader2, AlertCircle, Settings,
+  Loader2, AlertCircle, Settings, PictureInPicture2,
 } from "lucide-react";
+import { makeHlsConfig, resyncToLiveEdge } from "../lib/hls";
 
 interface QualityLevel {
   index: number;
@@ -21,6 +22,7 @@ export default function Player({ url, title }: { url: string; title?: string }) 
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
+  const [pip, setPip] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [levels, setLevels] = useState<QualityLevel[]>([]);
@@ -52,28 +54,9 @@ export default function Player({ url, title }: { url: string; title?: string }) 
     const hlsUrl = url.startsWith("/") ? `${window.location.origin}${url}` : url;
 
     if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        lowLatencyMode: false,
-        // Deep buffer + sit further from the live edge so jitter on a long-haul
-        // path is absorbed instead of stalling. For live TV the extra few
-        // seconds of latency is invisible.
-        backBufferLength: 90,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        // Sit ~4 segments back: enough to ride out jitter, but not so far that
-        // the server's rolling segment window (delete_segments) drops what we
-        // still need and opens a gap.
-        liveSyncDurationCount: 4,
-        maxLiveSyncPlaybackRate: 1.5,
-        // Generous retry budget — a slow segment should wait/retry, not go fatal.
-        manifestLoadingMaxRetry: 4,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingMaxRetry: 6,
-        levelLoadingRetryDelay: 1000,
-        fragLoadingMaxRetry: 8,
-        fragLoadingRetryDelay: 1000,
-      });
+      // Shared, production-tuned config (ABR + cap-to-player-size + gap
+      // recovery + network-aware initial estimate). See src/lib/hls.ts.
+      const hls = new Hls(makeHlsConfig());
       hlsRef.current = hls;
       let recoverAttempts = 0;
 
@@ -184,6 +167,30 @@ export default function Player({ url, title }: { url: string; title?: string }) 
     return () => document.removeEventListener("fullscreenchange", handler);
   }, []);
 
+  // Picture-in-Picture state (keeps the button in sync when PiP is closed from
+  // the OS chrome rather than our button).
+  useEffect(() => {
+    const v = videoRef.current; if (!v) return;
+    const on = () => setPip(true);
+    const off = () => setPip(false);
+    v.addEventListener("enterpictureinpicture", on);
+    v.addEventListener("leavepictureinpicture", off);
+    return () => { v.removeEventListener("enterpictureinpicture", on); v.removeEventListener("leavepictureinpicture", off); };
+  }, []);
+
+  // Live-edge resync on tab refocus — skip the stale backlog a backgrounded
+  // live stream accumulates and jump to the freshest point on return.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const v = videoRef.current; if (!v || v.paused) return;
+      resyncToLiveEdge(v, hlsRef.current);
+      v.play().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   // Auto-hide controls
   const showControlsTemp = useCallback(() => {
     setShowControls(true);
@@ -223,6 +230,14 @@ export default function Player({ url, title }: { url: string; title?: string }) 
     } else {
       document.exitFullscreen().catch(() => {});
     }
+  };
+
+  const togglePip = async () => {
+    const v = videoRef.current; if (!v) return;
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else if (document.pictureInPictureEnabled) await v.requestPictureInPicture();
+    } catch { /* PiP unsupported or blocked — ignore */ }
   };
 
   const switchQuality = (index: number) => {
@@ -340,6 +355,14 @@ export default function Player({ url, title }: { url: string; title?: string }) 
                   </div>
                 )}
               </div>
+            )}
+
+            {/* Picture-in-Picture (hidden where unsupported) */}
+            {typeof document !== "undefined" && document.pictureInPictureEnabled && (
+              <button onClick={togglePip} title="Picture-in-Picture"
+                className={`transition-colors ${pip ? "text-indigo-400" : "text-white hover:text-white/80"}`}>
+                <PictureInPicture2 size={19} />
+              </button>
             )}
 
             {/* Fullscreen */}

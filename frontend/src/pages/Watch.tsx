@@ -3,8 +3,9 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import Hls from "hls.js";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  Loader2, AlertCircle, Settings, ChevronLeft, Gauge,
+  Loader2, AlertCircle, Settings, ChevronLeft, Gauge, PictureInPicture2,
 } from "lucide-react";
+import { makeHlsConfig, resyncToLiveEdge } from "../lib/hls";
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -27,6 +28,7 @@ export default function WatchPage() {
   const [muted, setMuted] = useState(false);
   const [volume, setVolume] = useState(1);
   const [fullscreen, setFullscreen] = useState(false);
+  const [pip, setPip] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [levels, setLevels] = useState<{ index: number; label: string; bitrate: number }[]>([]);
@@ -60,25 +62,9 @@ export default function WatchPage() {
       : url.startsWith("/") ? `${window.location.origin}${url}` : url;
 
     if (Hls.isSupported()) {
-      const hls = new Hls({
-        enableWorker: true,
-        // Deep buffer + sit further from the live edge so jitter on a long-haul
-        // path is absorbed instead of stalling. Latency is invisible for live TV.
-        backBufferLength: 90,
-        maxBufferLength: 60,
-        maxMaxBufferLength: 120,
-        // Sit ~4 segments back: rides out jitter without falling off the back of
-        // the server's rolling (delete_segments) window.
-        liveSyncDurationCount: 4,
-        maxLiveSyncPlaybackRate: 1.5,
-        // Generous retry budget — a slow segment should wait/retry, not go fatal.
-        manifestLoadingMaxRetry: 4,
-        manifestLoadingRetryDelay: 1000,
-        levelLoadingMaxRetry: 6,
-        levelLoadingRetryDelay: 1000,
-        fragLoadingMaxRetry: 8,
-        fragLoadingRetryDelay: 1000,
-      });
+      // Shared, production-tuned config (ABR + cap-to-player-size + gap
+      // recovery + network-aware initial estimate). See src/lib/hls.ts.
+      const hls = new Hls(makeHlsConfig());
       hlsRef.current = hls;
       let recoverAttempts = 0;
       hls.loadSource(hlsUrl);
@@ -196,6 +182,82 @@ export default function WatchPage() {
     return () => document.removeEventListener("fullscreenchange", h);
   }, []);
 
+  // Picture-in-Picture state (button highlight + correct toggle when the user
+  // closes the PiP window from the OS chrome rather than our button).
+  useEffect(() => {
+    const v = videoRef.current; if (!v) return;
+    const on = () => setPip(true);
+    const off = () => setPip(false);
+    v.addEventListener("enterpictureinpicture", on);
+    v.addEventListener("leavepictureinpicture", off);
+    return () => { v.removeEventListener("enterpictureinpicture", on); v.removeEventListener("leavepictureinpicture", off); };
+  }, []);
+
+  // Live-edge resync on tab refocus — a backgrounded live stream keeps draining
+  // its buffer, so on return we skip the stale backlog to the freshest point
+  // (what YouTube/Twitch do) instead of playing minutes-old footage.
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState !== "visible") return;
+      const v = videoRef.current; if (!v || v.paused) return;
+      resyncToLiveEdge(v, hlsRef.current);
+      v.play().catch(() => {});
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
+  // Screen Wake Lock — keep the display awake while watching (mobile/tablet),
+  // re-acquiring it whenever the tab becomes visible again. Best-effort: the
+  // API is absent on some browsers, and the request can reject when hidden.
+  useEffect(() => {
+    let lock: { release: () => Promise<void> } | null = null;
+    let released = false;
+    const wl = (navigator as unknown as {
+      wakeLock?: { request: (t: "screen") => Promise<{ release: () => Promise<void> }> };
+    }).wakeLock;
+    if (!wl) return;
+    const acquire = async () => {
+      if (released || document.visibilityState !== "visible") return;
+      try { lock = await wl.request("screen"); } catch { /* denied — ignore */ }
+    };
+    acquire();
+    const onVisible = () => { if (document.visibilityState === "visible") acquire(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      released = true;
+      document.removeEventListener("visibilitychange", onVisible);
+      lock?.release().catch(() => {});
+    };
+  }, []);
+
+  // Keyboard shortcuts (YouTube-style): space/k play·pause, f fullscreen,
+  // m mute, p picture-in-picture, ←/→ seek 5s, ↑/↓ volume. Reads the DOM/refs
+  // directly so it never goes stale and needs no deps.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      const v = videoRef.current; if (!v) return;
+      switch (e.key) {
+        case " ": case "k":
+          e.preventDefault();
+          if (v.paused) { v.play().catch(() => {}); setPlaying(true); } else { v.pause(); setPlaying(false); }
+          break;
+        case "f": e.preventDefault(); toggleFullscreen(); break;
+        case "m": e.preventDefault(); v.muted = !v.muted; setMuted(v.muted); break;
+        case "p": e.preventDefault(); togglePip(); break;
+        case "ArrowLeft": e.preventDefault(); v.currentTime = Math.max(0, v.currentTime - 5); break;
+        case "ArrowRight": e.preventDefault(); v.currentTime = v.currentTime + 5; break;
+        case "ArrowUp": e.preventDefault(); { const nv = Math.min(1, v.volume + 0.05); v.volume = nv; setVolume(nv); setMuted(false); } break;
+        case "ArrowDown": e.preventDefault(); { const nv = Math.max(0, v.volume - 0.05); v.volume = nv; setVolume(nv); setMuted(nv === 0); } break;
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Speed
   useEffect(() => {
     if (videoRef.current) videoRef.current.playbackRate = speed;
@@ -229,6 +291,14 @@ export default function WatchPage() {
     const el = containerRef.current; if (!el) return;
     if (!document.fullscreenElement) el.requestFullscreen().catch(() => {});
     else document.exitFullscreen().catch(() => {});
+  };
+
+  const togglePip = async () => {
+    const v = videoRef.current; if (!v) return;
+    try {
+      if (document.pictureInPictureElement) await document.exitPictureInPicture();
+      else if (document.pictureInPictureEnabled) await v.requestPictureInPicture();
+    } catch { /* PiP unsupported or blocked — ignore */ }
   };
 
   const seek = (e: React.MouseEvent | React.TouchEvent | React.ChangeEvent<HTMLInputElement>) => {
@@ -384,8 +454,16 @@ export default function WatchPage() {
               </div>
             )}
 
+            {/* Picture-in-Picture (hidden where unsupported, e.g. Firefox/iOS) */}
+            {typeof document !== "undefined" && document.pictureInPictureEnabled && (
+              <button onClick={togglePip} title="Picture-in-Picture (p)"
+                className={`transition-colors ml-1 ${pip ? "text-indigo-400" : "text-white hover:text-white/80"}`}>
+                <PictureInPicture2 size={21} />
+              </button>
+            )}
+
             {/* Fullscreen */}
-            <button onClick={toggleFullscreen} className="text-white hover:text-white/80 transition-colors ml-1">
+            <button onClick={toggleFullscreen} title="Fullscreen (f)" className="text-white hover:text-white/80 transition-colors ml-1">
               {fullscreen ? <Minimize size={22} /> : <Maximize size={22} />}
             </button>
           </div>
