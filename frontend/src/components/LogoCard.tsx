@@ -71,7 +71,7 @@ export function LogoCard({ name, logo, onClick, noPlay, actions, className }: Lo
           </div>
         )}
       </div>
-      <div className="logo-card-label">{name}</div>
+      <div className="logo-card-label"><span>{name}</span></div>
     </div>
   );
 }

@@ -1,11 +1,11 @@
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, Crown, Play } from "lucide-react";
+import { Loader2, Crown } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { mintStreamToken } from "../lib/api";
-import { type Channel, type Health, BADGE, Logo } from "./Channels";
+import { type Channel } from "./Channels";
 import { PremiumEmpty, type PremiumSummary } from "../components/PremiumEmpty";
-import clsx from "clsx";
+import { LogoCard } from "../components/LogoCard";
 
 /**
  * Premium → Channels. The imported streams in the "Premium" bouquet's categories
@@ -58,32 +58,10 @@ export default function PremiumChannels() {
       ) : channels.length === 0 ? (
         <PremiumEmpty summary={summary} kind="channels" />
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
-          {channels.map((c) => {
-            const b = BADGE[c.health as Health];
-            return (
-              <div key={c.key} className="bg-surface-container-low border border-outline-variant rounded-md flex flex-col overflow-hidden">
-                <div className="p-3 flex flex-col items-center text-center gap-1.5 flex-1">
-                  <span className={clsx("self-start inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-2 py-0.5", b.cls)}>
-                    <span className={clsx("w-1.5 h-1.5 rounded-full", b.dot)} /> {b.label}
-                  </span>
-                  <Logo logo={c.logo} />
-                  <p className="font-semibold text-[13px] leading-tight line-clamp-2">{c.name}</p>
-                  <span className="text-[9px] font-code-label uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-full px-2 py-0.5 truncate max-w-full">
-                    {c.source}
-                  </span>
-                </div>
-                <div className="border-t border-outline-variant p-2">
-                  <button
-                    onClick={() => watch(c)}
-                    className="w-full inline-flex items-center justify-center gap-1 text-[12px] font-medium rounded-md border border-primary/40 text-primary py-1.5 hover:bg-primary/10 transition-colors"
-                  >
-                    <Play size={13} /> Watch
-                  </button>
-                </div>
-              </div>
-            );
-          })}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5">
+          {channels.map((c) => (
+            <LogoCard key={c.key} name={c.name} logo={c.logo} onClick={() => watch(c)} />
+          ))}
         </div>
       )}
     </div>

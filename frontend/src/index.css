@@ -259,7 +259,8 @@ html.light {
 .logo-card-actions button.danger:hover { color: #b3261e; }
 
 .logo-card-label {
-  min-height: 58px;
+  height: 58px;                       /* fixed so every card is identical */
+  flex-shrink: 0;
   background: #ebebeb;
   display: flex;
   align-items: center;
@@ -267,9 +268,16 @@ html.light {
   padding: 8px 12px;
   font-family: "Open Sans", sans-serif;
   font-size: 15px;
-  line-height: normal;
+  font-weight: 800;                   /* very bold name, same size */
+  line-height: 1.2;
   color: #262626;
   text-align: center;
+}
+.logo-card-label span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
   word-break: break-word;
 }
 

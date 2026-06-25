@@ -6,12 +6,8 @@ import {
 import toast from "react-hot-toast";
 import api from "../lib/api";
 import { MIcon } from "../components/MIcon";
-import { LogoCard } from "../components/LogoCard";
-import { Pagination } from "../components/Pagination";
 import { useInfiniteRender } from "../hooks/useInfiniteRender";
 import clsx from "clsx";
-
-const PAGE_SIZE = 36;
 
 export interface Playlist {
   id: number;
@@ -94,8 +90,6 @@ export default function Playlists() {
     onError: () => toast.error("Delete failed"),
   });
 
-  const [page, setPage] = useState(0);
-
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return playlists;
@@ -105,11 +99,6 @@ export default function Playlists() {
         (p.description || "").toLowerCase().includes(q)
     );
   }, [playlists, search]);
-
-  const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const cur = Math.min(page, pages - 1);
-  const shown = filtered.slice(cur * PAGE_SIZE, cur * PAGE_SIZE + PAGE_SIZE);
-  useMemo(() => { setPage(0); }, [search]);
 
   return (
     <div className="p-lg space-y-md max-w-[1400px]">
@@ -150,45 +139,20 @@ export default function Playlists() {
       ) : filtered.length === 0 ? (
         <div className="py-16 text-center text-on-surface-variant">No playlists match your search.</div>
       ) : (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5">
-            {shown.map((p) => (
-              <LogoCard
-                key={p.id}
-                name={p.name}
-                logo={p.logos?.[0]}
-                noPlay
-                onClick={() => setViewing(p)}
-                actions={
-                  <>
-                    <button
-                      title="Refresh"
-                      disabled={refreshingId === p.id && refreshMut.isPending}
-                      onClick={() => refreshMut.mutate(p.id)}
-                    >
-                      <RefreshCw
-                        size={13}
-                        className={clsx(refreshingId === p.id && refreshMut.isPending && "animate-spin")}
-                      />
-                    </button>
-                    <button
-                      className="danger"
-                      title="Delete"
-                      onClick={() => {
-                        if (confirm(`Remove "${p.name}" from your playlists?`)) deleteMut.mutate(p.id);
-                      }}
-                    >
-                      <Trash2 size={13} />
-                    </button>
-                  </>
-                }
-              />
-            ))}
-          </div>
-          <div className="pt-2">
-            <Pagination page={cur + 1} totalPages={pages} onChange={(p) => setPage(p - 1)} />
-          </div>
-        </>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">
+          {filtered.map((p) => (
+            <PlaylistCard
+              key={p.id}
+              playlist={p}
+              refreshing={refreshingId === p.id && refreshMut.isPending}
+              onView={() => setViewing(p)}
+              onRefresh={() => refreshMut.mutate(p.id)}
+              onDelete={() => {
+                if (confirm(`Remove "${p.name}" from your playlists?`)) deleteMut.mutate(p.id);
+              }}
+            />
+          ))}
+        </div>
       )}
 
       {showAdd && (

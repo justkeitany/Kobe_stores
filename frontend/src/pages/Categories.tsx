@@ -1,12 +1,8 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Trash2, Edit2, FolderOpen } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
-import { LogoCard } from "../components/LogoCard";
-import { Pagination } from "../components/Pagination";
-
-const PAGE_SIZE = 36;
 
 interface Category {
   id: number;
@@ -20,7 +16,6 @@ export default function Categories() {
   const qc = useQueryClient();
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState<Category | null>(null);
-  const [page, setPage] = useState(0);
 
   const { data: cats = [], isLoading } = useQuery<Category[]>({
     queryKey: ["categories"],
@@ -35,10 +30,6 @@ export default function Categories() {
     },
   });
 
-  const pages = Math.max(1, Math.ceil(cats.length / PAGE_SIZE));
-  const cur = Math.min(page, pages - 1);
-  const shown = cats.slice(cur * PAGE_SIZE, cur * PAGE_SIZE + PAGE_SIZE);
-
   return (
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between">
@@ -48,40 +39,41 @@ export default function Categories() {
         </button>
       </div>
 
-      {isLoading ? (
-        <p className="text-gray-400">Loading...</p>
-      ) : cats.length === 0 ? (
-        <p className="text-gray-400">No categories yet. Add one to group your streams.</p>
-      ) : (
-        <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5">
-            {shown.map((cat) => (
-              <LogoCard
-                key={cat.id}
-                name={cat.name}
-                logo={cat.icon}
-                noPlay
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {isLoading && <p className="text-gray-400 col-span-3">Loading...</p>}
+        {cats.map((cat) => (
+          <div key={cat.id} className="card flex items-center gap-4 group">
+            <div className="w-10 h-10 bg-gray-100 border border-gray-200 rounded-lg flex items-center justify-center shrink-0">
+              {cat.icon ? (
+                <img src={cat.icon} alt="" className="w-6 h-6 object-contain" />
+              ) : (
+                <FolderOpen size={16} className="text-gray-500" />
+              )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-gray-900 font-medium truncate">{cat.name}</p>
+              <p className="text-gray-400 text-xs">{cat.stream_count} streams</p>
+            </div>
+            <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <button
+                className="p-1.5 text-gray-400 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
                 onClick={() => { setEditing(cat); setShowModal(true); }}
-                actions={
-                  <button
-                    className="danger"
-                    title="Delete"
-                    onClick={() => {
-                      if (confirm(`Delete "${cat.name}"? Streams will be moved to Uncategorized.`))
-                        deleteMut.mutate(cat.id);
-                    }}
-                  >
-                    <Trash2 size={13} />
-                  </button>
-                }
-              />
-            ))}
+              >
+                <Edit2 size={14} />
+              </button>
+              <button
+                className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                onClick={() => {
+                  if (confirm(`Delete "${cat.name}"? Streams will be moved to Uncategorized.`))
+                    deleteMut.mutate(cat.id);
+                }}
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
           </div>
-          <div className="pt-2">
-            <Pagination page={cur + 1} totalPages={pages} onChange={(p) => setPage(p - 1)} />
-          </div>
-        </>
-      )}
+        ))}
+      </div>
 
       {showModal && (
         <CategoryModal
