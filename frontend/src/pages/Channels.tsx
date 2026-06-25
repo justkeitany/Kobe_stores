@@ -5,6 +5,7 @@ import { Loader2, RefreshCw, AlertCircle, Tv, Play } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { mintStreamToken } from "../lib/api";
 import { MIcon } from "../components/MIcon";
+import { Pagination } from "../components/Pagination";
 import clsx from "clsx";
 
 const PAGE_SIZE = 36;
@@ -183,13 +184,13 @@ export default function Channels() {
             })}
           </div>
 
-          {pages > 1 && (
-            <div className="flex items-center justify-center gap-3 pt-3 text-body-sm">
-              <button className="btn-secondary py-1 px-3" onClick={() => setPage(Math.max(0, cur - 1))} disabled={cur === 0}>Prev</button>
-              <span className="text-on-surface-variant">Page {cur + 1} of {pages}</span>
-              <button className="btn-secondary py-1 px-3" onClick={() => setPage(Math.min(pages - 1, cur + 1))} disabled={cur >= pages - 1}>Next</button>
-            </div>
-          )}
+          <div className="pt-3">
+            <Pagination
+              page={cur + 1}
+              totalPages={pages}
+              onChange={(p) => setPage(p - 1)}
+            />
+          </div>
         </>
       )}
     </div>

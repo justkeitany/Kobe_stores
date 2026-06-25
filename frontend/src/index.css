@@ -1,4 +1,4 @@
-@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Open+Sans:wght@400;600;700&display=swap");
 @import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap");
 @import "tailwindcss";
 
@@ -143,6 +143,38 @@ html.light {
   /* Card elevation — soft, clearly visible in light */
   --shadow-card: 0 1px 2px rgba(38, 38, 38, 0.06), 0 6px 16px rgba(38, 38, 38, 0.08);
 }
+
+/* ── Pagination — 1:1 port of the reference site's pager ──────────
+   Open Sans 700/13px pills, #f1f1f1 fill, #00ffcc current, 5px radius.
+   Hardcoded so it renders identically in light and dark mode.        */
+.ref-pagination {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+  flex-wrap: wrap;
+}
+.ref-pagination button,
+.ref-pagination span {
+  font-family: "Open Sans", sans-serif;
+  font-weight: 700;
+  font-size: 13px;
+  line-height: normal;
+  display: block;
+  margin: 5px;
+  padding: 8px 16px;
+  background: #f1f1f1;
+  color: #262626;
+  border: none;
+  border-radius: 5px;
+  text-decoration: none;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.ref-pagination button:hover:not(:disabled) { background: #66ffe0; }
+.ref-pagination .current { background: #00ffcc; }
+.ref-pagination button:disabled { opacity: 0.5; cursor: default; }
+.ref-pagination .ellipsis { cursor: default; }
 
 @layer base {
   * { box-sizing: border-box; }
