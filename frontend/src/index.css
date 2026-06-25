@@ -176,6 +176,103 @@ html.light {
 .ref-pagination button:disabled { opacity: 0.5; cursor: default; }
 .ref-pagination .ellipsis { cursor: default; }
 
+/* ── Logo card — 1:1 port of the reference site's .result-group ───
+   White logo area on top, grey #EBEBEB label below, 10px radius,
+   no borders, soft hover shadow + hover-reveal borderless play icon.
+   Colours hardcoded to match the reference exactly.                 */
+.logo-card {
+  background: #ebebeb;                 /* grey label area (gray3) */
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  cursor: pointer;
+  transition: box-shadow 0.2s;
+}
+.logo-card:hover { box-shadow: 2px 2px 5px #cccccc; }   /* gray4 */
+
+.logo-card-thumb {
+  position: relative;
+  background: #ffffff;                 /* white logo area */
+  border-radius: 10px 10px 0 0;
+  aspect-ratio: 1 / 1;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.logo-card-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+  transition: opacity 0.2s;
+}
+.logo-card:hover .logo-card-thumb img { opacity: 0.18; }
+
+.logo-card-initial {
+  font-family: "Open Sans", sans-serif;
+  font-weight: 700;
+  font-size: 48px;
+  line-height: 1;
+  color: #262626;
+}
+
+.logo-card-play {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s;
+  pointer-events: none;
+}
+.logo-card:hover .logo-card-play { opacity: 1; }
+
+.logo-card-actions {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 2;
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+.logo-card:hover .logo-card-actions { opacity: 1; }
+.logo-card-actions button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: 6px;
+  background: rgba(247, 247, 247, 0.9);
+  color: #555555;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.logo-card-actions button:hover { background: #ffffff; color: #262626; }
+.logo-card-actions button.danger:hover { color: #b3261e; }
+
+.logo-card-label {
+  min-height: 58px;
+  background: #ebebeb;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 12px;
+  font-family: "Open Sans", sans-serif;
+  font-size: 15px;
+  line-height: normal;
+  color: #262626;
+  text-align: center;
+  word-break: break-word;
+}
+
 @layer base {
   * { box-sizing: border-box; }
 

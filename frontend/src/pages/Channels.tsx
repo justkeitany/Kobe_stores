@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { Loader2, RefreshCw, AlertCircle, Tv, Play } from "lucide-react";
+import { Loader2, Tv } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { mintStreamToken } from "../lib/api";
 import { MIcon } from "../components/MIcon";
 import { Pagination } from "../components/Pagination";
-import clsx from "clsx";
+import { LogoCard } from "../components/LogoCard";
 
 const PAGE_SIZE = 36;
 
@@ -39,8 +39,6 @@ export const BADGE: Record<Health, { label: string; cls: string; dot: string }> 
 export default function Channels() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(0);
-  const [working, setWorking] = useState<Set<string>>(new Set());
-  const [probed, setProbed] = useState<Record<string, Health>>({});
   const nav = useNavigate();
 
   const { data: channels = [], isLoading } = useQuery<Channel[]>({
@@ -49,25 +47,21 @@ export default function Channels() {
     refetchInterval: 60_000,
   });
 
-  function healthOf(c: Channel): Health {
-    return probed[c.key] || c.health;
-  }
-
   const counts = useMemo(() => {
     const c = { online: 0, offline: 0, geo: 0, dead: 0, checking: 0 } as Record<Health, number>;
-    for (const ch of channels) c[probed[ch.key] || ch.health]++;
+    for (const ch of channels) c[ch.health]++;
     return c;
-  }, [channels, probed]);
+  }, [channels]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     const list = q ? channels.filter((c) => c.name.toLowerCase().includes(q)) : channels.slice();
-    // Stable sort: working channels float to the top, original order kept within a tier.
+    // Surface watchable channels first; keep original order within a health tier.
     return list
       .map((c, i) => ({ c, i }))
-      .sort((a, b) => HEALTH_ORDER[healthOf(a.c)] - HEALTH_ORDER[healthOf(b.c)] || a.i - b.i)
+      .sort((a, b) => HEALTH_ORDER[a.c.health] - HEALTH_ORDER[b.c.health] || a.i - b.i)
       .map((x) => x.c);
-  }, [channels, search, probed]);
+  }, [channels, search]);
 
   const pages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const cur = Math.min(page, pages - 1);
@@ -76,28 +70,17 @@ export default function Channels() {
   // Reset to page 0 on new search
   useMemo(() => { setPage(0); }, [search]);
 
-  async function reportIssue(c: Channel) {
-    setWorking((w) => new Set(w).add(c.key));
+  async function playChannel(c: Channel) {
     try {
-      if (c.imported && c.stream_id != null) {
-        const r = await api.post(`/streams/${c.stream_id}/diagnose`);
-        const d = r.data;
-        const firstSeg = d.timings?.first_segment_ms ? `${(d.timings.first_segment_ms / 1000).toFixed(1)}s` : "?";
-        const status = d.passed ? "PASS" : "FAIL";
-        toast.success(
-          `${c.name}: ${status} | DNS ${d.timings?.dns_ms || "?"}ms | First seg ${firstSeg}${d.errors?.length ? " | " + d.errors[0] : ""}`,
-          { duration: 8000 }
-        );
-      } else {
-        const r = await api.post("/channels/probe", { url: c.url, name: c.name });
-        const st = r.data.status as Health | "skipped";
-        if (st !== "skipped") setProbed((p) => ({ ...p, [c.key]: st }));
-        toast.success(`${c.name}: ${st} — ${r.data.note}`, { duration: 6000 });
-      }
+      const token =
+        c.imported && c.stream_id != null
+          ? await mintStreamToken({ stream_id: c.stream_id })
+          : c.url
+          ? await mintStreamToken({ url: c.url })
+          : null;
+      if (token) nav(`/watch?t=${token}&name=${encodeURIComponent(c.name)}`);
     } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Couldn't check this channel");
-    } finally {
-      setWorking((w) => { const n = new Set(w); n.delete(c.key); return n; });
+      toast.error(e?.response?.data?.detail || "Couldn't open this channel");
     }
   }
 
@@ -132,56 +115,10 @@ export default function Channels() {
         <div className="py-16 text-center text-on-surface-variant">No channels. Add a playlist or import streams.</div>
       ) : (
         <>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2">
-            {shown.map((c) => {
-              const b = BADGE[healthOf(c)];
-              const busy = working.has(c.key);
-              return (
-                <div key={c.key} className="bg-surface-container-low border border-outline-variant rounded-md flex flex-col overflow-hidden">
-                  <div className="p-3 flex flex-col items-center text-center gap-1.5 flex-1">
-                    <div className="self-stretch flex items-center justify-between">
-                      <span className={clsx("inline-flex items-center gap-1 text-[10px] font-medium rounded-full px-2 py-0.5", b.cls)}>
-                        <span className={clsx("w-1.5 h-1.5 rounded-full", b.dot)} /> {b.label}
-                      </span>
-                      <button onClick={() => reportIssue(c)} disabled={busy} title="Diagnose"
-                        className="text-on-surface-variant hover:text-on-surface transition-colors disabled:opacity-50">
-                        <RefreshCw size={13} className={clsx(busy && "animate-spin")} />
-                      </button>
-                    </div>
-                    <Logo logo={c.logo} />
-                    <p className="font-semibold text-[13px] leading-tight line-clamp-2">{c.name}</p>
-                    <span className="text-[9px] font-code-label uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-full px-2 py-0.5 truncate max-w-full">
-                      {c.source}
-                    </span>
-                  </div>
-                  <div className="border-t border-outline-variant p-2">
-                    <button onClick={() => reportIssue(c)} disabled={busy}
-                      className="w-full inline-flex items-center justify-center gap-1 text-[12px] font-medium rounded-md border border-error/40 text-error py-1.5 hover:bg-error/10 transition-colors disabled:opacity-50">
-                      {busy ? <Loader2 size={13} className="animate-spin" /> : <AlertCircle size={13} />}
-                      {busy ? "Diagnosing…" : "Diagnose"}
-                    </button>
-                    <button
-                      onClick={async () => {
-                        try {
-                          const token =
-                            c.imported && c.stream_id != null
-                              ? await mintStreamToken({ stream_id: c.stream_id })
-                              : c.url
-                              ? await mintStreamToken({ url: c.url })
-                              : null;
-                          if (token) nav(`/watch?t=${token}&name=${encodeURIComponent(c.name)}`);
-                        } catch (e: any) {
-                          toast.error(e?.response?.data?.detail || "Couldn't open this channel");
-                        }
-                      }}
-                      className="w-full inline-flex items-center justify-center gap-1 text-[12px] text-on-surface-variant hover:text-on-surface transition-colors py-1"
-                    >
-                      <Play size={13} /> Watch
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-5">
+            {shown.map((c) => (
+              <LogoCard key={c.key} name={c.name} logo={c.logo} onClick={() => playChannel(c)} />
+            ))}
           </div>
 
           <div className="pt-3">
