@@ -198,6 +198,11 @@ SVCEOF
 chown -R www-data:www-data "$APP_DIR" "$HLS_DIR" "$WEB_DIR"
 chmod -R 755 "$HLS_DIR"
 
+step "Server tuning (HLS tmpfs · nginx TCP opts · empty-segment guard)"
+# Idempotent: nginx sendfile/tcp_nopush/tcp_nodelay, /var/iptv/hls on tmpfs,
+# and the hls-clean-empty.timer that 404s abandoned 0-byte segments.
+HLS_DIR="$HLS_DIR" bash "$REPO_DIR/scripts/server-tuning.sh" || warn "Server tuning step had issues — see output above"
+
 step "Kernel tuning for low-latency streaming"
 cat >> /etc/sysctl.conf <<'SYSCTLEOF'
 # IPTV Panel — streaming optimisation

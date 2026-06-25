@@ -76,6 +76,12 @@ cp "$TMP_DIR/nginx/iptv-locations.conf" /etc/nginx/snippets/iptv-locations.conf
 nginx -t 2>/dev/null && systemctl reload nginx
 info "Nginx reloaded"
 
+step "Server tuning (HLS tmpfs · nginx TCP opts · empty-segment guard)"
+# Idempotent: nginx sendfile/tcp_nopush/tcp_nodelay, /var/iptv/hls on tmpfs,
+# and the hls-clean-empty.timer that 404s abandoned 0-byte segments. Runs before
+# the backend restart below so ffmpeg re-points onto the tmpfs mount.
+bash "$TMP_DIR/scripts/server-tuning.sh" || warn "Server tuning step had issues — see output above"
+
 step "Updating HTTPS helper"
 install -m 0755 -o root -g root "$TMP_DIR/scripts/iptv-ssl-setup.sh" /usr/local/sbin/iptv-ssl-setup.sh
 if [[ ! -f /etc/sudoers.d/iptv-panel ]]; then
