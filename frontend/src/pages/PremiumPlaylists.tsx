@@ -6,9 +6,11 @@ import { PlaylistCard, ChannelsModal, type Playlist } from "./Playlists";
 import { PremiumEmpty, type PremiumSummary } from "../components/PremiumEmpty";
 
 /**
- * Premium → Playlists. Read-only view of the playlists that belong to the
- * "Premium" bouquet (resolved server-side by name). Reuses the same PlaylistCard
- * and View modal as the main Playlists page; Refresh/Delete are omitted here.
+ * Premium → Playlists. The playlists that belong to the "Premium" bouquet
+ * (resolved server-side by name). Reuses the same PlaylistCard and View modal as
+ * the main Playlists page, including the Select-all / Import flow so premium
+ * channels can be imported into Streams. Refresh/Delete are omitted here; live
+ * per-channel probing is skipped since premium feeds may be IP-blocked.
  */
 export default function PremiumPlaylists() {
   const [viewing, setViewing] = useState<Playlist | null>(null);
@@ -52,7 +54,7 @@ export default function PremiumPlaylists() {
           playlist={viewing}
           onClose={() => setViewing(null)}
           channelsEndpoint={`/premium/playlists/${viewing.id}/channels`}
-          readOnly
+          skipProbe
         />
       )}
     </div>

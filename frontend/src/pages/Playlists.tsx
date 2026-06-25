@@ -412,14 +412,17 @@ interface Stream { id: number; name: string; stream_url: string; }
 interface Category { id: number; name: string; }
 
 export function ChannelsModal({
-  playlist, onClose, channelsEndpoint, readOnly = false,
+  playlist, onClose, channelsEndpoint, readOnly = false, skipProbe = false,
 }: {
   playlist: Playlist;
   onClose: () => void;
-  /** Override the channels source (premium playlists serve imported streams). */
+  /** Override the channels source (premium playlists serve their own feed). */
   channelsEndpoint?: string;
   /** Hide import + per-channel probing (channels are already imported streams). */
   readOnly?: boolean;
+  /** Keep import but skip live per-channel probing — for feeds the server may be
+   *  IP-blocked from (premium), where probing would just spin and add load. */
+  skipProbe?: boolean;
 }) {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
@@ -444,7 +447,7 @@ export function ChannelsModal({
     queryFn: () =>
       api.get(`/playlists/${playlist.id}/channels/probe`, { timeout: 180_000 })
         .then((r) => ({ skipped: !!r.data.skipped, statuses: (r.data.statuses ?? []) as ChannelProbe[] })),
-    enabled: channels.length > 0 && !readOnly,
+    enabled: channels.length > 0 && !readOnly && !skipProbe,
     staleTime: 60_000,
   });
   const probes = probeResp?.statuses;
