@@ -1,45 +1,349 @@
 #EXTM3U
-#EXTINF:-1 tvg-id="10456" tvg-name="US American Heroes Channel" tvg-logo="" group-title="New",US American Heroes Channel
+#EXTINF:-1 tvg-id="10456" tvg-name="US American Heroes Channel" tvg-logo="https://premium.keitanyfrank.store/American-Heroes-Channel-01.svg" group-title="United States",US American Heroes Channel
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10456.m3u8
-#EXTINF:-1 tvg-id="11644" tvg-name="CA Adult Swim (R)" tvg-logo="https://www.nicepng.com/png/detail/326-3269271_adult-swim-adult-swim-logo-png.png" group-title="New",CA Adult Swim (R)
+#EXTINF:-1 tvg-id="11644" tvg-name="CA Adult Swim (R)" tvg-logo="https://premium.keitanyfrank.store/Adult-Swim-01.svg" group-title="Canada",CA Adult Swim (R)
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/11644.m3u8
-#EXTINF:-1 tvg-id="15336" tvg-name="US Univision (East) (SP)" tvg-logo="https://w7.pngwing.com/pngs/618/904/png-transparent-logo-univision-mexico-television-san-antonio-disney-junior-logo-television-text-logo.png" group-title="New",US Univision (East) (SP)
+#EXTINF:-1 tvg-id="15336" tvg-name="US Univision (East) (SP)" tvg-logo="https://premium.keitanyfrank.store/Univision-01.svg" group-title="United States",US Univision (East) (SP)
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/15336.m3u8
-#EXTINF:-1 tvg-id="17870" tvg-name="US Animal Planet" tvg-logo="https://i.pinimg.com/originals/d1/18/a4/d118a4d4198818532da51e0a0bfb7969.png" group-title="New",US Animal Planet
+#EXTINF:-1 tvg-id="17870" tvg-name="US Animal Planet" tvg-logo="https://premium.keitanyfrank.store/Animal-Planet-01.svg" group-title="United States",US Animal Planet
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/17870.m3u8
-#EXTINF:-1 tvg-id="18925" tvg-name="US AMC" tvg-logo="https://seeklogo.com/images/A/amc-logo-36BD2C5A01-seeklogo.com.png" group-title="New",US AMC
+#EXTINF:-1 tvg-id="18925" tvg-name="US AMC" tvg-logo="https://premium.keitanyfrank.store/AMC-01.svg" group-title="United States",US AMC
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/18925.m3u8
-#EXTINF:-1 tvg-id="20180" tvg-name="US Antenna TV" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/2/2c/Antenna_TV_logo.svg/175px-Antenna_TV_logo.svg.png" group-title="New",US Antenna TV
+#EXTINF:-1 tvg-id="20180" tvg-name="US Antenna TV" tvg-logo="https://premium.keitanyfrank.store/Antenna_TV.svg" group-title="United States",US Antenna TV
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20180.m3u8
-#EXTINF:-1 tvg-id="20194" tvg-name="US BBC America" tvg-logo="https://b1.pngbarn.com/png/484/73/tv-channel-icons-pack-bbc-america-black-png-clip-art.png" group-title="New",US BBC America
+#EXTINF:-1 tvg-id="20194" tvg-name="US BBC America" tvg-logo="https://premium.keitanyfrank.store/BBC_America.svg" group-title="United States",US BBC America
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20194.m3u8
-#EXTINF:-1 tvg-id="20976" tvg-name="US Pop" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/8/82/Pop_Network_Logo.png" group-title="New",US Pop
+#EXTINF:-1 tvg-id="20976" tvg-name="US Pop" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/8/82/Pop_Network_Logo.png" group-title="United States",US Pop
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20976.m3u8
-#EXTINF:-1 tvg-id="21092" tvg-name="US Court TV" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/b/bf/Court_TV_2019.png/300px-Court_TV_2019.png" group-title="New",US Court TV
+#EXTINF:-1 tvg-id="21092" tvg-name="US Court TV" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/b/bf/Court_TV_2019.png/300px-Court_TV_2019.png" group-title="United States",US Court TV
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21092.m3u8
-#EXTINF:-1 tvg-id="21927" tvg-name="US Aspire (A)" tvg-logo="" group-title="New",US Aspire (A)
+#EXTINF:-1 tvg-id="21927" tvg-name="US Aspire (A)" tvg-logo="https://premium.keitanyfrank.store/aspire.svg" group-title="United States",US Aspire (A)
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21927.m3u8
-#EXTINF:-1 tvg-id="2201" tvg-name="US A&E (A)" tvg-logo="https://juicetv.app/channellogo/ae.png" group-title="New",US A&E (A)
+#EXTINF:-1 tvg-id="2201" tvg-name="US A&E (A)" tvg-logo="https://premium.keitanyfrank.store/A-and-E-Network-01.svg" group-title="United States",US A&E (A)
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/2201.m3u8
-#EXTINF:-1 tvg-id="22990" tvg-name="USA: ABC" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/American_Broadcasting_Company_Logo.svg/479px-American_Broadcasting_Company_Logo.svg.png" group-title="New",USA: ABC
+#EXTINF:-1 tvg-id="22990" tvg-name="USA: ABC" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/5/54/American_Broadcasting_Company_Logo.svg/479px-American_Broadcasting_Company_Logo.svg.png" group-title="United States",USA: ABC
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/22990.m3u8
-#EXTINF:-1 tvg-id="46754" tvg-name="US CBSN New York (D)" tvg-logo="" group-title="New",US CBSN New York (D)
+#EXTINF:-1 tvg-id="46754" tvg-name="US CBSN New York (D)" tvg-logo="" group-title="United States",US CBSN New York (D)
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46754.m3u8
-#EXTINF:-1 tvg-id="46792" tvg-name="US FOX Sports 1" tvg-logo="" group-title="New",US FOX Sports 1
+#EXTINF:-1 tvg-id="46792" tvg-name="US FOX Sports 1" tvg-logo="https://premium.keitanyfrank.store/Fox_Sports_1_logo.png" group-title="United States",US FOX Sports 1
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46792.m3u8
-#EXTINF:-1 tvg-id="48324" tvg-name="US AXS TV" tvg-logo="" group-title="New",US AXS TV
+#EXTINF:-1 tvg-id="48324" tvg-name="US AXS TV" tvg-logo="https://premium.keitanyfrank.store/AXS_TV_logo.svg" group-title="United States",US AXS TV
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/48324.m3u8
-#EXTINF:-1 tvg-id="57969" tvg-name="US UniMas" tvg-logo="" group-title="New",US UniMas
+#EXTINF:-1 tvg-id="57969" tvg-name="US UniMas" tvg-logo="https://premium.keitanyfrank.store/UniM%C3%A1s_Logo.png" group-title="United States",US UniMas
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57969.m3u8
-#EXTINF:-1 tvg-id="58765" tvg-name="USA: Baby First HD" tvg-logo="" group-title="New",USA: Baby First HD
+#EXTINF:-1 tvg-id="58765" tvg-name="USA: Baby First HD" tvg-logo="https://premium.keitanyfrank.store/Babyfirst%20Tv%20Logo%20Vector.svg" group-title="United States",USA: Baby First HD
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/58765.m3u8
-#EXTINF:-1 tvg-id="59056" tvg-name="USA: A&E" tvg-logo="" group-title="New",USA: A&E
+#EXTINF:-1 tvg-id="59056" tvg-name="USA: A&E" tvg-logo="https://premium.keitanyfrank.store/A-and-E-Network-01.svg" group-title="United States",USA: A&E
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/59056.m3u8
-#EXTINF:-1 tvg-id="66080" tvg-name="USA: Bet Gospel" tvg-logo="" group-title="New",USA: Bet Gospel
+#EXTINF:-1 tvg-id="66080" tvg-name="USA: Bet Gospel" tvg-logo="" group-title="United States",USA: Bet Gospel
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/66080.m3u8
-#EXTINF:-1 tvg-id="78578" tvg-name="Infowars" tvg-logo="" group-title="New",Infowars
+#EXTINF:-1 tvg-id="78578" tvg-name="Infowars" tvg-logo="https://premium.keitanyfrank.store/Infowars_Logo.svg" group-title="United States",Infowars
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/78578.m3u8
-#EXTINF:-1 tvg-id="79545" tvg-name="US Altitude Sports HD" tvg-logo="" group-title="New",US Altitude Sports HD
+#EXTINF:-1 tvg-id="79545" tvg-name="US Altitude Sports HD" tvg-logo="https://premium.keitanyfrank.store/altitude-sports-logo.svg" group-title="United States",US Altitude Sports HD
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/79545.m3u8
-#EXTINF:-1 tvg-id="79594" tvg-name="US CHARGE!" tvg-logo="" group-title="New",US CHARGE!
+#EXTINF:-1 tvg-id="79594" tvg-name="US CHARGE!" tvg-logo="https://premium.keitanyfrank.store/Charge%21_Logo.svg" group-title="United States",US CHARGE!
 http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/79594.m3u8
+#EXTINF:-1 tvg-id="1817" tvg-name="US CNN" tvg-logo="https://premium.keitanyfrank.store/CNN-01.svg" group-title="United States",US CNN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/1817.m3u8
+#EXTINF:-1 tvg-id="1818" tvg-name="US Fox News" tvg-logo="https://premium.keitanyfrank.store/FOX-News-01.svg" group-title="United States",US Fox News
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/1818.m3u8
+#EXTINF:-1 tvg-id="2208" tvg-name="US Lifetime Movie" tvg-logo="https://juicetv.app/channellogo/lmn2.png" group-title="United States",US Lifetime Movie
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/2208.m3u8
+#EXTINF:-1 tvg-id="7323" tvg-name="USA: Food Network HD" tvg-logo="https://premium.keitanyfrank.store/Food-Network-01.svg" group-title="United States",USA: Food Network HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/7323.m3u8
+#EXTINF:-1 tvg-id="7404" tvg-name="US VH1" tvg-logo="https://premium.keitanyfrank.store/VH1-01.svg" group-title="United States",US VH1
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/7404.m3u8
+#EXTINF:-1 tvg-id="7466" tvg-name="US Comedy Central (East)" tvg-logo="https://premium.keitanyfrank.store/Comedy-Central-01.svg" group-title="United States",US Comedy Central (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/7466.m3u8
+#EXTINF:-1 tvg-id="9229" tvg-name="US Cooking Channel" tvg-logo="https://premium.keitanyfrank.store/Cooking_Channel.svg" group-title="United States",US Cooking Channel
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9229.m3u8
+#EXTINF:-1 tvg-id="9237" tvg-name="US WE tv" tvg-logo="https://godish.com/wp-content/uploads/channel-logos/we.png" group-title="United States",US WE tv
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9237.m3u8
+#EXTINF:-1 tvg-id="9240" tvg-name="US FYI" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/1/12/FYI%2C_logo.png" group-title="United States",US FYI
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9240.m3u8
+#EXTINF:-1 tvg-id="9244" tvg-name="US Outdoor Channel" tvg-logo="https://i2.wp.com/tva.onscreenasia.com/wp-content/uploads/2018/06/TVA-19-June-5.png" group-title="United States",US Outdoor Channel
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9244.m3u8
+#EXTINF:-1 tvg-id="9245" tvg-name="US Oxygen (East)" tvg-logo="https://upload.wikimedia.org/wikipedia/en/5/5a/Oxygen_2008.png" group-title="United States",US Oxygen (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9245.m3u8
+#EXTINF:-1 tvg-id="9271" tvg-name="USA: TV Land Classic HD" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/7/76/TV_Land_2009.svg/542px-TV_Land_2009.svg.png" group-title="United States",USA: TV Land Classic HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9271.m3u8
+#EXTINF:-1 tvg-id="9272" tvg-name="US IFC" tvg-logo="https://res-4.cloudinary.com/crunchbase-production/image/upload/c_lpad,h_256,w_256,f_auto,q_auto:eco/v1412745090/blg54azaoqz0cj3at5zd.png" group-title="United States",US IFC
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9272.m3u8
+#EXTINF:-1 tvg-id="9275" tvg-name="US Lifetime" tvg-logo="https://premium.keitanyfrank.store/Logo_Lifetime.svg" group-title="United States",US Lifetime
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9275.m3u8
+#EXTINF:-1 tvg-id="9277" tvg-name="US National Geographic (East)" tvg-logo="https://premium.keitanyfrank.store/National-Geographic-Channel-01.svg" group-title="United States",US National Geographic (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9277.m3u8
+#EXTINF:-1 tvg-id="9296" tvg-name="US MSNBC" tvg-logo="https://premium.keitanyfrank.store/MSNBC-01.svg" group-title="United States",US MSNBC
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9296.m3u8
+#EXTINF:-1 tvg-id="9297" tvg-name="US ION" tvg-logo="https://2.bp.blogspot.com/-E__E_oYmXlc/UTWwxOzu9OI/AAAAAAAAY5Y/0Yn3eTdCupY/s1600/Ion+Television+logo+2013.png" group-title="United States",US ION
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9297.m3u8
+#EXTINF:-1 tvg-id="9307" tvg-name="US Hallmark family" tvg-logo="https://www.heartlandweekend.com/wp-content/uploads/2019/03/1200x627-Hallmark-Drama-300x157.png" group-title="United States",US Hallmark family
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9307.m3u8
+#EXTINF:-1 tvg-id="9308" tvg-name="US MTV2" tvg-logo="https://www.bellmedia.ca/wp-content/uploads/2014/02/tv_mtv2-1-490x490.png" group-title="United States",US MTV2
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9308.m3u8
+#EXTINF:-1 tvg-id="9315" tvg-name="US Travel Channel East" tvg-logo="https://assets.simpleviewinc.com/simpleview/image/upload/c_lpad,h_364,q_50,w_520/v1/clients/chattanooga/Travel_Channel_2019_Logo_41ccc6dd-cc39-4ff9-93a7-a75ca7b509f4.png" group-title="United States",US Travel Channel East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9315.m3u8
+#EXTINF:-1 tvg-id="9811" tvg-name="US Discovery Channel East" tvg-logo="https://premium.keitanyfrank.store/Discovery-Channel-01.svg" group-title="United States",US Discovery Channel East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9811.m3u8
+#EXTINF:-1 tvg-id="9815" tvg-name="US CNBC" tvg-logo="https://premium.keitanyfrank.store/CNBC_logo.svg" group-title="United States",US CNBC
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9815.m3u8
+#EXTINF:-1 tvg-id="9818" tvg-name="US MTV" tvg-logo="https://premium.keitanyfrank.store/MTV-01.svg" group-title="United States",US MTV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9818.m3u8
+#EXTINF:-1 tvg-id="9861" tvg-name="USA: Discovery Life HD" tvg-logo="https://premium.keitanyfrank.store/Discovery_Life_logo.svg" group-title="United States",USA: Discovery Life HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/9861.m3u8
+#EXTINF:-1 tvg-id="10224" tvg-name="US TRUTV East" tvg-logo="https://premium.keitanyfrank.store/Tru-TV-01.svg" group-title="United States",US TRUTV East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10224.m3u8
+#EXTINF:-1 tvg-id="10252" tvg-name="US USA Network (East)" tvg-logo="https://premium.keitanyfrank.store/USA-Network-01.svg" group-title="United States",US USA Network (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10252.m3u8
+#EXTINF:-1 tvg-id="10260" tvg-name="US FXM" tvg-logo="https://lamac.org/wp-content/uploads/2020/04/Group-63@2x.png" group-title="United States",US FXM
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10260.m3u8
+#EXTINF:-1 tvg-id="10289" tvg-name="US Hallmark Movies & Mysteries" tvg-logo="https://p.kindpng.com/picc/s/196-1969955_hallmark-movies-and-mysteries-channel-logo-hd-png.png" group-title="United States",US Hallmark Movies & Mysteries
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10289.m3u8
+#EXTINF:-1 tvg-id="10399" tvg-name="US MotorTrend (A)" tvg-logo="https://premium.keitanyfrank.store/Motor_Trend.svg" group-title="United States",US MotorTrend (A)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10399.m3u8
+#EXTINF:-1 tvg-id="10455" tvg-name="US TNT East" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/6/68/Logo_TNT_Series.png" group-title="United States",US TNT East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10455.m3u8
+#EXTINF:-1 tvg-id="10464" tvg-name="US Paramount TV" tvg-logo="https://e7.pngegg.com/pngimages/707/232/png-clipart-paramount-logo-brand-park-font-park-text-photography-thumbnail.png" group-title="United States",US Paramount TV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10464.m3u8
+#EXTINF:-1 tvg-id="10476" tvg-name="USA: CMT HD" tvg-logo="https://premium.keitanyfrank.store/CMT-01.svg" group-title="United States",USA: CMT HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10476.m3u8
+#EXTINF:-1 tvg-id="10477" tvg-name="US World Fishing Network (F)" tvg-logo="https://upload.wikimedia.org/wikipedia/en/9/90/World_Fishing_Network.png" group-title="United States",US World Fishing Network (F)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10477.m3u8
+#EXTINF:-1 tvg-id="10503" tvg-name="US Magnolia Network" tvg-logo="https://dockanddeck.com/wp-content/uploads/2019/02/diy.png" group-title="United States",US Magnolia Network
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10503.m3u8
+#EXTINF:-1 tvg-id="10525" tvg-name="US Up TV" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/8/8e/Upmoji-orange.png" group-title="United States",US Up TV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10525.m3u8
+#EXTINF:-1 tvg-id="10526" tvg-name="US Reelz" tvg-logo="https://upload.wikimedia.org/wikipedia/en/b/b1/Reelz_Channel_Logo.png" group-title="United States",US Reelz
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10526.m3u8
+#EXTINF:-1 tvg-id="10538" tvg-name="USA: DISCOVERY FAMILY" tvg-logo="https://png.pngitem.com/pimgs/s/452-4528679_discovery-family-channel-logo-hd-png-download.png" group-title="United States",USA: DISCOVERY FAMILY
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/10538.m3u8
+#EXTINF:-1 tvg-id="11651" tvg-name="US E! Entertainment Television East" tvg-logo="https://premium.keitanyfrank.store/E%21_Logo.svg" group-title="United States",US E! Entertainment Television East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/11651.m3u8
+#EXTINF:-1 tvg-id="11664" tvg-name="US Nat Geo Wild East (A)" tvg-logo="https://premium.keitanyfrank.store/National-Geographic-Wild-HD-01.svg" group-title="United States",US Nat Geo Wild East (A)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/11664.m3u8
+#EXTINF:-1 tvg-id="11868" tvg-name="US Cozi" tvg-logo="https://premium.keitanyfrank.store/Cozi-TV-01.svg" group-title="United States",US Cozi
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/11868.m3u8
+#EXTINF:-1 tvg-id="12734" tvg-name="US TLC East" tvg-logo="https://premium.keitanyfrank.store/TLC-01.svg" group-title="United States",US TLC East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/12734.m3u8
+#EXTINF:-1 tvg-id="13370" tvg-name="US Freeform East" tvg-logo="https://premium.keitanyfrank.store/Freeform_2018.svg" group-title="United States",US Freeform East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/13370.m3u8
+#EXTINF:-1 tvg-id="14222" tvg-name="US Destination America (A)" tvg-logo="https://premium.keitanyfrank.store/Destination_America_logo.svg" group-title="United States",US Destination America (A)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/14222.m3u8
+#EXTINF:-1 tvg-id="15017" tvg-name="US History Channel" tvg-logo="https://premium.keitanyfrank.store/History-01.svg" group-title="United States",US History Channel
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/15017.m3u8
+#EXTINF:-1 tvg-id="15158" tvg-name="US Bloomberg" tvg-logo="https://premium.keitanyfrank.store/Bloomberg-Television-01.svg" group-title="United States",US Bloomberg
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/15158.m3u8
+#EXTINF:-1 tvg-id="16149" tvg-name="US MeTV Network East" tvg-logo="https://stephenarnoldmusic.com/cms/wp-content/uploads/2017/02/client-logo-metv.png" group-title="United States",US MeTV Network East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/16149.m3u8
+#EXTINF:-1 tvg-id="16201" tvg-name="US Paramount Network" tvg-logo="https://images.vexels.com/media/users/3/139794/isolated/preview/63948c2cace761d17096170684e4d193-brazil-round-flag-by-vexels.png" group-title="United States",US Paramount Network
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/16201.m3u8
+#EXTINF:-1 tvg-id="16262" tvg-name="US insp" tvg-logo="https://ww1.prweb.com/prfiles/2016/09/14/14127507/gI_84595_INSP%20HD%20logo.png" group-title="United States",US insp
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/16262.m3u8
+#EXTINF:-1 tvg-id="17639" tvg-name="US Fox Business Network" tvg-logo="https://www.openthebooks.com/assets/1/6/Fox_Business1.png" group-title="United States",US Fox Business Network
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/17639.m3u8
+#EXTINF:-1 tvg-id="17640" tvg-name="US Great American Country" tvg-logo="https://www.prizestakes.com/wp-content/uploads/2018/08/47-471x320.png" group-title="United States",US Great American Country
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/17640.m3u8
+#EXTINF:-1 tvg-id="17748" tvg-name="US HLN" tvg-logo="https://cdn.strivecloud.io/wp-content/uploads/2020/07/14143602/hln-273x202.png" group-title="United States",US HLN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/17748.m3u8
+#EXTINF:-1 tvg-id="17777" tvg-name="US Laff (KNVA)" tvg-logo="https://sky21.com/wp-content/uploads/2019/02/LAFF.png" group-title="United States",US Laff (KNVA)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/17777.m3u8
+#EXTINF:-1 tvg-id="17868" tvg-name="US RFD-TV" tvg-logo="https://www.logolynx.com/images/logolynx/29/29694e6e70adeb8ed1c66a5f40c42af2.png" group-title="United States",US RFD-TV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/17868.m3u8
+#EXTINF:-1 tvg-id="18366" tvg-name="US GetTV" tvg-logo="https://logodix.com/logo/1826254.png" group-title="United States",US GetTV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/18366.m3u8
+#EXTINF:-1 tvg-id="18926" tvg-name="US The Weather Channel" tvg-logo="https://i.imgur.com/PIaNjfa.png" group-title="United States",US The Weather Channel
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/18926.m3u8
+#EXTINF:-1 tvg-id="18939" tvg-name="US Newsmax TV" tvg-logo="https://image.roku.com/developer_channels/prod/54d11237dc9d300eb0bfcf2b596c820d1f513459a3a4d4b7f69716d69aebe8d0.png" group-title="United States",US Newsmax TV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/18939.m3u8
+#EXTINF:-1 tvg-id="20189" tvg-name="US Decades" tvg-logo="https://decades.com/images/logo_tagline.png" group-title="United States",US Decades
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20189.m3u8
+#EXTINF:-1 tvg-id="20859" tvg-name="US Bravo (East)" tvg-logo="https://premium.keitanyfrank.store/Bravo-01.svg" group-title="United States",US Bravo (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20859.m3u8
+#EXTINF:-1 tvg-id="20860" tvg-name="US CNBC World" tvg-logo="https://premium.keitanyfrank.store/CNBC_World_2024.svg" group-title="United States",US CNBC World
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20860.m3u8
+#EXTINF:-1 tvg-id="20861" tvg-name="US Grit TV" tvg-logo="https://cdn.tvpassport.com/image/station/240x135/grittv.png" group-title="United States",US Grit TV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20861.m3u8
+#EXTINF:-1 tvg-id="20862" tvg-name="USA: LOGO TV" tvg-logo="https://n7.nextpng.com/sticker-png/347/134/sticker-png-logo-tv-television-channel-viacom-media-networks-others.png" group-title="United States",USA: LOGO TV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20862.m3u8
+#EXTINF:-1 tvg-id="20865" tvg-name="USA: OUTSIDE TV" tvg-logo="https://images-na.ssl-images-amazon.com/images/I/71iXofscZDL.png" group-title="United States",USA: OUTSIDE TV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20865.m3u8
+#EXTINF:-1 tvg-id="20866" tvg-name="US Discovery Science" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/6/6d/SCI-network-logo-192x192-v2.png" group-title="United States",US Discovery Science
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20866.m3u8
+#EXTINF:-1 tvg-id="20867" tvg-name="US TBS" tvg-logo="https://premium.keitanyfrank.store/TBS-01.svg" group-title="United States",US TBS
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20867.m3u8
+#EXTINF:-1 tvg-id="20868" tvg-name="US TV One" tvg-logo="https://www.kindpng.com/picc/m/335-3354292_tvone-logo-logo-tv-one-2019-hd-png.png" group-title="United States",US TV One
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/20868.m3u8
+#EXTINF:-1 tvg-id="21259" tvg-name="US CBS News" tvg-logo="" group-title="United States",US CBS News
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21259.m3u8
+#EXTINF:-1 tvg-id="21376" tvg-name="US MSNBC" tvg-logo="https://premium.keitanyfrank.store/MSNBC-01.svg" group-title="United States",US MSNBC
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21376.m3u8
+#EXTINF:-1 tvg-id="21648" tvg-name="US PixL (S)" tvg-logo="https://i.imgur.com/ysRh3Nl.png" group-title="United States",US PixL (S)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21648.m3u8
+#EXTINF:-1 tvg-id="21752" tvg-name="US One America News" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/8/84/One_America_News_Network_logo.svg/960px-One_America_News_Network_logo.svg.png" group-title="United States",US One America News
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21752.m3u8
+#EXTINF:-1 tvg-id="21844" tvg-name="USA: BET SOUL" tvg-logo="https://i.imgur.com/VeuTWUb.png" group-title="United States",USA: BET SOUL
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21844.m3u8
+#EXTINF:-1 tvg-id="21895" tvg-name="US TBN" tvg-logo="https://i.imgur.com/9A0AYyq.png" group-title="United States",US TBN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21895.m3u8
+#EXTINF:-1 tvg-id="21896" tvg-name="US BUZZR (STV)" tvg-logo="https://premium.keitanyfrank.store/Buzzr_logo.svg" group-title="United States",US BUZZR (STV)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/21896.m3u8
+#EXTINF:-1 tvg-id="22888" tvg-name="US Pursuit UP" tvg-logo="" group-title="United States",US Pursuit UP
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/22888.m3u8
+#EXTINF:-1 tvg-id="31150" tvg-name="US Smithsonian Channel (East)" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/6/67/SmithsonianChannellogo.png/960px-SmithsonianChannellogo.png" group-title="United States",US Smithsonian Channel (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/31150.m3u8
+#EXTINF:-1 tvg-id="39276" tvg-name="US Revolt" tvg-logo="https://i.imgur.com/eaYnGpH.png" group-title="United States",US Revolt
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/39276.m3u8
+#EXTINF:-1 tvg-id="46212" tvg-name="CA Discovery Velocity HD" tvg-logo="https://i.imgur.com/Q3rtPbl.png" group-title="Canada",CA Discovery Velocity HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46212.m3u8
+#EXTINF:-1 tvg-id="46685" tvg-name="US Syfy (East)" tvg-logo="https://premium.keitanyfrank.store/Syfy-HD-01.svg" group-title="United States",US Syfy (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46685.m3u8
+#EXTINF:-1 tvg-id="46687" tvg-name="USA: NBC" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/7/7a/NBC_logo_2022_%28vertical%29.svg/960px-NBC_logo_2022_%28vertical%29.svg.png" group-title="United States",USA: NBC
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46687.m3u8
+#EXTINF:-1 tvg-id="46688" tvg-name="US TNT (West)" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/2/24/TNT_Logo_2016.svg/960px-TNT_Logo_2016.svg.png" group-title="United States",US TNT (West)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46688.m3u8
+#EXTINF:-1 tvg-id="46690" tvg-name="US FX East" tvg-logo="https://i.imgur.com/ZScwrpi.png" group-title="United States",US FX East
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46690.m3u8
+#EXTINF:-1 tvg-id="46691" tvg-name="US TLC (East)" tvg-logo="https://premium.keitanyfrank.store/TLC-01.svg" group-title="United States",US TLC (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46691.m3u8
+#EXTINF:-1 tvg-id="46692" tvg-name="US Univision (East) (SP)" tvg-logo="https://premium.keitanyfrank.store/Univision-01.svg" group-title="United States",US Univision (East) (SP)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46692.m3u8
+#EXTINF:-1 tvg-id="46694" tvg-name="US Paramount Network" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/9/9f/Paramount_Network.svg/960px-Paramount_Network.svg.png" group-title="United States",US Paramount Network
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46694.m3u8
+#EXTINF:-1 tvg-id="46695" tvg-name="US Oxygen (A)" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/2/28/Ion_logo.svg/960px-Ion_logo.svg.png" group-title="United States",US Oxygen (A)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46695.m3u8
+#EXTINF:-1 tvg-id="46696" tvg-name="US TV Land" tvg-logo="https://i.imgur.com/VNNS4mF.png" group-title="United States",US TV Land
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46696.m3u8
+#EXTINF:-1 tvg-id="46697" tvg-name="US VICELAND" tvg-logo="https://premium.keitanyfrank.store/Vice-01.svg" group-title="United States",US VICELAND
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46697.m3u8
+#EXTINF:-1 tvg-id="46698" tvg-name="USA: OWN" tvg-logo="https://premium.keitanyfrank.store/OWN_logo.svg" group-title="United States",USA: OWN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46698.m3u8
+#EXTINF:-1 tvg-id="46699" tvg-name="US FXX (East)" tvg-logo="https://premium.keitanyfrank.store/FXX-01.svg" group-title="United States",US FXX (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46699.m3u8
+#EXTINF:-1 tvg-id="46701" tvg-name="US Fuse" tvg-logo="https://i.imgur.com/mijRpPQ.jpg" group-title="United States",US Fuse
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46701.m3u8
+#EXTINF:-1 tvg-id="46705" tvg-name="US VH1 (East)" tvg-logo="https://premium.keitanyfrank.store/VH1-01.svg" group-title="United States",US VH1 (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46705.m3u8
+#EXTINF:-1 tvg-id="46706" tvg-name="USA: CMT" tvg-logo="https://premium.keitanyfrank.store/CMT-01.svg" group-title="United States",USA: CMT
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46706.m3u8
+#EXTINF:-1 tvg-id="46708" tvg-name="US Cartoon Network" tvg-logo="https://premium.keitanyfrank.store/Cartoon-Network-01.svg" group-title="United States",US Cartoon Network
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46708.m3u8
+#EXTINF:-1 tvg-id="46710" tvg-name="US Nick Jr" tvg-logo="https://i.imgur.com/KT4tdQs.png" group-title="United States",US Nick Jr
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46710.m3u8
+#EXTINF:-1 tvg-id="46712" tvg-name="US SUNDANCE" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/0/01/SundanceTV_2014.svg/960px-SundanceTV_2014.svg.png" group-title="United States",US SUNDANCE
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46712.m3u8
+#EXTINF:-1 tvg-id="46713" tvg-name="US HBO East HD" tvg-logo="https://premium.keitanyfrank.store/HBO-01.svg" group-title="United States",US HBO East HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46713.m3u8
+#EXTINF:-1 tvg-id="46714" tvg-name="US Lifetime" tvg-logo="https://premium.keitanyfrank.store/Logo_Lifetime.svg" group-title="United States",US Lifetime
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46714.m3u8
+#EXTINF:-1 tvg-id="46717" tvg-name="US HGTV (East)" tvg-logo="https://premium.keitanyfrank.store/HGTV-01.svg" group-title="United States",US HGTV (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46717.m3u8
+#EXTINF:-1 tvg-id="46719" tvg-name="US Hallmark Channel" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/5/53/Hallmark_Channel.svg/960px-Hallmark_Channel.svg.png" group-title="United States",US Hallmark Channel
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46719.m3u8
+#EXTINF:-1 tvg-id="46720" tvg-name="US Discovery Channel (East)" tvg-logo="https://premium.keitanyfrank.store/Discovery-Channel-01.svg" group-title="United States",US Discovery Channel (East)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46720.m3u8
+#EXTINF:-1 tvg-id="46722" tvg-name="US National Geographic" tvg-logo="https://premium.keitanyfrank.store/National-Geographic-Channel-01.svg" group-title="United States",US National Geographic
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46722.m3u8
+#EXTINF:-1 tvg-id="46724" tvg-name="US HISTORY" tvg-logo="https://premium.keitanyfrank.store/History-01.svg" group-title="United States",US HISTORY
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46724.m3u8
+#EXTINF:-1 tvg-id="46726" tvg-name="US NESN" tvg-logo="https://i.imgur.com/Lv1bUG5.png" group-title="United States",US NESN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46726.m3u8
+#EXTINF:-1 tvg-id="46728" tvg-name="US Golf Channel" tvg-logo="https://premium.keitanyfrank.store/Golf_Channel_logo_2025.svg" group-title="United States",US Golf Channel
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46728.m3u8
+#EXTINF:-1 tvg-id="46810" tvg-name="US ID Investigation Discovery" tvg-logo="" group-title="United States",US ID Investigation Discovery
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/46810.m3u8
+#EXTINF:-1 tvg-id="47213" tvg-name="CA CNN" tvg-logo="https://premium.keitanyfrank.store/CNN-01.svg" group-title="Canada",CA CNN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/47213.m3u8
+#EXTINF:-1 tvg-id="47703" tvg-name="US TLC (east)" tvg-logo="https://premium.keitanyfrank.store/TLC-01.svg" group-title="United States",US TLC (east)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/47703.m3u8
+#EXTINF:-1 tvg-id="48323" tvg-name="US Bounce XL" tvg-logo="https://i.imgur.com/GzxgSkc.png" group-title="United States",US Bounce XL
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/48323.m3u8
+#EXTINF:-1 tvg-id="53527" tvg-name="USA: NTD NEWS." tvg-logo="" group-title="United States",USA: NTD NEWS.
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/53527.m3u8
+#EXTINF:-1 tvg-id="53539" tvg-name="USA: DOGTV" tvg-logo="https://premium.keitanyfrank.store/DOGTV_logo.svg" group-title="United States",USA: DOGTV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/53539.m3u8
+#EXTINF:-1 tvg-id="57264" tvg-name="CA A&E" tvg-logo="https://premium.keitanyfrank.store/A-and-E-Network-01.svg" group-title="Canada",CA A&E
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57264.m3u8
+#EXTINF:-1 tvg-id="57304" tvg-name="CA CBC NEWS NETWORK (E)" tvg-logo="https://premium.keitanyfrank.store/CBC-News-01.svg" group-title="Canada",CA CBC NEWS NETWORK (E)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57304.m3u8
+#EXTINF:-1 tvg-id="57320" tvg-name="CA : APTN" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/b/be/APTN_Colour-300x300.svg/500px-APTN_Colour-300x300.svg.png" group-title="Canada",CA : APTN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57320.m3u8
+#EXTINF:-1 tvg-id="57358" tvg-name="CA: BNN Bloomberg HD" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/4/45/BNN_Bloomberg.svg/960px-BNN_Bloomberg.svg.png" group-title="Canada",CA: BNN Bloomberg HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57358.m3u8
+#EXTINF:-1 tvg-id="57375" tvg-name="CA: ABC SPARK" tvg-logo="https://i.imgur.com/MOU2PAf.png" group-title="Canada",CA: ABC SPARK
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57375.m3u8
+#EXTINF:-1 tvg-id="57376" tvg-name="CA: AMC" tvg-logo="https://premium.keitanyfrank.store/AMC-01.svg" group-title="Canada",CA: AMC
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57376.m3u8
+#EXTINF:-1 tvg-id="57377" tvg-name="CA: Animal Planet" tvg-logo="https://premium.keitanyfrank.store/Animal-Planet-01.svg" group-title="Canada",CA: Animal Planet
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57377.m3u8
+#EXTINF:-1 tvg-id="57379" tvg-name="CA: Bravo" tvg-logo="https://premium.keitanyfrank.store/Bravo_2024.svg" group-title="Canada",CA: Bravo
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57379.m3u8
+#EXTINF:-1 tvg-id="57381" tvg-name="CA CBC Calgary HD" tvg-logo="" group-title="Canada",CA CBC Calgary HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57381.m3u8
+#EXTINF:-1 tvg-id="57382" tvg-name="CA CBC Charlottetown HD (D)" tvg-logo="" group-title="Canada",CA CBC Charlottetown HD (D)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57382.m3u8
+#EXTINF:-1 tvg-id="57384" tvg-name="CA: CBC Edmonton" tvg-logo="" group-title="Canada",CA: CBC Edmonton
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57384.m3u8
+#EXTINF:-1 tvg-id="57385" tvg-name="CA CBC Halifax HD" tvg-logo="" group-title="Canada",CA CBC Halifax HD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57385.m3u8
+#EXTINF:-1 tvg-id="57476" tvg-name="CA: A&E" tvg-logo="https://premium.keitanyfrank.store/A-and-E-Network-01.svg" group-title="Canada",CA: A&E
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/57476.m3u8
+#EXTINF:-1 tvg-id="58770" tvg-name="US Latin Galavision" tvg-logo="" group-title="United States",US Latin Galavision
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/58770.m3u8
+#EXTINF:-1 tvg-id="66087" tvg-name="US Heroes & Icons (Los Angeles)" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/9/9e/Heroes_%26_Icons_logo.svg/960px-Heroes_%26_Icons_logo.svg.png" group-title="United States",US Heroes & Icons (Los Angeles)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/66087.m3u8
+#EXTINF:-1 tvg-id="66242" tvg-name="CA Turner Classic Movies" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/6/63/TCM_2021.svg/960px-TCM_2021.svg.png" group-title="Canada",CA Turner Classic Movies
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/66242.m3u8
+#EXTINF:-1 tvg-id="66243" tvg-name="USA: AMC Thrillers" tvg-logo="https://i.imgur.com/EVD0aIt.png" group-title="United States",USA: AMC Thrillers
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/66243.m3u8
+#EXTINF:-1 tvg-id="66244" tvg-name="US Comet (S)" tvg-logo="https://premium.keitanyfrank.store/Comet_logo.svg" group-title="United States",US Comet (S)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/66244.m3u8
+#EXTINF:-1 tvg-id="75654" tvg-name="US GAC Living (S)" tvg-logo="https://premium.keitanyfrank.store/Great_American_Living.svg" group-title="United States",US GAC Living (S)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/75654.m3u8
+#EXTINF:-1 tvg-id="76481" tvg-name="US WAPA America" tvg-logo="" group-title="United States",US WAPA America
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/76481.m3u8
+#EXTINF:-1 tvg-id="79913" tvg-name="US Sportsman Channel (A)" tvg-logo="https://i.imgur.com/CXauv8M.png" group-title="United States",US Sportsman Channel (A)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/79913.m3u8
+#EXTINF:-1 tvg-id="82241" tvg-name="US TUDN" tvg-logo="https://i.imgur.com/oT5CAvd.png" group-title="United States",US TUDN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/82241.m3u8
+#EXTINF:-1 tvg-id="104877" tvg-name="US GAC Family" tvg-logo="" group-title="United States",US GAC Family
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/104877.m3u8
+#EXTINF:-1 tvg-id="104884" tvg-name="US CNN" tvg-logo="https://premium.keitanyfrank.store/CNN-01.svg" group-title="United States",US CNN
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/104884.m3u8
+#EXTINF:-1 tvg-id="108248" tvg-name="US Latin Univision" tvg-logo="" group-title="United States",US Latin Univision
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/108248.m3u8
+#EXTINF:-1 tvg-id="117707" tvg-name="US: QVC" tvg-logo="https://upload.wikimedia.org/wikipedia/commons/thumb/f/f0/Fox_Networks_Group_US_logo.svg/960px-Fox_Networks_Group_US_logo.svg.png" group-title="United States",US: QVC
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/117707.m3u8
+#EXTINF:-1 tvg-id="120633" tvg-name="US Game Show Network" tvg-logo="https://premium.keitanyfrank.store/Game_Show_Network_2018.svg" group-title="United States",US Game Show Network
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/120633.m3u8
+#EXTINF:-1 tvg-id="121130" tvg-name="US True Crime Network (KARE)" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/8/8c/True_Crime_Network_logo.svg/960px-True_Crime_Network_logo.svg.png" group-title="United States",US True Crime Network (KARE)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/121130.m3u8
+#EXTINF:-1 tvg-id="122527" tvg-name="US The Cowboy Channel" tvg-logo="https://i.imgur.com/0F1c7x4.png" group-title="United States",US The Cowboy Channel
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/122527.m3u8
+#EXTINF:-1 tvg-id="125831" tvg-name="US Comet" tvg-logo="https://premium.keitanyfrank.store/Comet_logo.svg" group-title="United States",US Comet
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/125831.m3u8
+#EXTINF:-1 tvg-id="134832" tvg-name="US (FD) Military History" tvg-logo="https://i.imgur.com/S1SnpoA.png" group-title="United States",US (FD) Military History
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/134832.m3u8
+#EXTINF:-1 tvg-id="135794" tvg-name="US Fox News" tvg-logo="https://premium.keitanyfrank.store/FOX-News-01.svg" group-title="United States",US Fox News
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/135794.m3u8
+#EXTINF:-1 tvg-id="136589" tvg-name="US: CSPAN FHD" tvg-logo="https://premium.keitanyfrank.store/C-SPAN-01.svg" group-title="United States",US: CSPAN FHD
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/136589.m3u8
+#EXTINF:-1 tvg-id="137680" tvg-name="US Start TV" tvg-logo="https://upload.wikimedia.org/wikipedia/en/thumb/0/06/Start_TV_logo.svg/960px-Start_TV_logo.svg.png" group-title="United States",US Start TV
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/137680.m3u8
+#EXTINF:-1 tvg-id="137790" tvg-name="US BET Her" tvg-logo="https://i.imgur.com/oafsrlo.png" group-title="United States",US BET Her
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/137790.m3u8
+#EXTINF:-1 tvg-id="140814" tvg-name="US Poker Go" tvg-logo="" group-title="United States",US Poker Go
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/140814.m3u8
+#EXTINF:-1 tvg-id="140815" tvg-name="US World Poker Tour" tvg-logo="https://i.imgur.com/98kLMjj.png" group-title="United States",US World Poker Tour
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/140815.m3u8
+#EXTINF:-1 tvg-id="160581" tvg-name="US Real America's Voice (STV)" tvg-logo="https://i.imgur.com/l7tmTjX.png" group-title="United States",US Real America's Voice (STV)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/160581.m3u8
+#EXTINF:-1 tvg-id="160711" tvg-name="US Al Jazeera" tvg-logo="https://dtil.tmsimg.com/assets/s159135_ld_h15_aa.png?lock=720x540" group-title="United States",US Al Jazeera
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/160711.m3u8
+#EXTINF:-1 tvg-id="161450" tvg-name="US NewsNation" tvg-logo="https://zap2it.tmsimg.com/h3/NowShowing/91097/s91097_ll_h15_ae.png?w=512" group-title="United States",US NewsNation
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/161450.m3u8
+#EXTINF:-1 tvg-id="172481" tvg-name="US Family Entertainment Television" tvg-logo="" group-title="United States",US Family Entertainment Television
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/172481.m3u8
+#EXTINF:-1 tvg-id="176811" tvg-name="US Black News Channel (A)" tvg-logo="https://i.imgur.com/oX5oR4d.png" group-title="United States",US Black News Channel (A)
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/176811.m3u8
+#EXTINF:-1 tvg-id="213668" tvg-name="US Space City Home Network" tvg-logo="" group-title="United States",US Space City Home Network
+http://1tv41.icu:8080/live/hadjimaka69@yahoo.com/zHg11Zjg2C/213668.m3u8
