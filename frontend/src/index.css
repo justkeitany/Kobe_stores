@@ -102,44 +102,46 @@
 html.light {
   --color-white: #ffffff;
 
-  --color-gray-50:  #f6f6f9;
-  --color-gray-100: #eeeef2;
-  --color-gray-200: #e2e2e8;
-  --color-gray-300: #cfcfd6;
-  --color-gray-400: #a7a6b0;
-  --color-gray-500: #76757f;
-  --color-gray-600: #5b5a64;
-  --color-gray-700: #45444d;
-  --color-gray-800: #2a2930;
-  --color-gray-900: #1a1b22;
+  /* Neutral ramp tuned to the reference site (#f7f7f7 page, #262626 ink) */
+  --color-gray-50:  #f7f7f7;
+  --color-gray-100: #f1f1f1;
+  --color-gray-200: #ebebeb;
+  --color-gray-300: #cccccc;
+  --color-gray-400: #999999;
+  --color-gray-500: #777777;
+  --color-gray-600: #666666;
+  --color-gray-700: #555555;
+  --color-gray-800: #3a3a3a;
+  --color-gray-900: #262626;
   --color-gray-950: #ffffff;
 
-  --color-surface: #f7f7fa;
-  --color-surface-dim: #ececf1;
+  --color-surface: #f7f7f7;
+  --color-surface-dim: #ebebeb;
   --color-surface-bright: #ffffff;
   --color-surface-container-lowest: #ffffff;
-  --color-surface-container-low: #f3f3f7;
-  --color-surface-container: #eeeef3;
-  --color-surface-container-high: #e7e7ee;
-  --color-surface-container-highest: #e1e1e9;
-  --color-surface-variant: #e2e2e8;
+  --color-surface-container-low: #fafafa;
+  --color-surface-container: #f7f7f7;
+  --color-surface-container-high: #f1f1f1;
+  --color-surface-container-highest: #ebebeb;
+  --color-surface-variant: #ebebeb;
 
-  --color-on-surface: #1a1b22;
-  --color-on-surface-variant: #5b5a64;
-  --color-on-background: #1a1b22;
+  --color-on-surface: #262626;
+  --color-on-surface-variant: #666666;
+  --color-on-background: #262626;
 
-  --color-outline: #b6b5bf;
-  --color-outline-variant: #d9d9e0;
+  --color-outline: #cccccc;
+  --color-outline-variant: #ebebeb;
 
-  --color-primary: #1a1b22;
+  --color-primary: #262626;
   --color-on-primary: #ffffff;
-  --color-primary-fixed-dim: #16a34a;
+  --color-primary-fixed-dim: #00ffcc;
   --color-error: #b3261e;
 
-  --color-brand: #16a34a;
+  /* Teal accent from the reference site (--main #00ffcc, hover #66ffe0) */
+  --color-brand: #00ffcc;
 
   /* Card elevation — soft, clearly visible in light */
-  --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06), 0 6px 16px rgba(16, 24, 40, 0.08);
+  --shadow-card: 0 1px 2px rgba(38, 38, 38, 0.06), 0 6px 16px rgba(38, 38, 38, 0.08);
 }
 
 @layer base {
