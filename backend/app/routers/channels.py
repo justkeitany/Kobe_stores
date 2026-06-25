@@ -12,14 +12,16 @@ import logging
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_admin
 from app.database import get_db
 from app.ffmpeg_manager import ffmpeg_manager
-from app.models import AiEvent, ChannelHealth, Playlist, Stream, StreamCategory
+from app.models import (
+    AiEvent, Bouquet, BouquetCategory, ChannelHealth, Playlist, Stream, StreamCategory,
+)
 from app.sources import source_urls
 
 router = APIRouter(prefix="/api/channels", tags=["channels"])
@@ -35,6 +37,27 @@ def _key(prefix: str, val: str) -> str:
     return f"{prefix}_{hashlib.md5(val.encode()).hexdigest()[:10]}"
 
 
+async def _premium_scope(db: AsyncSession) -> tuple[set[int], set[str]]:
+    """Category ids + (lowercased) names belonging to the "Premium" bouquet.
+
+    Used to keep premium content OUT of the general Channels directory — premium
+    streams and premium playlists live only under the Premium pages. Resolved by
+    bouquet name (case-insensitive); empty sets when there's no Premium bouquet.
+    Inlined here (rather than importing premium.py) to avoid a circular import.
+    """
+    bouquet = (await db.execute(
+        select(Bouquet).where(func.lower(Bouquet.name) == "premium")
+    )).scalars().first()
+    if not bouquet:
+        return set(), set()
+    rows = (await db.execute(
+        select(StreamCategory.id, StreamCategory.name)
+        .join(BouquetCategory, BouquetCategory.category_id == StreamCategory.id)
+        .where(BouquetCategory.bouquet_id == bouquet.id)
+    )).all()
+    return {r[0] for r in rows}, {(r[1] or "").strip().lower() for r in rows}
+
+
 async def build_channel_rows(db: AsyncSession, category_ids: set[int] | None = None) -> list[dict]:
     """Build the unified channel-directory rows.
 
@@ -45,9 +68,16 @@ async def build_channel_rows(db: AsyncSession, category_ids: set[int] | None = N
     of truth so the health/status logic can't drift between the two views.
     """
     cats = {c.id: c.name for c in (await db.execute(select(StreamCategory))).scalars()}
+    # For the full directory, exclude Premium content (it has its own pages).
+    premium_cat_ids: set[int] = set()
+    premium_names: set[str] = set()
+    if category_ids is None:
+        premium_cat_ids, premium_names = await _premium_scope(db)
     stream_q = select(Stream).options(selectinload(Stream.sources))
     if category_ids is not None:
         stream_q = stream_q.where(Stream.category_id.in_(category_ids))
+    elif premium_cat_ids:
+        stream_q = stream_q.where(Stream.category_id.notin_(premium_cat_ids))
     streams = (await db.execute(stream_q)).scalars().all()
     live = {s["stream_id"]: s for s in await ffmpeg_manager.get_all_statuses()}
     # Real probed health (online | offline | geo) keyed by URL, from the sweep.
@@ -95,6 +125,8 @@ async def build_channel_rows(db: AsyncSession, category_ids: set[int] | None = N
     if category_ids is None:
         seen = set(imported_urls)
         for p in (await db.execute(select(Playlist))).scalars().all():
+            if (p.name or "").strip().lower() in premium_names:
+                continue                       # premium playlists live under Premium
             for c in (p.channels or []):
                 url = c.get("url")
                 if not url or url in seen:
