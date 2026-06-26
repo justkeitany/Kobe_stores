@@ -4,7 +4,7 @@ import re
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query
 from pydantic import BaseModel
-from sqlalchemy import select, func, update, delete
+from sqlalchemy import select, func, update, delete, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.auth import get_current_admin
@@ -211,6 +211,29 @@ async def create_stream(
     payload["stream_url"] = _normalize_url(payload.get("stream_url"))
     payload["backup_url"] = _normalize_url(payload.get("backup_url"))
     payload["delivery_mode"] = delivery_mode
+
+    # Idempotent import: a channel must never be imported twice. If any incoming
+    # URL (primary, backup, or a provided source) already belongs to a stream,
+    # return that existing stream instead of creating a duplicate. This is the
+    # authoritative guard — the UI also greys out imported channels, but this
+    # holds even if a client sends a duplicate anyway.
+    candidate_urls = _clean_source_list(
+        (sources_in or []) + [payload["stream_url"], payload["backup_url"]]
+    )
+    if candidate_urls:
+        existing = (await db.execute(
+            select(Stream).options(selectinload(Stream.sources)).where(
+                or_(
+                    Stream.stream_url.in_(candidate_urls),
+                    Stream.backup_url.in_(candidate_urls),
+                    Stream.id.in_(
+                        select(StreamSource.stream_id).where(StreamSource.url.in_(candidate_urls))
+                    ),
+                )
+            )
+        )).scalars().first()
+        if existing:
+            return existing
 
     stream = Stream(**payload)
     db.add(stream)
