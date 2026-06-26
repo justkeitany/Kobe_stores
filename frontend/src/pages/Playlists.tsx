@@ -408,7 +408,6 @@ function AddPlaylistModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
 
 /* ── Channels modal (browse + import) ─────────────────────────── */
 
-interface Stream { id: number; name: string; stream_url: string; }
 interface Category { id: number; name: string; }
 
 export function ChannelsModal({
