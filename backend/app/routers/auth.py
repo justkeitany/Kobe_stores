@@ -154,12 +154,11 @@ async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends
 
     await clear_login_attempts(client_ip)
 
-    # Flag must_change if still on default password
-    using_default = (
-        form_data.username == DEFAULT_USERNAME
-        and form_data.password == DEFAULT_PASSWORD
-    )
-    must_change = using_default and await _is_default_password_unchanged()
+    # Force a password change on first login. The installer writes a unique
+    # random ADMIN_PASSWORD per server (shown once at install time), so the very
+    # first sign-in must set the admin's own password before reaching the
+    # dashboard. The username stays "admin". Cleared once they change it.
+    must_change = await _is_default_password_unchanged()
 
     # Always embed role=admin so tokens survive username changes
     data = {"sub": form_data.username, "role": "admin"}
