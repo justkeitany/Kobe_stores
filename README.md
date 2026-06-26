@@ -26,15 +26,22 @@ curl -fsSL https://raw.githubusercontent.com/justkeitany/Kobe_stores/main/script
 ```
 
 This installs everything (Python, Node, PostgreSQL, Redis, Nginx, FFmpeg), clones the
-repo, builds the dashboard, and starts the service. **No domain is asked for.**
+repo, builds the dashboard, and starts the service. **No domain is asked for.** The
+installer runs as a clean checklist — detailed output goes to `/var/log/iptv-install.log`.
 
-When it finishes it prints your dashboard URL and login, e.g.:
+When it finishes it prints your dashboard URL and login in **red bold** — a unique
+admin password is generated for this server and shown **only here**, e.g.:
 
 ```
 Dashboard:   http://203.0.113.10:25461
 Username:    admin
-Password:    admin   (you must change it on first login)
+Password:    qkvxen        ← unique to this install; copy it now
+DB password: 9c6eb29a…     ← needed for backups
 ```
+
+> The admin **username stays `admin`**. There is no shared `admin/admin` default —
+> each server gets its own random password, and you're forced to set your own
+> password on first login.
 
 ### Manual install (alternative)
 
@@ -52,8 +59,8 @@ bash /tmp/mzeekobe/install.sh
 
 ## First steps after install
 
-1. Open **`http://YOUR_VPS_IP:25461`** (port `80` also works) and log in with `admin` / `admin`.
-2. Set a new username and password when prompted.
+1. Open **`http://YOUR_VPS_IP:25461`** (port `80` also works) and log in with `admin` and the password printed at the end of the install.
+2. Set your own password when prompted (the username stays `admin`).
 3. Add categories and streams, then create users under **Users**.
 4. Share the Xtream details with your players — by default they use `http://YOUR_VPS_IP:25461`.
 

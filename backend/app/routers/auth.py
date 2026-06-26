@@ -12,7 +12,10 @@ from app.redis_client import get_redis
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
-# Default credentials — user MUST change username AND password on first login
+# The admin username is always "admin" and is KEPT on first login; only the
+# password must be changed (the installer writes a unique random ADMIN_PASSWORD
+# per server). DEFAULT_USERNAME/PASSWORD remain only as validator guards so a
+# user can't set their new username/password to these literal values.
 DEFAULT_USERNAME = "admin"
 DEFAULT_PASSWORD = "admin"
 FORCE_CHANGE_KEY = "credentials_changed"
