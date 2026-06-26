@@ -40,18 +40,6 @@ export default function Login() {
             Enter your username and password to sign in.
           </p>
 
-          {/* Default creds hint — only shown when fields are empty */}
-          {!username && !password && (
-            <div className="mb-6 px-4 py-3 bg-gray-50 border border-gray-200 rounded-[10px] text-xs text-gray-500">
-              Default credentials:{" "}
-              <span className="font-mono font-semibold text-gray-700">admin</span>{" "}
-              /{" "}
-              <span className="font-mono font-semibold text-gray-700">admin</span>
-              <br />
-              You will be asked to set a new username and password on first login.
-            </div>
-          )}
-
           <form onSubmit={handleSubmit} className="space-y-5">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1.5">

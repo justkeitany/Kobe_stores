@@ -84,23 +84,20 @@ async def _mark_password_changed():
 
 def _check_credentials(username: str, password: str) -> bool:
     """
-    Check credentials in priority order:
-    1. Current ADMIN_PASSWORD from settings (supports plain or bcrypt)
-    2. Default credentials (only while password hasn't been changed)
+    Check credentials against the configured admin only. The installer writes a
+    unique random ADMIN_PASSWORD per server, so there is NO universal
+    "admin/admin" fallback — that backdoor was removed deliberately.
     """
     if username == settings.ADMIN_USERNAME:
-        # Plain text match (covers initial .env setup and dev)
+        # Plain text match (covers the installer-written .env and dev)
         if password == settings.ADMIN_PASSWORD:
             return True
-        # bcrypt match (after hashed password is stored)
+        # bcrypt match (after a hashed password is stored)
         try:
             if verify_password(password, settings.ADMIN_PASSWORD):
                 return True
         except Exception:
             pass
-    # Allow default creds as fallback until changed
-    if username == DEFAULT_USERNAME and password == DEFAULT_PASSWORD:
-        return True
     return False
 
 

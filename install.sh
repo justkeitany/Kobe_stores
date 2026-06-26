@@ -36,6 +36,11 @@ DB_NAME="iptvpanel"
 DB_USER="iptv"
 DB_PASS=$(openssl rand -hex 20)
 JWT_SECRET=$(openssl rand -hex 32)
+# Admin password: 6 random lowercase letters, unique to THIS install — there is
+# no shared "admin/admin" default any more, so no two servers get the same one.
+# Generated crypto-randomly and shown only once, at the end of this script.
+ADMIN_PASS=$(LC_ALL=C tr -dc 'a-z' < /dev/urandom 2>/dev/null | head -c 6 || true)
+[[ ${#ADMIN_PASS} -eq 6 ]] || ADMIN_PASS=$(openssl rand -hex 3)
 
 step "System update"
 apt-get update -qq
@@ -119,7 +124,7 @@ JWT_ALGORITHM=HS256
 ACCESS_TOKEN_EXPIRE_MINUTES=60
 REFRESH_TOKEN_EXPIRE_DAYS=30
 ADMIN_USERNAME=admin
-ADMIN_PASSWORD=admin
+ADMIN_PASSWORD=$ADMIN_PASS
 SERVER_URL=
 PANEL_PORT=8000
 HLS_SEGMENT_TIME=2
@@ -247,12 +252,13 @@ echo ""
 echo -e "  Dashboard:   ${CYAN}http://$SERVER_IP:$PANEL_PORT_HTTP${NC}"
 echo -e "               ${CYAN}http://$SERVER_IP${NC}  (port 80 also works)"
 echo ""
-echo -e "  Username:    ${BOLD}admin${NC}"
-echo -e "  Password:    ${BOLD}admin${NC}  ← you will be forced to change on first login"
+echo -e "  Username:    ${RED}${BOLD}admin${NC}"
+echo -e "  Password:    ${RED}${BOLD}$ADMIN_PASS${NC}"
 echo ""
-echo -e "  DB password: ${BOLD}$DB_PASS${NC}"
+echo -e "  DB password: ${RED}${BOLD}$DB_PASS${NC}"
 echo ""
-echo -e "${YELLOW}  SAVE THE DB PASSWORD — you will need it for backups!${NC}"
+echo -e "${YELLOW}  COPY THESE NOW — the admin password is shown ONLY here (it is not on${NC}"
+echo -e "${YELLOW}  the login page), and the DB password is needed for backups.${NC}"
 echo -e "${BOLD}${GREEN}════════════════════════════════════════════════${NC}"
 echo ""
 echo -e "${YELLOW}Using a domain?${NC} Point its DNS to ${BOLD}$SERVER_IP${NC}, then set it under"
