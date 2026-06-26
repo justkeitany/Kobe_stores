@@ -191,6 +191,20 @@ export default function Player({ url, title }: { url: string; title?: string }) 
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
+  // Network-change recovery — a WiFi⇄cellular switch (or any brief drop) can
+  // leave hls.js silently stalled with no fatal error. When the browser reports
+  // it's back online, kick the loader and resync to the live edge instead of
+  // sitting frozen until the watchdog notices.
+  useEffect(() => {
+    const onOnline = () => {
+      const v = videoRef.current, h = hlsRef.current;
+      if (!v || !h || v.paused) return;
+      try { h.startLoad(); resyncToLiveEdge(v, h); v.play().catch(() => {}); } catch { /* ignore */ }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
   // Auto-hide controls
   const showControlsTemp = useCallback(() => {
     setShowControls(true);
@@ -263,6 +277,7 @@ export default function Player({ url, title }: { url: string; title?: string }) 
         className="w-full h-full object-contain"
         onClick={togglePlay}
         playsInline
+        preload="auto"
         muted={muted}
       />
 
