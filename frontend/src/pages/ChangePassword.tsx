@@ -23,21 +23,30 @@ export default function ChangePassword() {
     e.preventDefault();
     if (newPass !== confirmPass) { toast.error("Passwords do not match"); return; }
     if (newPass.length < 8)      { toast.error("Password must be at least 8 characters"); return; }
-    if (newUsername.trim().length < 3) { toast.error("Username must be at least 3 characters"); return; }
+    if (!forced && newUsername.trim().length < 3) { toast.error("Username must be at least 3 characters"); return; }
 
     setSaving(true);
     try {
-      await api.post("/auth/change-credentials", {
-        current_password: currentPass,
-        new_username: newUsername.trim(),
-        new_password: newPass,
-      });
-      toast.success("Credentials updated — please sign in again");
+      if (forced) {
+        // First-login: set a new password only. Username stays "admin".
+        await api.post("/auth/change-password", {
+          current_password: currentPass,
+          new_password: newPass,
+        });
+        toast.success("Password updated — please sign in again");
+      } else {
+        await api.post("/auth/change-credentials", {
+          current_password: currentPass,
+          new_username: newUsername.trim(),
+          new_password: newPass,
+        });
+        toast.success("Credentials updated — please sign in again");
+      }
       localStorage.removeItem("access_token");
       localStorage.removeItem("refresh_token");
       navigate("/login");
     } catch (err: any) {
-      toast.error(err?.response?.data?.detail || "Failed to update credentials");
+      toast.error(err?.response?.data?.detail || "Failed to update");
     } finally {
       setSaving(false);
     }
@@ -52,16 +61,18 @@ export default function ChangePassword() {
             <ShieldCheck size={22} className="text-white" />
           </div>
 
-          <h1 className="text-3xl font-bold text-gray-900 mb-1">Set Your Credentials</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-1">
+            {forced ? "Set Your Password" : "Set Your Credentials"}
+          </h1>
           <p className="text-sm text-gray-500 mb-6">
             {forced
-              ? "You're using the default credentials. Choose a unique username and a strong password."
+              ? "Welcome! For security, choose your own password before continuing. Your username stays admin."
               : "Update your admin username and password."}
           </p>
 
           {forced && (
             <div className="mb-6 px-4 py-3 bg-amber-50 border border-amber-200 rounded-[10px] text-xs text-amber-700">
-              For security, you must change the default <strong>admin / admin</strong> credentials before accessing the dashboard.
+              You're signed in with the temporary password from installation. Set a strong password to continue to the dashboard.
             </div>
           )}
 
@@ -76,7 +87,7 @@ export default function ChangePassword() {
                   type={showCurrent ? "text" : "password"}
                   value={currentPass}
                   onChange={(e) => setCurrentPass(e.target.value)}
-                  placeholder={forced ? "admin" : "Current password"}
+                  placeholder={forced ? "Temporary password from install" : "Current password"}
                   required
                   className="w-full px-4 py-2.5 pr-11 border border-gray-300 rounded-[10px] text-sm
                              text-gray-900 placeholder-gray-400 bg-white
@@ -90,23 +101,25 @@ export default function ChangePassword() {
               </div>
             </div>
 
-            {/* New username */}
-            <div>
-              <label className="block text-xs font-medium text-gray-700 mb-1.5">
-                New Username <span className="text-gray-900">*</span>
-              </label>
-              <input
-                type="text"
-                value={newUsername}
-                onChange={(e) => setNewUsername(e.target.value)}
-                placeholder="e.g. keitany"
-                required
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-[10px] text-sm
-                           text-gray-900 placeholder-gray-400 bg-white
-                           focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 transition-colors"
-              />
-              <p className="text-xs text-gray-400 mt-1">Letters, numbers, - _ . only. Min 3 characters.</p>
-            </div>
+            {/* New username — only when not forced (first-login keeps "admin") */}
+            {!forced && (
+              <div>
+                <label className="block text-xs font-medium text-gray-700 mb-1.5">
+                  New Username <span className="text-gray-900">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={newUsername}
+                  onChange={(e) => setNewUsername(e.target.value)}
+                  placeholder="e.g. keitany"
+                  required
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-[10px] text-sm
+                             text-gray-900 placeholder-gray-400 bg-white
+                             focus:outline-none focus:border-gray-900 focus:ring-1 focus:ring-gray-900 transition-colors"
+                />
+                <p className="text-xs text-gray-400 mt-1">Letters, numbers, - _ . only. Min 3 characters.</p>
+              </div>
+            )}
 
             {/* New password */}
             <div>
@@ -173,12 +186,12 @@ export default function ChangePassword() {
 
             <button
               type="submit"
-              disabled={saving || newPass !== confirmPass || newPass.length < 8 || newUsername.trim().length < 3}
+              disabled={saving || newPass !== confirmPass || newPass.length < 8 || (!forced && newUsername.trim().length < 3)}
               className="w-full py-2.5 px-4 bg-gray-900 hover:bg-black text-white text-sm
                          font-semibold rounded-[10px] transition-colors disabled:opacity-40
                          disabled:cursor-not-allowed mt-2"
             >
-              {saving ? "Saving..." : "Save Credentials"}
+              {saving ? "Saving..." : forced ? "Set Password & Continue" : "Save Credentials"}
             </button>
 
             {!forced && (
