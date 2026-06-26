@@ -174,6 +174,25 @@ async def stream_count(db: AsyncSession = Depends(get_db), _=Depends(get_current
     return {"count": result.scalar()}
 
 
+@router.get("/urls")
+async def stream_urls(db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)):
+    """Every imported stream's source URL(s), as a flat list.
+
+    Used by the playlist / premium import modal to mark already-imported channels
+    as "Added" and stop them being re-imported. The list endpoint is paginated
+    (limit 100), so importers must use this complete, lightweight set to dedupe
+    rather than `GET /streams`.
+    """
+    rows = (await db.execute(select(Stream.stream_url, Stream.backup_url))).all()
+    urls: set[str] = set()
+    for stream_url, backup_url in rows:
+        if stream_url:
+            urls.add(stream_url)
+        if backup_url:
+            urls.add(backup_url)
+    return {"urls": sorted(urls)}
+
+
 @router.post("", status_code=201)
 async def create_stream(
     data: StreamCreate,

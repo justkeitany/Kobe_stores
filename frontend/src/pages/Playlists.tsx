@@ -453,16 +453,17 @@ export function ChannelsModal({
   const probes = probeResp?.statuses;
   const probeSkipped = probeResp?.skipped ?? false;
 
-  const { data: streams = [] } = useQuery<Stream[]>({
-    queryKey: ["streams"],
-    queryFn: () => api.get("/streams").then((r) => r.data),
+  // Every imported stream URL (complete set, not the paginated /streams page) so
+  // already-imported channels are marked "Added" and can't be imported twice.
+  const { data: importedUrlList = [] } = useQuery<string[]>({
+    queryKey: ["stream-urls"],
+    queryFn: () => api.get("/streams/urls").then((r) => r.data.urls as string[]),
   });
 
-  const importedUrls = useMemo(() => {
-    const urls = new Set<string>();
-    for (const s of streams) if (s.stream_url) urls.add(s.stream_url);
-    return urls;
-  }, [streams]);
+  const importedUrls = useMemo(
+    () => new Set(importedUrlList),
+    [importedUrlList]
+  );
 
   const isImported = (c: PlaylistChannel) => importedUrls.has(c.url);
 
@@ -527,6 +528,7 @@ export function ChannelsModal({
       toast.success(`Imported ${ok} channel${ok === 1 ? "" : "s"} to ${playlist.name}`, { id: t });
       setSelected(new Set());
       qc.invalidateQueries({ queryKey: ["streams"] });
+      qc.invalidateQueries({ queryKey: ["stream-urls"] });
       qc.invalidateQueries({ queryKey: ["categories"] });
     } catch (err: any) {
       toast.error(err?.response?.data?.detail || "Import failed", { id: t });
