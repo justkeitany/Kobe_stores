@@ -57,7 +57,15 @@ export function makeHlsConfig(): Partial<HlsConfig> {
     // balloon memory on low-end devices while still buffering plenty of time.
     maxBufferSize: 60 * 1000 * 1000,
     liveSyncDurationCount: 4,
+    // Don't let the player drift more than ~8 segments behind live before it
+    // seeks back toward the edge — bounds latency without being so tight that a
+    // normal rebuffer triggers a jump (must stay > liveSyncDurationCount).
+    liveMaxLatencyDurationCount: 8,
     maxLiveSyncPlaybackRate: 1.5,
+
+    // Warm the pipe: fetch the first fragment while the manifest is still being
+    // parsed so the opening frames are ready sooner (snappier channel zap).
+    startFragPrefetch: true,
 
     // ---- Automatic stall / gap recovery --------------------------------
     // hls.js's own gap-jumping. Small holes (e.g. a missing frame at a segment

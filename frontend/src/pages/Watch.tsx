@@ -207,6 +207,20 @@ export default function WatchPage() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
+  // Network-change recovery — a WiFi⇄cellular switch (or any brief drop) can
+  // leave hls.js silently stalled with no fatal error. When the browser reports
+  // it's back online, kick the loader and resync to the live edge instead of
+  // sitting frozen until the watchdog notices.
+  useEffect(() => {
+    const onOnline = () => {
+      const v = videoRef.current, h = hlsRef.current;
+      if (!v || !h || v.paused) return;
+      try { h.startLoad(); resyncToLiveEdge(v, h); v.play().catch(() => {}); } catch { /* ignore */ }
+    };
+    window.addEventListener("online", onOnline);
+    return () => window.removeEventListener("online", onOnline);
+  }, []);
+
   // Screen Wake Lock — keep the display awake while watching (mobile/tablet),
   // re-acquiring it whenever the tab becomes visible again. Best-effort: the
   // API is absent on some browsers, and the request can reject when hidden.
@@ -322,7 +336,7 @@ export default function WatchPage() {
       {/* Video fills the whole container at a constant size; the control bars
           overlay on top (absolute) so showing/hiding them never resizes it. */}
       <video ref={videoRef} onClick={togglePlay}
-        className="absolute inset-0 w-full h-full object-contain" playsInline muted={muted} />
+        className="absolute inset-0 w-full h-full object-contain" playsInline preload="auto" muted={muted} />
 
       {loading && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60">
