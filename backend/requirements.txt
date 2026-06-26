@@ -19,3 +19,4 @@ aiohttp==3.9.5
 lxml==5.2.2
 anthropic>=0.40.0
 # Note: requires Python 3.11 or 3.12. Python 3.14 not yet supported by asyncpg.
+boto3==1.34.131

@@ -61,12 +61,15 @@ async def lifespan(app: FastAPI):
     from app.routers.epg import epg_loop
     epg_task = asyncio.create_task(epg_loop())
 
+    from app.r2_export import r2_export_loop
+    r2_task = asyncio.create_task(r2_export_loop())
+
     yield
     # Shutdown
     logger.info("Shutting down...")
     health_task.cancel()
     playlist_task.cancel()
-    for t in ("ai_task", "ai_monitor_task", "epg_task", "diag_task"):
+    for t in ("ai_task", "ai_monitor_task", "epg_task", "diag_task", "r2_task"):
         task = locals().get(t)
         if task is not None:
             task.cancel()

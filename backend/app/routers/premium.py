@@ -152,3 +152,31 @@ async def premium_summary(db: AsyncSession = Depends(get_db), _=Depends(get_curr
         "channel_count": channel_count,
         "playlist_count": playlist_count,
     }
+
+
+@router.get("/export")
+async def premium_export_status(_=Depends(get_current_admin)):
+    """Whether R2 backup is configured, and the most recent backups (presigned
+    download URLs, so a private bucket still works)."""
+    from app.r2_export import r2_configured, list_premium_backups
+    if not r2_configured():
+        return {"configured": False, "backups": []}
+    try:
+        backups = await list_premium_backups()
+    except Exception as e:
+        logger.warning("R2 backup listing failed: %s", e)
+        return {"configured": True, "backups": [], "error": str(e)}
+    return {"configured": True, "backups": backups}
+
+
+@router.post("/export")
+async def premium_export_run(_=Depends(get_current_admin)):
+    """Export the premium playlists to R2 now (manual trigger)."""
+    from app.r2_export import r2_configured, export_premium_to_r2
+    if not r2_configured():
+        raise HTTPException(400, "R2 is not configured. Set R2_* in backend/.env.")
+    try:
+        return await export_premium_to_r2()
+    except Exception as e:
+        logger.error("Manual R2 export failed: %s", e)
+        raise HTTPException(502, f"Export failed: {e}")

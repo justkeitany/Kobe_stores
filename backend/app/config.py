@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     SERVER_URL: str = ""
     PANEL_PORT: int = 8000
 
+    # Cloudflare R2 (S3-compatible) — premium-playlist backup/export. All blank by
+    # default; export stays dormant until these are set. Create an R2 API token
+    # with Object Read & Write scoped to the bucket.
+    R2_ACCOUNT_ID: str = ""
+    R2_ACCESS_KEY_ID: str = ""
+    R2_SECRET_ACCESS_KEY: str = ""
+    R2_BUCKET: str = ""
+    R2_PREFIX: str = "playlists/"
+    # Optional public base (custom domain) for friendly return URLs only.
+    R2_PUBLIC_BASE: str = ""
+
     # HLS / FFmpeg
     HLS_SEGMENT_TIME: int = 2
     HLS_LIST_SIZE: int = 6
