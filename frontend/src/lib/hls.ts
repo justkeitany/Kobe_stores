@@ -49,19 +49,28 @@ export function makeHlsConfig(): Partial<HlsConfig> {
     // ---- Buffer policy -------------------------------------------------
     // Deep buffer + sit a few segments back from the live edge so jitter on a
     // long-haul path is absorbed instead of stalling. The extra latency is
-    // invisible for live TV.
+    // invisible for live TV — Netflix/YouTube deliberately trade latency for
+    // smoothness, and so do we.
     backBufferLength: 90,
     maxBufferLength: 60,
     maxMaxBufferLength: 120,
     // Cap the buffer by *size* too (60 MB) so a high-bitrate source can't
     // balloon memory on low-end devices while still buffering plenty of time.
     maxBufferSize: 60 * 1000 * 1000,
-    liveSyncDurationCount: 4,
-    // Don't let the player drift more than ~8 segments behind live before it
-    // seeks back toward the edge — bounds latency without being so tight that a
-    // normal rebuffer triggers a jump (must stay > liveSyncDurationCount).
-    liveMaxLatencyDurationCount: 8,
-    maxLiveSyncPlaybackRate: 1.5,
+    // The real anti-stall lever for LIVE: you can't buffer ahead of the live
+    // edge (that media doesn't exist yet), so the only way to get a forward
+    // cushion is to sit further back. 6 segments (~12s at 2s segments) gives a
+    // 12s jitter cushion and still fits inside the 24s/12-segment playlist
+    // window the origin serves.
+    liveSyncDurationCount: 6,
+    // NB: liveMaxLatencyDurationCount is intentionally LEFT UNSET (defaults to
+    // Infinity). Setting it makes hls.js *seek/jump* back toward the live edge
+    // whenever you drift past it — on a dipping connection that means constant
+    // skip-aheads, which is the opposite of smooth. We let latency drift and
+    // rely on gentle rate catch-up + the visibility/online resync handlers.
+    // Gentle catch-up only: nudge playbackRate to at most 1.1x (near-invisible)
+    // to ease back toward the sync point, instead of a jarring 1.5x fast-forward.
+    maxLiveSyncPlaybackRate: 1.1,
 
     // Warm the pipe: fetch the first fragment while the manifest is still being
     // parsed so the opening frames are ready sooner (snappier channel zap).
