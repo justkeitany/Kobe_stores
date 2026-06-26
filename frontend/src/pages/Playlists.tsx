@@ -472,7 +472,10 @@ export function ChannelsModal({
     const q = search.trim().toLowerCase();
     return channels
       .map((c, i) => ({ c, i }))
-      .filter(({ c }) => !q || c.name.toLowerCase().includes(q));
+      .filter(({ c }) => !q || c.name.toLowerCase().includes(q))
+      // Alphabetical display; keep each row's original index `i` so probe
+      // statuses (index-aligned) and selection still line up.
+      .sort((a, b) => a.c.name.localeCompare(b.c.name, undefined, { sensitivity: "base" }));
   }, [channels, search]);
 
   // Render incrementally — a big playlist (10k+ channels) mounts far too many

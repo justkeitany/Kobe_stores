@@ -143,6 +143,9 @@ async def build_channel_rows(db: AsyncSession, category_ids: set[int] | None = N
                     "health": resolve(url, False, True, None, 0),
                     "url": url,
                 })
+    # Alphabetical everywhere: the channel grids (Channels + Premium Channels)
+    # render rows in this order.
+    out.sort(key=lambda r: (r["name"] or "").strip().lower())
     return out
 
 

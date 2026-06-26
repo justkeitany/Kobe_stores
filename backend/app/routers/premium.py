@@ -106,7 +106,7 @@ async def premium_playlists(db: AsyncSession = Depends(get_db), _=Depends(get_cu
     if not names:
         return []
     playlists = (await db.execute(
-        select(Playlist).order_by(Playlist.created_at.desc(), Playlist.id.desc())
+        select(Playlist).order_by(func.lower(Playlist.name))
     )).scalars().all()
     return [
         _serialize_playlist(p)
