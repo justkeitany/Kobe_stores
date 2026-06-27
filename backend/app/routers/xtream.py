@@ -336,7 +336,25 @@ async def player_api(
                 limit=limit,
             )
 
-    return {}
+        # ── VOD / Series ──────────────────────────────────────────────────
+        # This panel is live-only, but on import players enumerate VOD and
+        # Series too. These MUST be JSON arrays — returning {} makes strict
+        # decoders (e.g. the wizju iOS player) reject the whole import with
+        # "the data couldn't be read because it isn't in the correct format".
+        if action in (
+            "get_vod_categories", "get_vod_streams",
+            "get_series_categories", "get_series",
+        ):
+            return []
+        # Detail lookups are objects; return empty-but-valid shapes.
+        if action == "get_vod_info":
+            return {"info": {}, "movie_data": {}}
+        if action == "get_series_info":
+            return {"info": {}, "seasons": [], "episodes": {}}
+
+    # Unknown actions: default to an empty array — almost every Xtream "list"
+    # action returns one, and an array is what importers expect (never {}).
+    return []
 
 
 # ── /get.php — M3U playlist download ──────────────────────────────────────
