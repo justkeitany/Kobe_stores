@@ -371,8 +371,8 @@ function AddPlaylistModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-surface-container border border-outline-variant rounded-md w-full max-w-[28rem] shadow-xl p-6 space-y-4">
+    <div className="modal-backdrop fixed inset-0 bg-black/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="modal-panel bg-surface-container border border-outline-variant rounded-md w-full max-w-[28rem] shadow-xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-bold">Add Playlist</h2>
           <button onClick={onClose} className="text-on-surface-variant hover:text-on-surface">
@@ -540,9 +540,9 @@ export function ChannelsModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+    <div className="modal-backdrop fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
       <div className="absolute inset-0" onClick={onClose} aria-hidden />
-      <div className="relative bg-surface w-full max-w-3xl max-h-[88vh] rounded-xl flex flex-col shadow-2xl border border-outline-variant overflow-hidden">
+      <div className="modal-panel relative bg-surface w-full max-w-3xl max-h-[88vh] rounded-xl flex flex-col shadow-2xl border border-outline-variant overflow-hidden">
         {/* Header */}
         <div className="shrink-0 px-lg pt-lg pb-md flex items-start justify-between gap-md">
           <h2 className="text-xl font-bold flex items-center gap-2 min-w-0">

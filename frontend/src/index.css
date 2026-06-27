@@ -96,6 +96,12 @@
 
   /* Card elevation — subtle in dark */
   --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.28);
+
+  /* ── Motion curves (exposed as `ease-drawer` / `ease-pop` utilities) ──
+     Built-in CSS easings are too weak; these are stronger custom variants.
+     ease-drawer = iOS drawer curve (Ionic); ease-pop = strong ease-out. */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  --ease-pop:    cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 /* ── Light mode: re-point the variables ───────────────────────── */
@@ -284,6 +290,28 @@ html.light {
   -webkit-box-orient: vertical;
   overflow: hidden;
   word-break: break-word;
+}
+
+/* ── Motion primitives ────────────────────────────────────────────
+   Entrance-only animations (elements are conditionally mounted in React,
+   so there's no exit). Keyframes are fine here: modals/menus aren't
+   triggered rapidly enough to need interruptible transitions.
+   Modals stay centered (transform-origin: center); menus are origin-aware. */
+@keyframes fade-in        { from { opacity: 0; } }
+@keyframes modal-panel-in { from { opacity: 0; transform: scale(0.96) translateY(4px); } }
+@keyframes menu-pop-in    { from { opacity: 0; transform: scale(0.95); } }
+@keyframes nav-group-in   { from { opacity: 0; transform: translateY(-4px); } }
+
+.modal-backdrop   { animation: fade-in 200ms ease-out; }
+.modal-panel      { animation: modal-panel-in 220ms var(--ease-pop); }
+.menu-pop         { animation: menu-pop-in 150ms var(--ease-pop); transform-origin: top right; }
+.nav-group-expand { animation: nav-group-in 180ms var(--ease-pop); }
+
+/* Reduced motion: keep comprehension-aiding fades, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .modal-panel,
+  .menu-pop,
+  .nav-group-expand { animation: fade-in 160ms ease-out; transform: none; }
 }
 
 @layer base {

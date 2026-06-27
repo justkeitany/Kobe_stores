@@ -167,12 +167,12 @@ export default function Layout() {
 
       {/* ── Sidebar ─────────────────────────────────────────── */}
       <aside className={clsx(
-        "flex flex-col bg-surface-container-lowest border-r border-outline-variant shrink-0 transition-transform duration-200",
+        "flex flex-col bg-surface-container-lowest border-r border-outline-variant shrink-0 transition-transform duration-300 ease-drawer",
         // Mobile: fixed off-canvas drawer (always full width, never collapsed).
         "fixed inset-y-0 left-0 z-50 w-60",
         mobileOpen ? "translate-x-0" : "-translate-x-full",
         // Desktop: in-flow column that can collapse to an icon rail.
-        "lg:static lg:translate-x-0 lg:z-auto lg:transition-all",
+        "lg:static lg:translate-x-0 lg:z-auto lg:transition-[width] lg:duration-200 lg:ease-pop",
         collapsed ? "lg:w-14" : "lg:w-60"
       )}>
 
@@ -244,11 +244,11 @@ export default function Layout() {
                   <span>{label}</span>
                   <ChevronDown
                     size={14}
-                    className={clsx("ml-auto shrink-0 transition-transform", open && "rotate-180")}
+                    className={clsx("ml-auto shrink-0 transition-transform duration-200 ease-pop", open && "rotate-180")}
                   />
                 </button>
                 {open && (
-                  <div className="mt-0.5 space-y-0.5">
+                  <div className="nav-group-expand mt-0.5 space-y-0.5">
                     {children.map((c) => renderLeaf(c, true))}
                   </div>
                 )}
@@ -477,7 +477,7 @@ function Dropdown({ children, onClose }: { children: React.ReactNode; onClose: (
     <>
       <div className="fixed inset-0 z-40" onClick={onClose} />
       <div ref={ref}
-        className="absolute right-0 mt-2 w-56 bg-surface-container border border-outline-variant rounded-md shadow-xl z-50 overflow-hidden">
+        className="menu-pop absolute right-0 mt-2 w-56 bg-surface-container border border-outline-variant rounded-md shadow-xl z-50 overflow-hidden">
         {children}
       </div>
     </>

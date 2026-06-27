@@ -394,8 +394,8 @@ function StreamModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white border border-gray-300 rounded-md w-full max-w-[28rem] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+    <div className="modal-backdrop fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="modal-panel bg-white border border-gray-300 rounded-md w-full max-w-[28rem] p-6 space-y-4 max-h-[90vh] overflow-y-auto">
         <h2 className="text-lg font-semibold text-gray-900">
           {stream ? "Edit Stream" : "Add Stream"}
         </h2>
