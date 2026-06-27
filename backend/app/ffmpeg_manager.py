@@ -399,13 +399,17 @@ transcode_governor = TranscodeGovernor()
 class StreamProcess:
     def __init__(self, stream_id: int, sources: list[str], stream_name: str,
                  quality: str = "auto", proxy_country: Optional[str] = None,
-                 allow_multivariant: bool = True):
+                 allow_multivariant: bool = True, force_adaptive: bool = False):
         self.stream_id = stream_id
         self.quality = quality if quality in VALID_QUALITIES else "auto"
         # If False, this stream always uses single-rendition passthrough HLS
         # (stream-copy). Playlist proxy streams set this to avoid 65× CPU per
         # viewer from multi-variant transcoding.
         self.allow_multivariant = allow_multivariant
+        # Force the adaptive ladder even when the source probe comes back empty
+        # (provider blocks ffprobe). Set on premium TV channels — see
+        # Stream.force_adaptive. Ignored for audio-only sources.
+        self.force_adaptive = force_adaptive
         # ISO country code for proxy-assisted playlist resolution (None = off).
         self.proxy_country = proxy_country
         # FFmpeg input URL + proxy args, computed (async) once per start().
@@ -642,6 +646,13 @@ class StreamProcess:
                     self.audio_only = not has_video
                     self.source_height = height or 0
                     wants_ladder = _source_wants_ladder(height, bitrate)
+                    # Forced premium TV: engage the ladder even when the probe was
+                    # blocked (0×0). The probe returns has_video=True on failure,
+                    # so a genuinely audio-only source is still correctly excluded.
+                    if self.force_adaptive and not self.audio_only:
+                        wants_ladder = True
+                        if not self.source_height:
+                            self.source_height = 1080  # label top rung "1080p"
                     if self.allow_multivariant and self.quality == "auto" and not self.audio_only:
                         logger.info(
                             f"Stream {self.stream_id}: source {height or '?'}p "
@@ -834,12 +845,13 @@ class FFmpegManager:
     async def get_or_create(
         self, stream_id: int, sources: list[str], stream_name: str,
         quality: str = "auto", proxy_country: Optional[str] = None,
-        allow_multivariant: bool = True,
+        allow_multivariant: bool = True, force_adaptive: bool = False,
     ) -> StreamProcess:
         async with self._lock:
             sp = self._streams.get(stream_id)
             if sp is None:
-                sp = StreamProcess(stream_id, sources, stream_name, quality, proxy_country, allow_multivariant)
+                sp = StreamProcess(stream_id, sources, stream_name, quality,
+                                   proxy_country, allow_multivariant, force_adaptive)
                 self._streams[stream_id] = sp
             elif sp.status not in ("running", "starting"):
                 # Pick up edited source pools / quality / proxy_country the next
@@ -850,16 +862,18 @@ class FFmpegManager:
                 sp.quality = quality if quality in VALID_QUALITIES else "auto"
                 sp.proxy_country = proxy_country
                 sp.allow_multivariant = allow_multivariant
+                sp.force_adaptive = force_adaptive
             return sp
 
     async def start_stream(
         self, stream_id: int, sources: list[str], stream_name: str,
         client_key: str = "viewer", quality: str = "auto",
         proxy_country: Optional[str] = None,
-        allow_multivariant: bool = True,
+        allow_multivariant: bool = True, force_adaptive: bool = False,
     ) -> StreamProcess:
         self._ensure_reaper()
-        sp = await self.get_or_create(stream_id, sources, stream_name, quality, proxy_country, allow_multivariant)
+        sp = await self.get_or_create(stream_id, sources, stream_name, quality,
+                                      proxy_country, allow_multivariant, force_adaptive)
         sp.heartbeat(client_key)
         # Channel switch: free this viewer's previous channel BEFORE starting the
         # new one, so a connection-limited upstream (M3USe trial) never sees two
@@ -901,7 +915,8 @@ class FFmpegManager:
             await sp.stop()
 
     async def restart_stream(
-        self, stream_id: int, sources: Optional[list[str]] = None, quality: Optional[str] = None
+        self, stream_id: int, sources: Optional[list[str]] = None, quality: Optional[str] = None,
+        force_adaptive: Optional[bool] = None,
     ) -> bool:
         async with self._lock:
             sp = self._streams.get(stream_id)
@@ -912,6 +927,8 @@ class FFmpegManager:
             sp.sources = [s for s in sources if s] or [""]
         if quality is not None:
             sp.quality = quality if quality in VALID_QUALITIES else "auto"
+        if force_adaptive is not None:
+            sp.force_adaptive = force_adaptive
         sp.source_index = 0
         await asyncio.sleep(1)
         return await sp.start()

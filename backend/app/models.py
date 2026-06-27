@@ -45,6 +45,14 @@ class Stream(Base):
     #   auto | low (480p) | medium (720p) | high (1080p)
     quality = Column(String(10), default="auto", nullable=False)
 
+    # Force the multi-variant adaptive ladder even when the source can't be
+    # probed. Heavy sources normally auto-engage the ladder via an ffprobe, but
+    # some providers (e.g. premium Xtream feeds) block the VPS IP from probing,
+    # so ffprobe returns 0×0 and the ladder never engages → a fixed 1080p
+    # passthrough with no low rung. Set on premium TV channels so weak viewers
+    # still get 720p/480p. Only affects "auto" video streams (radio stays audio).
+    force_adaptive = Column(Boolean, default=False, nullable=False)
+
     # Optional ISO country code (e.g. "GB", "US"). When set, the initial M3U8
     # playlist is resolved THROUGH a residential proxy in that country to bypass
     # geo-blocks; heavy segment traffic still flows direct (app/proxy_resolver.py).

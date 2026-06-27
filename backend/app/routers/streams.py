@@ -427,11 +427,14 @@ async def restart_stream(
     if not stream:
         raise HTTPException(404, "Stream not found")
     urls = source_urls(stream, stream.sources)
-    ok = await ffmpeg_manager.restart_stream(stream_id, urls, stream.quality)
+    ok = await ffmpeg_manager.restart_stream(
+        stream_id, urls, stream.quality, force_adaptive=stream.force_adaptive
+    )
     if not ok:
         # Not running yet, start it
         sp = await ffmpeg_manager.start_stream(
-            stream_id, urls, stream.name, quality=stream.quality
+            stream_id, urls, stream.name, quality=stream.quality,
+            force_adaptive=stream.force_adaptive,
         )
         return {"restarted": True, "status": sp.status}
     return {"restarted": True}

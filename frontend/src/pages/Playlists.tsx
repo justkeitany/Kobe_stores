@@ -188,13 +188,15 @@ export default function Playlists() {
 /* ── Card ─────────────────────────────────────────────────────── */
 
 export function PlaylistCard({
-  playlist, refreshing = false, onView, onRefresh, onDelete,
+  playlist, refreshing = false, onView, onRefresh, onDelete, hideSourceBadge = false,
 }: {
   playlist: Playlist;
   refreshing?: boolean;
   onView: () => void;
   onRefresh?: () => void;
   onDelete?: () => void;
+  /** Hide the "M3U" source badge — used on Premium cards to keep links secret. */
+  hideSourceBadge?: boolean;
 }) {
   return (
     <div className="bg-surface-container-low border border-outline-variant rounded-md p-md flex flex-col gap-3">
@@ -203,9 +205,11 @@ export function PlaylistCard({
         <h3 className="font-bold text-base leading-tight truncate" title={playlist.name}>
           {playlist.name}
         </h3>
-        <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-code-label uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-full px-2 py-0.5">
-          <Globe size={11} /> M3U
-        </span>
+        {!hideSourceBadge && (
+          <span className="shrink-0 inline-flex items-center gap-1 text-[10px] font-code-label uppercase tracking-wider text-on-surface-variant border border-outline-variant rounded-full px-2 py-0.5">
+            <Globe size={11} /> M3U
+          </span>
+        )}
       </div>
 
       {/* Channel count + health + avatar stack */}
@@ -346,7 +350,9 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
 
 /* ── Add modal ────────────────────────────────────────────────── */
 
-function AddPlaylistModal({ onClose, onSaved }: { onClose: () => void; onSaved: () => void }) {
+export function AddPlaylistModal({
+  onClose, onSaved, endpoint = "/playlists",
+}: { onClose: () => void; onSaved: () => void; endpoint?: string }) {
   const [name, setName] = useState("");
   const [url, setUrl] = useState("");
   const [description, setDescription] = useState("");
@@ -356,7 +362,7 @@ function AddPlaylistModal({ onClose, onSaved }: { onClose: () => void; onSaved: 
     setSaving(true);
     const t = toast.loading("Fetching playlist…");
     try {
-      await api.post("/playlists", {
+      await api.post(endpoint, {
         name: name.trim(),
         url: url.trim(),
         description: description.trim() || null,

@@ -807,6 +807,7 @@ async def _serve_imported(
     sp = await ffmpeg_manager.start_stream(
         stream_id, [r.url for r in refs], stream.name, client_key, stream.quality,
         proxy_country=stream.proxy_country,
+        force_adaptive=stream.force_adaptive,
     )
 
     no_cache = {"Cache-Control": "no-cache, no-store, must-revalidate"}

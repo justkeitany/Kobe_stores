@@ -1,29 +1,33 @@
 import { useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Loader2, Crown, UploadCloud, Download } from "lucide-react";
+import { Loader2, Crown, Plus, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import api from "../lib/api";
-import { PlaylistCard, ChannelsModal, type Playlist } from "./Playlists";
+import { PlaylistCard, ChannelsModal, AddPlaylistModal, type Playlist } from "./Playlists";
 import { PremiumEmpty, type PremiumSummary } from "../components/PremiumEmpty";
 
-interface R2Backup { key: string; size: number; last_modified: string; url: string; }
-interface ExportStatus { configured: boolean; backups: R2Backup[]; error?: string; }
+interface SyncResult {
+  playlists: { name: string; updated: number; added: number; unchanged: number }[];
+  restarted: number;
+}
 
 /**
  * Premium → Playlists. The playlists that belong to the "Premium" bouquet
  * (resolved server-side by name). Reuses the same PlaylistCard and View modal as
  * the main Playlists page, including the Select-all / Import flow so premium
- * channels can be imported into Streams. Refresh/Delete are omitted here; live
- * per-channel probing is skipped since premium feeds may be IP-blocked.
+ * channels can be imported into Streams.
  *
- * Also hosts the R2 backup controls: a daily background export runs server-side;
- * "Export now" triggers it on demand, and recent backups list with short-lived
- * presigned download links (so a private bucket still works).
+ * Source links are kept secret here (this is a distributable product): the M3U
+ * badge is hidden on cards, no raw URLs are shown, and the R2 export is a hidden
+ * background job — there's no download list in the UI. "Import playlist" adds a
+ * new premium playlist from an M3U URL; "Sync channels" re-pulls each feed and
+ * refreshes the imported streams in place (fixes stale/looping channels).
  */
 export default function PremiumPlaylists() {
   const qc = useQueryClient();
   const [viewing, setViewing] = useState<Playlist | null>(null);
-  const [exporting, setExporting] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [syncing, setSyncing] = useState(false);
 
   const { data: playlists = [], isLoading } = useQuery<Playlist[]>({
     queryKey: ["premium-playlists"],
@@ -33,27 +37,31 @@ export default function PremiumPlaylists() {
     queryKey: ["premium-summary"],
     queryFn: () => api.get("/premium/summary").then((r) => r.data),
   });
-  const { data: exportStatus } = useQuery<ExportStatus>({
-    queryKey: ["premium-export"],
-    queryFn: () => api.get("/premium/export").then((r) => r.data),
-  });
 
-  async function exportNow() {
-    setExporting(true);
-    const t = toast.loading("Exporting premium playlists to R2…");
-    try {
-      const r = await api.post("/premium/export").then((res) => res.data);
-      toast.success(`Backed up ${r.count} file${r.count === 1 ? "" : "s"} to R2`, { id: t });
-      qc.invalidateQueries({ queryKey: ["premium-export"] });
-    } catch (e: any) {
-      toast.error(e?.response?.data?.detail || "Export failed", { id: t });
-    } finally {
-      setExporting(false);
-    }
+  function refreshPremium() {
+    qc.invalidateQueries({ queryKey: ["premium-playlists"] });
+    qc.invalidateQueries({ queryKey: ["premium-summary"] });
+    qc.invalidateQueries({ queryKey: ["stream-urls"] });
   }
 
-  const configured = exportStatus?.configured;
-  const backups = exportStatus?.backups ?? [];
+  async function syncChannels() {
+    setSyncing(true);
+    const t = toast.loading("Syncing premium channels…");
+    try {
+      const r = await api.post("/premium/sync").then((res) => res.data as SyncResult);
+      const updated = r.playlists.reduce((n, p) => n + p.updated, 0);
+      const added = r.playlists.reduce((n, p) => n + p.added, 0);
+      toast.success(
+        `Synced — ${updated} updated, ${added} added, ${r.restarted} restarted`,
+        { id: t },
+      );
+      refreshPremium();
+    } catch (e: any) {
+      toast.error(e?.response?.data?.detail || "Sync failed", { id: t });
+    } finally {
+      setSyncing(false);
+    }
+  }
 
   return (
     <div className="p-lg space-y-md max-w-[1400px]">
@@ -66,38 +74,16 @@ export default function PremiumPlaylists() {
             {isLoading ? "Loading…" : `${playlists.length} premium playlist${playlists.length === 1 ? "" : "s"}`}
           </p>
         </div>
-        {configured && (
-          <button className="btn-primary" onClick={exportNow} disabled={exporting}>
-            {exporting ? <Loader2 size={16} className="animate-spin" /> : <UploadCloud size={16} />}
-            Export to R2
+        <div className="flex items-center gap-2">
+          <button className="btn-secondary" onClick={syncChannels} disabled={syncing}>
+            {syncing ? <Loader2 size={16} className="animate-spin" /> : <RefreshCw size={16} />}
+            Sync channels
           </button>
-        )}
-      </div>
-
-      {configured === false && (
-        <p className="flex items-center gap-1.5 text-[12px] text-on-surface-variant bg-surface-container rounded px-3 py-2 border border-outline-variant">
-          R2 backup isn't configured yet — set the R2_* values in backend/.env to enable automatic daily exports.
-        </p>
-      )}
-
-      {backups.length > 0 && (
-        <div className="border border-outline-variant rounded-md divide-y divide-outline-variant overflow-hidden">
-          <p className="px-3 py-2 text-[12px] font-bold bg-surface-container-low">Recent R2 backups</p>
-          {backups.map((b) => (
-            <a
-              key={b.key}
-              href={b.url}
-              target="_blank"
-              rel="noreferrer"
-              className="flex items-center gap-2 px-3 py-2 text-[12px] hover:bg-surface-container-low transition-colors"
-            >
-              <Download size={13} className="shrink-0 text-on-surface-variant" />
-              <span className="font-mono truncate flex-1 min-w-0">{b.key}</span>
-              <span className="shrink-0 text-on-surface-variant">{(b.size / 1024).toFixed(1)} KB</span>
-            </a>
-          ))}
+          <button className="btn-primary" onClick={() => setImporting(true)}>
+            <Plus size={16} /> Import playlist
+          </button>
         </div>
-      )}
+      </div>
 
       {isLoading ? (
         <div className="py-16 flex justify-center text-on-surface-variant">
@@ -108,9 +94,20 @@ export default function PremiumPlaylists() {
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-gutter">
           {playlists.map((p) => (
-            <PlaylistCard key={p.id} playlist={p} onView={() => setViewing(p)} />
+            <PlaylistCard key={p.id} playlist={p} onView={() => setViewing(p)} hideSourceBadge />
           ))}
         </div>
+      )}
+
+      {importing && (
+        <AddPlaylistModal
+          endpoint="/premium/playlists"
+          onClose={() => setImporting(false)}
+          onSaved={() => {
+            setImporting(false);
+            refreshPremium();
+          }}
+        />
       )}
 
       {viewing && (

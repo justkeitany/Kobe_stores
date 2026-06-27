@@ -15,22 +15,37 @@ empty results and the UI shows a setup hint.
   exactly like the main Playlists page.
 """
 import logging
+import re
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from app.auth import get_current_admin
 from app.database import get_db
-from app.models import Bouquet, BouquetCategory, Playlist, StreamCategory
+from app.ffmpeg_manager import ffmpeg_manager
+from app.models import Bouquet, BouquetCategory, Playlist, Stream, StreamCategory
 from app.routers.channels import build_channel_rows
-from app.routers.playlists import _channels_for, _serialize as _serialize_playlist
+from app.routers.playlists import _channels_for, _refresh_meta, _serialize as _serialize_playlist
+from app.routers.streams import _clean_source_list, _normalize_url, _replace_sources
 
 router = APIRouter(prefix="/api/premium", tags=["premium"])
 logger = logging.getLogger(__name__)
 
 _PREMIUM_NAME = "premium"
+
+
+def _norm_name(s: str) -> str:
+    """Normalise a channel name for matching feed channels to imported streams."""
+    return re.sub(r"\s+", " ", (s or "").strip().lower())
+
+
+def _is_radio_playlist(name: str) -> bool:
+    """Audio-only premium playlists (radio) don't get the forced video ladder."""
+    return "radio" in (name or "").lower()
 
 
 async def _premium_categories(db: AsyncSession) -> tuple[set[int], set[str]]:
@@ -152,6 +167,179 @@ async def premium_summary(db: AsyncSession = Depends(get_db), _=Depends(get_curr
         "channel_count": channel_count,
         "playlist_count": playlist_count,
     }
+
+
+async def _premium_playlists(db: AsyncSession) -> list[Playlist]:
+    """Saved playlists whose name matches a Premium-bouquet category name."""
+    _ids, names = await _premium_categories(db)
+    if not names:
+        return []
+    playlists = (await db.execute(select(Playlist))).scalars().all()
+    return [p for p in playlists if (p.name or "").strip().lower() in names]
+
+
+@router.post("/sync")
+async def premium_sync(db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)):
+    """Re-sync premium channels IN PLACE from their playlist feeds.
+
+    For each premium playlist: refresh its cached channel snapshot from the M3U
+    feed, then reconcile the imported streams in the matching category — update a
+    channel's source URL + logo in place when the feed has changed (this is what
+    fixes channels stuck on the provider's looping filler when a stream ID goes
+    stale), add channels that aren't imported yet, and flag video channels for the
+    forced adaptive ladder (US/Canada; radio stays audio-only). Running streams
+    whose source changed are restarted so the new URL/ladder take effect.
+    """
+    playlists = await _premium_playlists(db)
+    if not playlists:
+        raise HTTPException(400, "No Premium playlists found — set up the Premium bouquet first.")
+
+    results: list[dict] = []
+    to_restart: list[tuple[int, str, str, bool]] = []  # (stream_id, url, quality, force_adaptive)
+
+    for p in playlists:
+        await _refresh_meta(p, db)               # refresh cached feed from source
+        feed = p.channels or []
+        force_adaptive = not _is_radio_playlist(p.name)
+
+        cat = (await db.execute(
+            select(StreamCategory).where(func.lower(StreamCategory.name) == (p.name or "").strip().lower())
+        )).scalars().first()
+
+        existing: list[Stream] = []
+        if cat:
+            existing = (await db.execute(
+                select(Stream).options(selectinload(Stream.sources)).where(Stream.category_id == cat.id)
+            )).scalars().all()
+        by_name: dict[str, Stream] = {}
+        for s in existing:
+            by_name.setdefault(_norm_name(s.name), s)
+
+        updated = added = unchanged = 0
+        for ch in feed:
+            url = _normalize_url((ch.get("url") or "").strip())
+            if not url:
+                continue
+            logo = (ch.get("logo") or "").strip()
+            s = by_name.get(_norm_name(ch.get("name") or ""))
+            if s:
+                current = s.sources[0].url if s.sources else s.stream_url
+                changed = False
+                if current != url:
+                    await _replace_sources(db, s, _clean_source_list([url]))
+                    changed = True
+                if logo and s.logo_url != logo:
+                    s.logo_url = logo
+                    changed = True
+                if s.force_adaptive != force_adaptive:
+                    s.force_adaptive = force_adaptive
+                    changed = True
+                if changed:
+                    updated += 1
+                    to_restart.append((s.id, url, s.quality, force_adaptive))
+                else:
+                    unchanged += 1
+            elif cat:
+                # New channel in the feed — import it into this category. Skip if
+                # the URL already belongs to a stream (idempotent, no duplicates).
+                dup = (await db.execute(select(Stream).where(Stream.stream_url == url))).scalars().first()
+                if dup:
+                    unchanged += 1
+                    continue
+                ns = Stream(
+                    name=(ch.get("name") or "Unnamed"), logo_url=(logo or None),
+                    category_id=cat.id, stream_url=url, quality="auto",
+                    delivery_mode="restream", force_adaptive=force_adaptive,
+                )
+                db.add(ns)
+                await db.flush()
+                await _replace_sources(db, ns, _clean_source_list([url]))
+                added += 1
+
+        results.append({"name": p.name, "updated": updated, "added": added, "unchanged": unchanged})
+
+    await db.commit()
+
+    # Restart only the streams that actually changed; restart_stream is a cheap
+    # no-op for streams that aren't currently running.
+    restarted = 0
+    for sid, url, quality, fa in to_restart:
+        if await ffmpeg_manager.restart_stream(sid, [url], quality, force_adaptive=fa):
+            restarted += 1
+
+    return {"playlists": results, "restarted": restarted}
+
+
+class PremiumPlaylistImport(BaseModel):
+    name: str
+    url: str
+    description: str | None = None
+
+
+@router.post("/playlists")
+async def premium_playlist_import(
+    data: PremiumPlaylistImport,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_admin),
+):
+    """Import an M3U playlist into the Premium section.
+
+    Creates (or updates) the saved playlist and files it under Premium by ensuring
+    a category of the same name exists and is linked to the Premium bouquet — that
+    name link is what makes a playlist 'premium'. Channels aren't imported as
+    streams here; browse + Import (or Sync) does that, same as the main Playlists.
+    """
+    name = (data.name or "").strip()
+    url = (data.url or "").strip()
+    if not name:
+        raise HTTPException(400, "Name is required")
+    if not url.lower().startswith(("http://", "https://")):
+        raise HTTPException(400, "URL must start with http:// or https://")
+
+    # Premium bouquet (create if it doesn't exist yet).
+    bouquet = (await db.execute(
+        select(Bouquet).where(func.lower(Bouquet.name) == _PREMIUM_NAME)
+    )).scalars().first()
+    if not bouquet:
+        bouquet = Bouquet(name="Premium")
+        db.add(bouquet)
+        await db.flush()
+
+    # Category of the same name (create if missing) — the premium link key.
+    cat = (await db.execute(
+        select(StreamCategory).where(func.lower(StreamCategory.name) == name.lower())
+    )).scalars().first()
+    if not cat:
+        cat = StreamCategory(name=name)
+        db.add(cat)
+        await db.flush()
+
+    # Link the category to the Premium bouquet (additive — keep existing links).
+    linked = (await db.execute(
+        select(BouquetCategory).where(
+            BouquetCategory.bouquet_id == bouquet.id,
+            BouquetCategory.category_id == cat.id,
+        )
+    )).scalars().first()
+    if not linked:
+        db.add(BouquetCategory(bouquet_id=bouquet.id, category_id=cat.id, sort_order=0))
+
+    # Create or update the playlist, then refresh its cached channel snapshot.
+    p = (await db.execute(
+        select(Playlist).where(func.lower(Playlist.name) == name.lower())
+    )).scalars().first()
+    if p:
+        p.url = url
+        if data.description is not None:
+            p.description = data.description.strip() or None
+    else:
+        p = Playlist(name=name, url=url, description=(data.description or "").strip() or None)
+        db.add(p)
+    await db.flush()
+    await _refresh_meta(p, db)
+    await db.commit()
+    await db.refresh(p)
+    return _serialize_playlist(p)
 
 
 @router.get("/export")
