@@ -215,6 +215,17 @@ async def premium_sync(db: AsyncSession = Depends(get_db), _=Depends(get_current
         for s in existing:
             by_name.setdefault(_norm_name(s.name), s)
 
+        # Apply the forced-ABR flag category-wide so EVERY premium TV channel gets
+        # the ladder (US/Canada), not only the ones whose feed name still matches
+        # the imported stream. Radio categories are forced off. Track restarts so a
+        # running stream picks the change up immediately.
+        for s in existing:
+            if s.force_adaptive != force_adaptive:
+                s.force_adaptive = force_adaptive
+                cur = s.sources[0].url if s.sources else s.stream_url
+                if cur:
+                    to_restart.append((s.id, cur, s.quality, force_adaptive))
+
         updated = added = unchanged = 0
         for ch in feed:
             url = _normalize_url((ch.get("url") or "").strip())
@@ -230,9 +241,6 @@ async def premium_sync(db: AsyncSession = Depends(get_db), _=Depends(get_current
                     changed = True
                 if logo and s.logo_url != logo:
                     s.logo_url = logo
-                    changed = True
-                if s.force_adaptive != force_adaptive:
-                    s.force_adaptive = force_adaptive
                     changed = True
                 if changed:
                     updated += 1
@@ -261,9 +269,12 @@ async def premium_sync(db: AsyncSession = Depends(get_db), _=Depends(get_current
     await db.commit()
 
     # Restart only the streams that actually changed; restart_stream is a cheap
-    # no-op for streams that aren't currently running.
+    # no-op for streams that aren't currently running. Dedupe by stream id (a
+    # stream can be queued by both the flag pass and the URL pass) — the later
+    # entry wins so we restart with the freshest source URL.
+    by_id = {sid: (url, quality, fa) for sid, url, quality, fa in to_restart}
     restarted = 0
-    for sid, url, quality, fa in to_restart:
+    for sid, (url, quality, fa) in by_id.items():
         if await ffmpeg_manager.restart_stream(sid, [url], quality, force_adaptive=fa):
             restarted += 1
 
