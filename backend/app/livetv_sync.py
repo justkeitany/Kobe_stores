@@ -16,7 +16,7 @@ import httpx
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.database import get_session
+from app.database import AsyncSessionLocal
 from app.models import Bouquet, BouquetCategory, Stream, StreamCategory
 from app.category_sync import link_category_to_all_bouquets
 from app.routers.streams import _replace_sources
@@ -229,7 +229,7 @@ async def _refresh_expiring_tokens():
         # Map cache keys back to player URLs, then to running stream ids
         # (cache key = cdnlive:<sha1(player_url)>; we need to look up streams by stream_url)
         # Simplified: just restart all running cdnlive streams — it's a small set
-        async with get_session() as db:
+        async with AsyncSessionLocal() as db:
             streams = (await db.execute(
                 select(Stream.id, Stream.stream_url).where(
                     Stream.status == "running",
@@ -267,7 +267,7 @@ async def livetv_sync_loop():
             # Full catalog sync
             if (now - last_full_sync).total_seconds() >= full_sync_interval:
                 logger.info("cdnlive: starting full catalog sync")
-                async with get_session() as db:
+                async with AsyncSessionLocal() as db:
                     result = await sync_cdnlive(db)
                 # Restart changed streams
                 if result.get("changed_stream_ids"):
