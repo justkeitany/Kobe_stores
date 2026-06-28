@@ -1,8 +1,8 @@
 import { useState, useRef, useEffect } from "react";
 import { NavLink, Outlet, useNavigate, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Tv, FolderOpen, Package, Radio,
-  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo, LayoutGrid, Crown,
+  LayoutDashboard, Tv, FolderOpen, Package,
+  Server, Settings, LogOut, Menu, X, Users, Clapperboard, ChevronDown, ListVideo, LayoutGrid, Crown, CalendarDays,
   type LucideIcon,
 } from "lucide-react";
 import { useQuery } from "@tanstack/react-query";
@@ -81,7 +81,7 @@ const nav: NavEntry[] = [
   },
   { label: "Categories", icon: FolderOpen,      path: "/categories" },
   { label: "Bouquets",   icon: Package,         path: "/bouquets" },
-  { label: "EPG",        icon: Radio,           path: "/epg" },
+  { label: "Guide",      icon: CalendarDays,    path: "/guide" },
   { label: "Server",     icon: Server,          path: "/server" },
 ];
 

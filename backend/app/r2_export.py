@@ -162,8 +162,188 @@ async def list_premium_backups(expires: int = 3600) -> list[dict]:
     return await asyncio.to_thread(_list)
 
 
+# ── EPG export ───────────────────────────────────────────────────────────────
+# The site's channels (streams with an epg_channel_id) plus their programmes,
+# rendered to XMLTV and uploaded under EPGs/. The full ~8k-channel catalogue stays
+# in the DB as background data; only channels that exist on the site are exported.
+_EPG_PREFIX = "EPGs/"
+
+
+def _xml_escape(text: str) -> str:
+    return (text or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
+async def _build_epg_xmltv() -> tuple[str, int, int]:
+    """Render XMLTV for every site channel that has an EPG mapping. Returns
+    (xml, channel_count, programme_count)."""
+    from datetime import datetime, timezone
+    from app.models import Stream, EpgData, Playlist
+
+    async with AsyncSessionLocal() as db:
+        streams = (await db.execute(
+            select(Stream).where(Stream.epg_channel_id.isnot(None), Stream.epg_channel_id != "")
+        )).scalars().all()
+        cids = {s.epg_channel_id for s in streams if s.epg_channel_id}
+
+        # Playlist channels tagged with an `epg` id (served to players by get.php).
+        pl_channels: dict[str, str] = {}
+        pls = (await db.execute(select(Playlist).where(Playlist.channels.isnot(None)))).scalars().all()
+        for pl in pls:
+            for c in (pl.channels or []):
+                eid = c.get("epg")
+                if eid and eid not in cids:
+                    pl_channels.setdefault(eid, c.get("name") or eid)
+        cids |= set(pl_channels)
+
+        progs = []
+        if cids:
+            now = datetime.now(timezone.utc)
+            progs = (await db.execute(
+                select(EpgData).where(
+                    EpgData.channel_id.in_(cids),
+                    EpgData.end_time >= now,
+                ).order_by(EpgData.channel_id, EpgData.start_time).limit(500000)
+            )).scalars().all()
+
+    lines = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<!DOCTYPE tv SYSTEM "xmltv.dtd">',
+             '<tv generator-info-name="IPTV-Panel">']
+    seen = set()
+    for s in streams:
+        if s.epg_channel_id in seen:
+            continue
+        seen.add(s.epg_channel_id)
+        lines.append(f'  <channel id="{_xml_escape(s.epg_channel_id)}">')
+        lines.append(f'    <display-name>{_xml_escape(s.name)}</display-name>')
+        if s.logo_url:
+            lines.append(f'    <icon src="{_xml_escape(s.logo_url)}" />')
+        lines.append('  </channel>')
+    for eid, dname in pl_channels.items():
+        if eid in seen:
+            continue
+        seen.add(eid)
+        lines.append(f'  <channel id="{_xml_escape(eid)}">')
+        lines.append(f'    <display-name>{_xml_escape(dname)}</display-name>')
+        lines.append('  </channel>')
+    for p in progs:
+        start = p.start_time.strftime("%Y%m%d%H%M%S +0000")
+        stop = p.end_time.strftime("%Y%m%d%H%M%S +0000")
+        lines.append(f'  <programme start="{start}" stop="{stop}" channel="{_xml_escape(p.channel_id)}">')
+        lines.append(f'    <title lang="en">{_xml_escape(p.title)}</title>')
+        if p.description:
+            lines.append(f'    <desc lang="en">{_xml_escape(p.description)}</desc>')
+        if p.category:
+            lines.append(f'    <category lang="en">{_xml_escape(p.category)}</category>')
+        lines.append('  </programme>')
+    lines.append('</tv>')
+    return "\n".join(lines) + "\n", len(seen), len(progs)
+
+
+async def export_epg_to_r2() -> dict:
+    """Build the site-channel XMLTV and upload it to R2 under EPGs/ (plain + gz)."""
+    if not r2_configured():
+        raise RuntimeError("R2 is not configured (set R2_* in backend/.env)")
+    import gzip
+
+    xml, nchan, nprog = await _build_epg_xmltv()
+    raw = xml.encode("utf-8")
+    gz = gzip.compress(raw)
+
+    def _upload() -> list[str]:
+        client = _r2_client()
+        client.put_object(Bucket=settings.R2_BUCKET, Key=f"{_EPG_PREFIX}epg.xml",
+                          Body=raw, ContentType="application/xml")
+        client.put_object(Bucket=settings.R2_BUCKET, Key=f"{_EPG_PREFIX}epg.xml.gz",
+                          Body=gz, ContentType="application/gzip")
+        return [f"{_EPG_PREFIX}epg.xml", f"{_EPG_PREFIX}epg.xml.gz"]
+
+    keys = await asyncio.to_thread(_upload)
+    logger.info("Exported EPG (%d channels, %d programmes) to R2 %s", nchan, nprog, settings.R2_BUCKET)
+    base = (settings.R2_PUBLIC_BASE or "").rstrip("/")
+    return {"bucket": settings.R2_BUCKET, "channels": nchan, "programmes": nprog,
+            "keys": keys, "urls": [f"{base}/{k}" for k in keys] if base else []}
+
+
+async def export_full_epg_to_r2() -> dict:
+    """Export the ENTIRE epg_data catalogue (all ~10k channels / ~1M programmes) to
+    R2 under EPGs/epg-full.xml(.gz). Streamed to a temp file and uploaded from disk
+    (boto3 multipart) so the ~200 MB document never sits in memory."""
+    if not r2_configured():
+        raise RuntimeError("R2 is not configured (set R2_* in backend/.env)")
+    import gzip
+    import os
+    import shutil
+    import tempfile
+    from sqlalchemy import func
+    from app.models import EpgData
+
+    # Distinct channels (best display-name per id).
+    async with AsyncSessionLocal() as db:
+        chans = (await db.execute(
+            select(EpgData.channel_id, func.max(EpgData.channel_name)).group_by(EpgData.channel_id)
+        )).all()
+
+    # Unique temp file (avoids collisions between the daily loop and manual runs).
+    fd, xml_path = tempfile.mkstemp(prefix="epg-full-", suffix=".xml")
+    os.close(fd)
+    gz_path = xml_path + ".gz"
+    nprog = 0
+    with open(xml_path, "w", encoding="utf-8") as f:
+        f.write('<?xml version="1.0" encoding="UTF-8"?>\n')
+        f.write('<!DOCTYPE tv SYSTEM "xmltv.dtd">\n')
+        f.write('<tv generator-info-name="IPTV-Panel">\n')
+        for cid, name in chans:
+            f.write(f'  <channel id="{_xml_escape(cid)}"><display-name>'
+                    f'{_xml_escape(name or cid)}</display-name></channel>\n')
+        # Programmes, paginated by primary key so memory stays flat.
+        last_id = 0
+        while True:
+            async with AsyncSessionLocal() as db:
+                rows = (await db.execute(
+                    select(EpgData).where(EpgData.id > last_id)
+                    .order_by(EpgData.id).limit(5000)
+                )).scalars().all()
+            if not rows:
+                break
+            for p in rows:
+                last_id = p.id
+                start = p.start_time.strftime("%Y%m%d%H%M%S +0000")
+                stop = p.end_time.strftime("%Y%m%d%H%M%S +0000")
+                f.write(f'  <programme start="{start}" stop="{stop}" channel="{_xml_escape(p.channel_id)}">')
+                f.write(f'<title lang="en">{_xml_escape(p.title)}</title>')
+                if p.description:
+                    f.write(f'<desc lang="en">{_xml_escape(p.description)}</desc>')
+                if p.category:
+                    f.write(f'<category lang="en">{_xml_escape(p.category)}</category>')
+                f.write('</programme>\n')
+                nprog += 1
+        f.write('</tv>\n')
+
+    with open(xml_path, "rb") as fin, gzip.open(gz_path, "wb") as fout:
+        shutil.copyfileobj(fin, fout)
+
+    def _upload() -> None:
+        client = _r2_client()
+        client.upload_file(xml_path, settings.R2_BUCKET, f"{_EPG_PREFIX}epg-full.xml",
+                           ExtraArgs={"ContentType": "application/xml"})
+        client.upload_file(gz_path, settings.R2_BUCKET, f"{_EPG_PREFIX}epg-full.xml.gz",
+                           ExtraArgs={"ContentType": "application/gzip"})
+
+    await asyncio.to_thread(_upload)
+    raw_size, gz_size = os.path.getsize(xml_path), os.path.getsize(gz_path)
+    os.remove(xml_path)
+    os.remove(gz_path)
+    logger.info("Exported FULL EPG (%d channels, %d programmes, %d MB → %d MB gz) to R2 %s",
+                len(chans), nprog, raw_size // 1048576, gz_size // 1048576, settings.R2_BUCKET)
+    base = (settings.R2_PUBLIC_BASE or "").rstrip("/")
+    keys = [f"{_EPG_PREFIX}epg-full.xml", f"{_EPG_PREFIX}epg-full.xml.gz"]
+    return {"bucket": settings.R2_BUCKET, "channels": len(chans), "programmes": nprog,
+            "raw_bytes": raw_size, "gz_bytes": gz_size, "keys": keys,
+            "urls": [f"{base}/{k}" for k in keys] if base else []}
+
+
 async def r2_export_loop() -> None:
-    """Background task: back the premium playlists up to R2 once a day.
+    """Background task: back the premium playlists + EPG up to R2 once a day.
 
     A no-op while R2 is unconfigured, so it's safe to always start. Never lets a
     transient upload error kill the loop.
@@ -173,8 +353,10 @@ async def r2_export_loop() -> None:
         try:
             if r2_configured():
                 await export_premium_to_r2()
+                await export_epg_to_r2()
+                await export_full_epg_to_r2()
         except asyncio.CancelledError:
             break
         except Exception as e:  # transient R2/network error — retry next cycle
-            logger.error("R2 premium export failed: %s", e)
+            logger.error("R2 export failed: %s", e)
         await asyncio.sleep(_EXPORT_INTERVAL)

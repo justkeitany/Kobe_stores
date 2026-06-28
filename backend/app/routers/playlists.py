@@ -300,10 +300,18 @@ async def _refresh_meta(p: Playlist, db: AsyncSession) -> None:
 
     p.channel_count = len(channels)
     p.logos = _sample_logos(channels)
-    p.channels = [
-        {"name": c["name"], "logo": c.get("logo") or "", "url": c["url"], "category": c.get("category") or ""}
-        for c in channels
-    ]
+    # Preserve EPG tags (set by /api/epg/automap-playlists) across a refresh —
+    # they're keyed to the channel URL, so a re-fetch doesn't wipe the guide.
+    prev_epg = {c.get("url"): c.get("epg") for c in (p.channels or []) if c.get("epg")}
+    rebuilt = []
+    for c in channels:
+        row = {"name": c["name"], "logo": c.get("logo") or "", "url": c["url"],
+               "category": c.get("category") or ""}
+        eid = prev_epg.get(c["url"])
+        if eid:
+            row["epg"] = eid
+        rebuilt.append(row)
+    p.channels = rebuilt
 
     if not channels:
         p.health = "no channels"

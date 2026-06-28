@@ -58,8 +58,9 @@ async def lifespan(app: FastAPI):
     from app.routers.channels import channels_diag_loop
     diag_task = asyncio.create_task(channels_diag_loop())
 
-    from app.routers.epg import epg_loop
+    from app.routers.epg import epg_loop, epg_match_loop
     epg_task = asyncio.create_task(epg_loop())
+    epg_match_task = asyncio.create_task(epg_match_loop())
 
     from app.r2_export import r2_export_loop
     r2_task = asyncio.create_task(r2_export_loop())

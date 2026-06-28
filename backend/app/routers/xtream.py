@@ -440,7 +440,7 @@ async def get_playlist(
             # imported streams: ABR, 2s segments, input resilience).
             final_url = f"{base_url}/live/pl/{username}/{password}?url={quote(c['url'], safe='')}"
             lines.append(
-                f'#EXTINF:-1 tvg-id="" '
+                f'#EXTINF:-1 tvg-id="{c.get("epg") or ""}" '
                 f'tvg-name="{safe_name}" '
                 f'tvg-logo="{safe_logo}" '
                 f'group-title="{cat}",{safe_name}'
@@ -975,25 +975,59 @@ async def xmltv(
         streams_res = await db.execute(q)
         streams = streams_res.scalars().all()
 
-        # Only emit programmes for channels this user can actually see.
+        # Only emit programmes for channels this user can actually see. Filter by
+        # the site's channel ids IN THE QUERY — there are ~8k channels / ~1M rows
+        # in epg_data (the full background catalogue), so a global limit ordered by
+        # channel_id would never reach most site channels and they'd show no EPG.
         allowed_channel_ids = {s.epg_channel_id for s in streams if s.epg_channel_id}
 
+        # Playlist channels are served to every user by get.php and carry an `epg`
+        # id (tagged by /api/epg/automap-playlists). Include them so those 12k+
+        # channels also get a guide in IPTV players.
+        from app.models import Playlist
+        pl_rows = (await db.execute(
+            select(Playlist).where(Playlist.channels.isnot(None))
+        )).scalars().all()
+        pl_channels: dict[str, str] = {}  # epg id -> display name (first seen)
+        for pl in pl_rows:
+            for c in (pl.channels or []):
+                eid = c.get("epg")
+                if eid and eid not in allowed_channel_ids:
+                    pl_channels.setdefault(eid, c.get("name") or eid)
+        allowed_channel_ids |= set(pl_channels)
+
         now = datetime.now(timezone.utc)
-        epg_res = await db.execute(
-            select(EpgData)
-            .where(EpgData.end_time >= now)
-            .order_by(EpgData.channel_id, EpgData.start_time)
-            .limit(50000)
-        )
-        programmes = [p for p in epg_res.scalars().all() if p.channel_id in allowed_channel_ids]
+        programmes = []
+        if allowed_channel_ids:
+            epg_res = await db.execute(
+                select(EpgData)
+                .where(
+                    EpgData.channel_id.in_(allowed_channel_ids),
+                    EpgData.end_time >= now,
+                )
+                .order_by(EpgData.channel_id, EpgData.start_time)
+                .limit(200000)
+            )
+            programmes = epg_res.scalars().all()
 
     lines = ['<?xml version="1.0" encoding="UTF-8"?>', '<!DOCTYPE tv SYSTEM "xmltv.dtd">', '<tv>']
 
+    emitted_channels: set[str] = set()
     for s in streams:
-        lines.append(f'  <channel id="{s.epg_channel_id}">')
+        if not s.epg_channel_id or s.epg_channel_id in emitted_channels:
+            continue
+        emitted_channels.add(s.epg_channel_id)
+        lines.append(f'  <channel id="{_xml_escape(s.epg_channel_id)}">')
         lines.append(f'    <display-name>{_xml_escape(s.name)}</display-name>')
         if s.logo_url:
             lines.append(f'    <icon src="{s.logo_url}" />')
+        lines.append("  </channel>")
+    for eid, dname in pl_channels.items():
+        if eid in emitted_channels:
+            continue
+        emitted_channels.add(eid)
+        lines.append(f'  <channel id="{_xml_escape(eid)}">')
+        lines.append(f'    <display-name>{_xml_escape(dname)}</display-name>')
         lines.append("  </channel>")
 
     for p in programmes:

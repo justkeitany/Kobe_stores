@@ -57,6 +57,16 @@ async def fetch_and_parse_epg(source_id: int, url: str):
         root = etree.fromstring(content)
         programmes = root.findall("programme")
 
+        # Channel display-names (e.g. <channel id="Bounce.TV.us2"><display-name>
+        # Bounce TV</display-name>) — stored per row so the guide can show a clean
+        # name and so auto-mapping can match on the readable name, not the dotted id.
+        chan_names: dict[str, str] = {}
+        for ch in root.findall("channel"):
+            cid = ch.get("id", "")
+            dn = ch.find("display-name")
+            if cid and dn is not None and dn.text:
+                chan_names.setdefault(cid, dn.text.strip())
+
         async with AsyncSessionLocal() as db:
             # Clear old data for this source
             await db.execute(delete(EpgData).where(EpgData.source_id == source_id))
@@ -91,6 +101,7 @@ async def fetch_and_parse_epg(source_id: int, url: str):
 
                     batch.append(EpgData(
                         channel_id=channel,
+                        channel_name=chan_names.get(channel),
                         title=title_el.text if title_el is not None else "Unknown",
                         description=desc_el.text if desc_el is not None else None,
                         start_time=parse_xmltv_time(start_str),
@@ -156,6 +167,29 @@ async def epg_loop() -> None:
         except Exception as e:  # never let the loop die on a transient error
             logger.error("EPG refresh loop failed: %s", e)
         await asyncio.sleep(TICK)
+
+
+async def epg_match_loop() -> None:
+    """Re-apply EPG channel mappings periodically.
+
+    Stream auto-map + playlist-channel tagging are normally one-shot, but a
+    playlist refresh rewrites its cached channels (dropping the `epg` tags) and
+    new channels appear over time. Re-running daily keeps every channel's guide
+    self-healing without manual intervention. First run shortly after startup.
+    """
+    await asyncio.sleep(300)
+    while True:
+        try:
+            async with AsyncSessionLocal() as db:
+                r = await automap(only_unmapped=True, dry_run=False, db=db, _=None)
+                pr = await automap_playlists(db=db, _=None)
+                logger.info("EPG re-match: streams +%d, playlist channels %d/%d tagged",
+                            r.matched, pr["matched"], pr["playlist_channels"])
+        except asyncio.CancelledError:
+            break
+        except Exception as e:
+            logger.error("EPG match loop failed: %s", e)
+        await asyncio.sleep(24 * 3600)
 
 
 @router.get("/sources")
@@ -250,7 +284,11 @@ async def map_stream_to_epg(
 # — a display name plus a country suffix, with many near-duplicate variants
 # (HD, +1, casing, spacing). We normalise both sides to a comparable key.
 
-_COUNTRY_SUFFIX = re.compile(r"\.[a-z]{2,3}$")
+_COUNTRY_SUFFIX = re.compile(r"\.[a-z]{2,3}\d*$")  # ".uk", ".us2", ".ca2"
+# Country tokens that appear as PREFIXES on our stream names ("US AMC",
+# "CA: Animal Planet") but as a suffix on feed ids — stripped so they don't block
+# a match. Kept short to avoid eating real words.
+_COUNTRY_PREFIX = re.compile(r"^(us|usa|uk|gb|ca|can)\b")
 # Quality / provider noise that shouldn't affect channel identity. NOTE we
 # deliberately strip "east/eastern" (the default schedule most US streams want,
 # and how .ca feeds label the ET feed) and "feed", but NOT pacific/west/central/
@@ -259,7 +297,7 @@ _COUNTRY_SUFFIX = re.compile(r"\.[a-z]{2,3}$")
 # likewise kept as a token so base channels never match their +1 variant.
 _NOISE = re.compile(
     r"\b("
-    r"hd|sd|fhd|uhd|4k|"
+    r"hd|sd|fhd|uhd|4k|\d+p|"
     r"east|eastern|feed|"
     r"pluto\s*tv|pluto|samsung\s*tv\s*plus|samsung|plex|roku|tubi|stirr|xumo|"
     r"channel|network|tv"
@@ -270,7 +308,9 @@ _NOISE = re.compile(
 def _norm(name: str, drop_noise: bool) -> str:
     """Normalise a channel name/id to a comparison key."""
     s = name.lower()
-    s = _COUNTRY_SUFFIX.sub("", s)          # drop ".uk" / ".ca" / ".us" suffix
+    s = _COUNTRY_SUFFIX.sub("", s)          # drop ".uk" / ".ca" / ".us2" suffix
+    s = s.replace(":", " ")                  # "ca: animal planet" → "ca  animal planet"
+    s = _COUNTRY_PREFIX.sub("", s).strip()   # drop leading "us"/"ca" country prefix
     s = s.replace("&", " and ")
     s = re.sub(r"\+\s*1", " plus1 ", s)      # timeshift kept as a token in BOTH forms
     if drop_noise:
@@ -320,9 +360,21 @@ async def automap(
         if cur is None or counts.get(cid, 0) > counts.get(cur, 0):
             index[key] = cid
 
+    # Readable display-name per feed channel_id (populated on ingest). Indexing
+    # these as well as the dotted ids makes "US AMC" → "AMC.HD.us2" match via the
+    # clean name "AMC HD".
+    names = dict((await db.execute(
+        select(EpgData.channel_id, EpgData.channel_name)
+        .where(EpgData.channel_name.isnot(None)).distinct()
+    )).all())
+
     for cid in counts:
         _offer(full_index, _norm(cid, drop_noise=False), cid)
         _offer(core_index, _norm(cid, drop_noise=True), cid)
+        nm = names.get(cid)
+        if nm:
+            _offer(full_index, _norm(nm, drop_noise=False), cid)
+            _offer(core_index, _norm(nm, drop_noise=True), cid)
 
     full_keys = list(full_index.keys())
 
@@ -382,6 +434,137 @@ async def automap(
         samples=samples,
         unmatched=unmatched[:200],
     )
+
+
+async def _build_match_index(db: AsyncSession) -> tuple[dict, dict]:
+    """Normalised name → epg channel_id indexes (full + noise-stripped), preferring
+    the id with the most programmes. Shared by stream automap and playlist tagging."""
+    counts = dict((await db.execute(
+        select(EpgData.channel_id, func.count()).group_by(EpgData.channel_id)
+    )).all())
+    names = dict((await db.execute(
+        select(EpgData.channel_id, EpgData.channel_name)
+        .where(EpgData.channel_name.isnot(None)).distinct()
+    )).all())
+    full_index: dict[str, str] = {}
+    core_index: dict[str, str] = {}
+
+    def offer(idx: dict, key: str, cid: str):
+        if not key:
+            return
+        cur = idx.get(key)
+        if cur is None or counts.get(cid, 0) > counts.get(cur, 0):
+            idx[key] = cid
+
+    for cid in counts:
+        offer(full_index, _norm(cid, False), cid)
+        offer(core_index, _norm(cid, True), cid)
+        nm = names.get(cid)
+        if nm:
+            offer(full_index, _norm(nm, False), cid)
+            offer(core_index, _norm(nm, True), cid)
+    return full_index, core_index
+
+
+def _match_name(name: str, full_index: dict, core_index: dict) -> Optional[str]:
+    """Exact/core normalised match (no fuzzy — fast for 10k+ channels)."""
+    nf = _norm(name, False)
+    if nf in full_index:
+        return full_index[nf]
+    return core_index.get(_norm(name, True))
+
+
+@router.post("/automap-playlists")
+async def automap_playlists(db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)):
+    """Tag every PLAYLIST channel (cached, not imported as a stream) with an `epg`
+    id by name-matching to the ingested EPG. These channels are served to players
+    directly by get.php, so this is what gives the 12k+ playlist channels a guide.
+    Stores the id in the cached channel JSON; emitted as tvg-id by get.php/xmltv."""
+    from sqlalchemy.orm.attributes import flag_modified
+    from app.models import Playlist
+
+    full_index, core_index = await _build_match_index(db)
+    playlists = (await db.execute(select(Playlist))).scalars().all()
+    total = matched = 0
+    for pl in playlists:
+        chs = pl.channels or []
+        changed = False
+        for c in chs:
+            total += 1
+            cid = _match_name(c.get("name", ""), full_index, core_index)
+            if cid:
+                matched += 1
+                if c.get("epg") != cid:
+                    c["epg"] = cid
+                    changed = True
+        if changed:
+            flag_modified(pl, "channels")
+    await db.commit()
+    return {"playlist_channels": total, "matched": matched,
+            "coverage_pct": round(100 * matched / total, 1) if total else 0}
+
+
+@router.get("/guide")
+async def guide(
+    category_id: Optional[int] = None,
+    hours: int = 4,
+    start: Optional[int] = None,
+    limit: int = 150,
+    db: AsyncSession = Depends(get_db),
+    _=Depends(get_current_admin),
+):
+    """Grid-style guide: channels (streams with EPG) + their programmes within a
+    time window. Powers the TV-guide page. `start` is a unix timestamp (defaults
+    to the current half-hour); `hours` is the window width."""
+    now = datetime.now(timezone.utc)
+    if start:
+        win_start = datetime.fromtimestamp(start, tz=timezone.utc)
+    else:
+        win_start = now.replace(minute=0 if now.minute < 30 else 30, second=0, microsecond=0)
+    win_end = win_start + timedelta(hours=max(1, min(12, hours)))
+
+    q = select(Stream).where(Stream.epg_channel_id.isnot(None), Stream.epg_channel_id != "")
+    if category_id:
+        q = q.where(Stream.category_id == category_id)
+    q = q.order_by(Stream.name).limit(max(1, min(400, limit)))
+    streams = (await db.execute(q)).scalars().all()
+    if not streams:
+        return {"start": win_start.isoformat(), "end": win_end.isoformat(),
+                "now": now.isoformat(), "channels": []}
+
+    cids = list({s.epg_channel_id for s in streams})
+    rows = (await db.execute(
+        select(EpgData).where(
+            EpgData.channel_id.in_(cids),
+            EpgData.end_time > win_start,
+            EpgData.start_time < win_end,
+        ).order_by(EpgData.start_time)
+    )).scalars().all()
+
+    by_cid: dict[str, list] = {}
+    for r in rows:
+        by_cid.setdefault(r.channel_id, []).append({
+            "title": r.title,
+            "start": r.start_time.isoformat(),
+            "stop": r.end_time.isoformat(),
+            "desc": r.description,
+            "category": r.category,
+        })
+
+    channels = []
+    for s in streams:
+        progs = by_cid.get(s.epg_channel_id)
+        if not progs:
+            continue  # nothing airing in this window → omit the row
+        channels.append({
+            "id": s.id,
+            "name": s.name,
+            "logo": s.logo_url or "",
+            "epg_channel_id": s.epg_channel_id,
+            "programmes": progs,
+        })
+    return {"start": win_start.isoformat(), "end": win_end.isoformat(),
+            "now": now.isoformat(), "channels": channels}
 
 
 @router.get("/now/{channel_id}")

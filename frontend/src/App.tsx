@@ -17,7 +17,7 @@ import PremiumChannels from "./pages/PremiumChannels";
 import Watch from "./pages/Watch";
 import Categories from "./pages/Categories";
 import Bouquets from "./pages/Bouquets";
-import EPG from "./pages/EPG";
+import EPGGuide from "./pages/EPGGuide";
 import ServerPage from "./pages/ServerPage";
 import SettingsPage from "./pages/SettingsPage";
 
@@ -70,7 +70,7 @@ export default function App() {
             <Route path="watch" element={<Watch />} />
             <Route path="categories" element={<Categories />} />
             <Route path="bouquets" element={<Bouquets />} />
-            <Route path="epg" element={<EPG />} />
+            <Route path="guide" element={<EPGGuide />} />
             <Route path="server" element={<ServerPage />} />
             <Route path="settings" element={<SettingsPage />} />
           </Route>
