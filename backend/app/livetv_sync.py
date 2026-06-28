@@ -11,8 +11,10 @@ Tokens expire in 3h; this module runs:
 """
 import asyncio
 import logging
+import os
 import re
 from datetime import datetime, timezone
+from urllib.parse import urlparse
 
 import httpx
 from sqlalchemy import select, func, delete
@@ -82,6 +84,81 @@ def _country_of(ch: dict) -> str:
     return _infer_country(ch.get("channel_name", ""))
 
 
+# Locally-hosted, extracted channel logos (provider images are 401/missing for a
+# browser <img>, so we mirror them under /var/iptv/logos and serve at /logos/).
+_LOGO_DIR = os.environ.get("IPTV_LOGO_DIR", "/var/iptv/logos")
+
+
+def _local_logo(image_url: str) -> str:
+    """Map a provider image URL to a locally-hosted ``/logos/`` path when we have
+    the file on disk; '' otherwise (so cards show a clean placeholder, never a
+    broken image). The provider's own URLs return 401 to a browser."""
+    try:
+        parts = [x for x in urlparse(image_url).path.split("/") if x]
+    except Exception:
+        return ""
+    if len(parts) < 2:
+        return ""
+    country, fname = parts[-2], parts[-1]
+    base = fname.rsplit(".", 1)[0]
+    for ext in ("webp", "png", "jpg", "jpeg"):
+        if os.path.exists(os.path.join(_LOGO_DIR, country, f"{base}.{ext}")):
+            return f"/logos/{country}/{base}.{ext}"
+    return ""
+
+
+async def _ensure_logos(channels: list[dict]) -> int:
+    """Download any not-yet-cached channel logos into ``_LOGO_DIR`` so they can be
+    served locally. The provider lists images on cdnlivetv.tv (401 to a browser)
+    but serves them on api.cdnlivetv.tv; the listed extension is often wrong
+    (.webp vs .png), so we try a few. Skips files already on disk → cheap on
+    repeat syncs. Never raises (a logo failure must not break the catalog sync).
+    """
+    seen: set[tuple[str, str]] = set()
+    fetched = 0
+    sem = asyncio.Semaphore(12)
+    headers = {"Referer": "https://cdnlivetv.tv/", "User-Agent": _UA}
+
+    async def grab(client: httpx.AsyncClient, image_url: str):
+        nonlocal fetched
+        path = urlparse(image_url).path
+        parts = [x for x in path.split("/") if x]
+        if len(parts) < 2:
+            return
+        country, fname = parts[-2], parts[-1]
+        base = fname.rsplit(".", 1)[0]
+        if (country, base) in seen:
+            return
+        seen.add((country, base))
+        for e in ("webp", "png", "jpg", "jpeg"):
+            if os.path.exists(os.path.join(_LOGO_DIR, country, f"{base}.{e}")):
+                return
+        api_base = "https://api.cdnlivetv.tv" + path.rsplit(".", 1)[0]
+        ext0 = fname.rsplit(".", 1)[-1]
+        for e in [ext0] + [x for x in ("webp", "png", "jpg") if x != ext0]:
+            try:
+                async with sem:
+                    r = await client.get(f"{api_base}.{e}")
+                if r.status_code == 200 and len(r.content) > 100:
+                    dst = os.path.join(_LOGO_DIR, country, f"{base}.{e}")
+                    os.makedirs(os.path.dirname(dst), exist_ok=True)
+                    with open(dst, "wb") as f:
+                        f.write(r.content)
+                    fetched += 1
+                    return
+            except Exception:
+                pass
+
+    try:
+        async with httpx.AsyncClient(timeout=20.0, headers=headers, follow_redirects=True) as client:
+            await asyncio.gather(*[grab(client, ch.get("channel_image") or "") for ch in channels])
+        if fetched:
+            logger.info("cdnlive sync: extracted %d new logos", fetched)
+    except Exception as e:
+        logger.warning("cdnlive sync: logo extraction skipped: %s", e)
+    return fetched
+
+
 def _category_name(country: str) -> str:
     """Premium playlist + category name for a country's live-TV channels.
 
@@ -136,6 +213,10 @@ async def sync_cdnlive(db: AsyncSession) -> dict:
         })
     logger.info("cdnlive sync: fetched %d channels", len(channels))
 
+    # Extract logos to local disk first, so the snapshot below maps each channel
+    # to its locally-served /logos/ path (provider image URLs 401 in a browser).
+    await _ensure_logos(channels)
+
     # Ensure Premium bouquet
     bouquet = (await db.execute(
         select(Bouquet).where(func.lower(Bouquet.name) == _PREMIUM_BOUQUET)
@@ -167,7 +248,7 @@ async def sync_cdnlive(db: AsyncSession) -> dict:
             snapshot.append({
                 "id": "",
                 "name": cn,
-                "logo": ch.get("channel_image") or "",
+                "logo": _local_logo(ch.get("channel_image") or ""),
                 "url": url,
                 "category": name,
             })
