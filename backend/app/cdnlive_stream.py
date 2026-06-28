@@ -106,24 +106,26 @@ def _parse_player_html(html: str) -> str | None:
     return url
 
 
-async def resolve(player_url: str) -> str | None:
+async def resolve(player_url: str, force: bool = False) -> str | None:
     """Resolve a cdnlivetv player page URL to the playable .m3u8 stream URL.
 
     Returns the minted playlist URL (cached 2h) or None on any fetch/parse failure.
-    Non-cdnlive URLs return None immediately.
+    Non-cdnlive URLs return None immediately. ``force=True`` skips the cache and
+    re-mints (used when a cached token has expired mid-watch).
     """
     if not is_cdnlive_url(player_url):
         return None
 
     from app.redis_client import get_redis
 
-    try:
-        r = await get_redis()
-        cached = await r.get(_cache_key(player_url))
-        if cached:
-            return cached
-    except Exception as e:
-        logger.warning("cdnlive resolve: redis check failed: %s", e)
+    if not force:
+        try:
+            r = await get_redis()
+            cached = await r.get(_cache_key(player_url))
+            if cached:
+                return cached
+        except Exception as e:
+            logger.warning("cdnlive resolve: redis check failed: %s", e)
 
     # Fetch the player page
     try:
@@ -158,3 +160,52 @@ async def resolve(player_url: str) -> str | None:
 
     logger.info("cdnlive resolve: minted %s", stream_url[:80])
     return stream_url
+
+
+async def _fetch_and_rewrite(playlist_url: str) -> str | None:
+    """Fetch the provider media playlist and rewrite its segment URIs to ABSOLUTE
+    provider-CDN URLs. Returns None on a non-200 (e.g. expired token → caller
+    re-mints and retries)."""
+    base = playlist_url.split("/secure/", 1)[0]  # https://cdnlivetv.tv
+    try:
+        async with httpx.AsyncClient(timeout=15.0, follow_redirects=True) as client:
+            resp = await client.get(playlist_url, headers={
+                "Referer": "https://cdnlivetv.tv/", "User-Agent": _BROWSER_UA,
+            })
+    except Exception as e:
+        logger.warning("cdnlive proxy: playlist fetch failed: %s", e)
+        return None
+    if resp.status_code != 200:
+        logger.warning("cdnlive proxy: playlist HTTP %s", resp.status_code)
+        return None
+
+    out = []
+    for line in resp.text.splitlines():
+        if line and not line.startswith("#"):
+            if line.startswith("http"):
+                out.append(line)
+            elif line.startswith("/"):
+                out.append(base + line)
+            else:
+                out.append(base + "/" + line)
+        else:
+            out.append(line)
+    return "\n".join(out) + "\n"
+
+
+async def proxy_playlist(player_url: str) -> str | None:
+    """Direct-CDN delivery: return a media playlist whose segment URIs point
+    straight at the provider's CORS-open CDN, so the viewer's player loads
+    segments directly (no FFmpeg relay, no single-VPS bottleneck). We only proxy
+    the small playlist text + refresh the token on expiry. None on failure.
+    """
+    resolved = await resolve(player_url)
+    if not resolved:
+        return None
+    body = await _fetch_and_rewrite(resolved)
+    if body is None:
+        # Cached token likely expired mid-watch — force a re-mint and retry once.
+        resolved = await resolve(player_url, force=True)
+        if resolved:
+            body = await _fetch_and_rewrite(resolved)
+    return body

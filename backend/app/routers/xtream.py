@@ -27,6 +27,7 @@ from app.sources import source_refs, source_urls, pick_source_for_user
 from app.redis_client import get_redis
 from app.viewers import track_viewer, untrack_viewer
 from app.stream_token import verify_stream_token
+from app.cdnlive_stream import is_cdnlive_url, proxy_playlist as cdnlive_proxy_playlist
 from urllib.parse import quote, urlparse
 
 router = APIRouter(tags=["xtream"])
@@ -779,6 +780,24 @@ async def _serve_imported(
     # HLS polls re-trigger this every request; the .ts wrapper refreshes it while
     # streaming and clears it on disconnect.
     await track_viewer(username, client_key, stream_id)
+
+    # cdnlive (cdnlivetv.tv / ntv) channels: deliver direct from the provider's
+    # CORS-open CDN instead of relaying through FFmpeg. We hand the player a media
+    # playlist whose segment URIs are absolute provider URLs, so the browser pulls
+    # segments straight from the distributed CDN — no single-VPS uplink bottleneck,
+    # no transcode, no buffering. We only proxy the tiny playlist + refresh tokens.
+    # The player re-requests this .m3u8 every few seconds (live), heartbeating above.
+    if is_cdnlive_url(primary_url):
+        if ext == "ts":
+            return RedirectResponse(url=self_m3u8, status_code=302)
+        body = await cdnlive_proxy_playlist(primary_url)
+        if not body:
+            raise HTTPException(503, "Channel temporarily unavailable")
+        return Response(
+            content=body,
+            media_type="application/vnd.apple.mpegurl",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
 
     # .ts output: serve one continuous MPEG-TS stream (one FFmpeg per viewer).
     # Players buffer a progressive TS feed more smoothly than HLS on weak links.
