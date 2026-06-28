@@ -379,3 +379,31 @@ async def premium_export_run(_=Depends(get_current_admin)):
     except Exception as e:
         logger.error("Manual R2 export failed: %s", e)
         raise HTTPException(502, f"Export failed: {e}")
+
+
+@router.post("/livetv-sync")
+async def premium_livetv_sync(
+    db: AsyncSession = Depends(get_db), _=Depends(get_current_admin)
+):
+    """Sync cdnlive (ntv.cx) live TV channels into Premium country categories.
+
+    Imports ~450 channels across 42 country groups. Returns import stats and
+    restarts any running streams whose metadata changed.
+    """
+    from app.livetv_sync import sync_cdnlive
+    from app.ffmpeg_manager import ffmpeg_manager
+    import asyncio
+
+    result = await sync_cdnlive(db)
+    if result.get("error"):
+        raise HTTPException(502, result["error"])
+
+    # Restart changed streams
+    changed_ids = result.get("changed_stream_ids", [])
+    if changed_ids:
+        for sid in changed_ids:
+            await ffmpeg_manager.restart_stream(sid)
+            await asyncio.sleep(0.5)
+
+    return result
+

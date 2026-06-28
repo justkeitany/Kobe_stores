@@ -188,12 +188,20 @@ async def resolve_input(url: str, stream_id: Optional[int] = None,
                         proxy_country: Optional[str] = None) -> str:
     """Return the URL FFmpeg should open as its input.
 
-    Applies Pluto rewriting always. For a proxy_country stream NOT in 403
-    fallback, fetches the playlist through the country proxy and returns the
+    Applies Pluto rewriting always. For cdnlive (ntv.cx) player pages, fetches
+    + parses the page to mint a fresh token. For a proxy_country stream NOT in
+    403 fallback, fetches the playlist through the country proxy and returns the
     resolved (post-redirect) URL, cached 30 min. Falls back to the plain URL on
     any error so a viewer is never left without a stream.
     """
     url = resolve_pluto_url(url)
+
+    # cdnlive resolution (ntv.cx backend) — mints a fresh playlist.m3u8?token=...
+    from app.cdnlive_stream import is_cdnlive_url, resolve as resolve_cdnlive
+    if is_cdnlive_url(url):
+        resolved = await resolve_cdnlive(url)
+        return resolved if resolved else url
+
     if not stream_id or not proxy_country:
         return url
 

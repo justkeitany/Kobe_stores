@@ -65,12 +65,16 @@ async def lifespan(app: FastAPI):
     from app.r2_export import r2_export_loop
     r2_task = asyncio.create_task(r2_export_loop())
 
+    from app.livetv_sync import livetv_sync_loop
+    livetv_task = asyncio.create_task(livetv_sync_loop())
+
     yield
     # Shutdown
     logger.info("Shutting down...")
     health_task.cancel()
     playlist_task.cancel()
-    for t in ("ai_task", "ai_monitor_task", "epg_task", "diag_task", "r2_task"):
+    livetv_task.cancel()
+    for t in ("ai_task", "ai_monitor_task", "epg_task", "diag_task", "r2_task", "epg_match_task"):
         task = locals().get(t)
         if task is not None:
             task.cancel()

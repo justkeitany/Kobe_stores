@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel add frontend/src/pages/Watch.tsx frontend/src/pages/Channels.tsx frontend/src/App.tsx frontend/src/components/Player.tsx)",
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel commit -m \"feat: full-page Watch player with progress bar, speed, quality, YouTube-style controls\")",
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel add frontend/src/pages/Watch.tsx)",
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel commit -m \"fix: TS event type for seek handler\")",
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel commit -m \"fix: TS error — use Record type for error msgs\")",
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel add frontend/src/pages/Channels.tsx)",
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel commit -m \"fix: Watch uses /live/ endpoint so FFmpeg starts before playback\")",
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel commit -m \"fix: video fills entire screen with object-contain aspect ratio\")",
+      "Bash(git -C /Users/keitany/Documents/stream/iptv-panel commit -m \"fix: video absolute positioning to fill screen at any quality\")",
+      "Bash(python3 -c \"import ast; ast.parse\\(open\\('/Users/keitany/Documents/stream/iptv-panel/backend/app/routers/player_token.py'\\).read\\(\\)\\); ast.parse\\(open\\('/Users/keitany/Documents/stream/iptv-panel/backend/app/main.py'\\).read\\(\\)\\); print\\('OK'\\)\")",
+      "Bash(ping -c 15 172.235.138.237)",
+      "Bash(traceroute -w 2 -q 1 -m 20 172.235.138.237)",
+      "Bash(curl -s \"https://ipinfo.io/172.235.138.237\")",
+      "Bash(curl -so /dev/null -w \"connect=%{time_connect}s ttfb=%{time_starttotal:-%{time_starttransfer}}s total=%{time_total}s size=%{size_download}B speed=%{speed_download}B/s\\\\n\" https://172.235.138.237:443/ -k)",
+      "Bash(curl -s --max-time 25 'http://lb58.1xtr.icu:25461/player_api.php?username=hadjimaka69%40yahoo.com&password=zHg11Zjg2C')",
+      "Bash(grep -c '\\\\.m3u8$' new.m3u)",
+      "Bash(echo \"url lines \\(.m3u8\\): $\\(grep -c '\\\\.m3u8$' new.m3u\\)\")",
+      "Bash(wc -c)",
+      "Bash(echo \"exit=$? size=$\\(wc -c <iptv_channels.json 2>/dev/null\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(echo \"exit=$? size=$\\(wc -c <iptv_logos.json \\)\")",
+      "Bash(echo \"EXTINF lines: $\\(grep -c '^#EXTINF:' new.m3u\\) | url lines: $\\(grep -c '\\\\.m3u8$' new.m3u\\) | leaked names: $\\(grep -c 'tvg-name=\\\\\"#EXTINF' new.m3u\\)\")",
+      "Bash(python3 /tmp/match_logos.py)",
+      "Bash(python3)"
+    ]
+  }
+}
