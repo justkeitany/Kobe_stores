@@ -25,8 +25,12 @@ from app.redis_client import get_redis
 
 logger = logging.getLogger(__name__)
 
-_CHANNELS_API = "https://ntv.cx/api/get-channels"
-_REFERER = "https://ntv.cx/"
+# Direct cdnlivetv.tv catalog (the source of truth: 515 channels / 35 countries,
+# incl. South Africa). The ntv.cx mirror only carried a 450-channel subset and
+# tagged the rest as unplayable 'dlhd'. user=cdnlivetv mints the same HLS the
+# resolver already handles.
+_CHANNELS_API = "https://api.cdnlivetv.tv/api/v1/channels/?user=cdnlivetv&plan=free"
+_REFERER = "https://cdnlivetv.tv/"
 _UA = "Mozilla/5.0 AppleWebKit/537.36 Chrome/124.0.0.0 Safari/537.36"
 _PREMIUM_BOUQUET = "premium"
 _TOKEN_EXPIRY_BUFFER = 1800  # 30 min in seconds
@@ -41,7 +45,7 @@ CODE2NAME = {
     "in": "India", "it": "Italy", "mx": "Mexico", "nl": "Netherlands",
     "nz": "New Zealand", "pl": "Poland", "pt": "Portugal", "ro": "Romania",
     "rs": "Serbia", "ru": "Russia", "sa": "Saudi Arabia", "se": "Sweden",
-    "tr": "Turkey", "us": "United States", "uy": "Uruguay",
+    "tr": "Turkey", "us": "United States", "uy": "Uruguay", "za": "South Africa",
 }
 
 # Keyword → country (for empty-code channels with country in the name)
@@ -106,20 +110,31 @@ async def sync_cdnlive(db: AsyncSession) -> dict:
     """
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
-            resp = await client.get(_CHANNELS_API, headers={"Referer": _REFERER, "User-Agent": _UA})
+            resp = await client.get(_CHANNELS_API, headers={
+                "Referer": _REFERER, "Origin": "https://cdnlivetv.tv", "User-Agent": _UA,
+            })
         if resp.status_code != 200:
-            logger.error("cdnlive sync: get-channels HTTP %s", resp.status_code)
+            logger.error("cdnlive sync: channels API HTTP %s", resp.status_code)
             return {"error": f"HTTP {resp.status_code}"}
         data = resp.json()
     except Exception as e:
         logger.error("cdnlive sync: fetch failed: %s", e)
         return {"error": str(e)}
 
-    channels = [
-        ch for ch in data.get("channels", [])
-        if ch.get("server") == "cdnlive" and ch.get("channel_url")
-    ]
-    logger.info("cdnlive sync: fetched %d cdnlive channels", len(channels))
+    # Normalise to the field names the rest of this module uses. The direct API
+    # returns {name, code, url, image}; the old ntv.cx mirror used channel_*.
+    channels = []
+    for ch in data.get("channels", []):
+        url = ch.get("url") or ch.get("channel_url")
+        if not url:
+            continue
+        channels.append({
+            "channel_name": ch.get("name") or ch.get("channel_name") or "",
+            "channel_code": ch.get("code") or ch.get("channel_code") or "",
+            "channel_url": url,
+            "channel_image": ch.get("image") or ch.get("channel_image") or "",
+        })
+    logger.info("cdnlive sync: fetched %d channels", len(channels))
 
     # Ensure Premium bouquet
     bouquet = (await db.execute(
