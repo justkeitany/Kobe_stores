@@ -701,7 +701,7 @@ async def serve_playlist_restream_file(
 @router.get("/live/{username}/{password}/{stream_file}")
 async def serve_live(
     username: str, password: str, stream_file: str, request: Request,
-    v: Optional[int] = Query(None),
+    v: Optional[int] = Query(None), remux: int = Query(0),
 ):
     user_data = await _check_credentials(username, password)
     if not user_data:
@@ -715,16 +715,18 @@ async def serve_live(
         raise HTTPException(400, "Invalid stream ID")
     ext = stream_file.rsplit(".", 1)[-1].lower() if "." in stream_file else ""
 
+    qs = "?remux=1" if remux else ""
     return await _serve_imported(
         stream_id, ext, request, v, username, user_data,
-        variant_name=str(stream_id),
-        self_m3u8=f"/live/{username}/{password}/{stream_id}.m3u8",
+        variant_name=str(stream_id), remux=bool(remux),
+        self_m3u8=f"/live/{username}/{password}/{stream_id}.m3u8{qs}",
     )
 
 
 async def _serve_imported(
     stream_id: int, ext: str, request: Request, v: Optional[int],
     username: str, user_data: dict, *, variant_name: str, self_m3u8: str,
+    remux: bool = False,
 ):
     """Deliver an imported (DB-backed) stream.
 
@@ -787,7 +789,11 @@ async def _serve_imported(
     # segments straight from the distributed CDN — no single-VPS uplink bottleneck,
     # no transcode, no buffering. We only proxy the tiny playlist + refresh tokens.
     # The player re-requests this .m3u8 every few seconds (live), heartbeating above.
-    if is_cdnlive_url(primary_url):
+    # ?remux=1 opts out (per-channel browser fallback): some providers' raw H.264
+    # segments lack inline SPS/PPS and won't decode in the browser ("Unsupported
+    # format"). The player retries with remux=1 → we fall through to the FFmpeg
+    # path below, which re-muxes to browser-clean HLS (copy, full quality).
+    if is_cdnlive_url(primary_url) and not remux:
         if ext == "ts":
             return RedirectResponse(url=self_m3u8, status_code=302)
         body = await cdnlive_proxy_playlist(primary_url)
@@ -944,6 +950,7 @@ async def _serve_upstream(url: str, ext: str, request: Request, self_m3u8: str):
 @router.get("/live/t/{token_file}")
 async def serve_token_live(
     token_file: str, request: Request, v: Optional[int] = Query(None),
+    remux: int = Query(0),
 ):
     """Play a stream from an encrypted, expiring token instead of credentials.
 
@@ -959,7 +966,7 @@ async def serve_token_live(
         raise HTTPException(401, "Invalid or expired link")
 
     ext = ext.lower()
-    self_m3u8 = f"/live/t/{token}.m3u8"
+    self_m3u8 = f"/live/t/{token}.m3u8" + ("?remux=1" if remux else "")
 
     if "sid" in data:
         # Token authorizes this specific stream, so use an admin-style context
@@ -967,7 +974,7 @@ async def serve_token_live(
         user_data = {"bouquet_id": None, "max_connections_int": 0}
         return await _serve_imported(
             int(data["sid"]), ext, request, v, "web", user_data,
-            variant_name=token, self_m3u8=self_m3u8,
+            variant_name=token, self_m3u8=self_m3u8, remux=bool(remux),
         )
     if "u" in data:
         return await _serve_upstream(data["u"], ext, request, self_m3u8)

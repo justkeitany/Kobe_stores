@@ -67,6 +67,7 @@ export default function WatchPage() {
       const hls = new Hls(makeHlsConfig());
       hlsRef.current = hls;
       let recoverAttempts = 0;
+      let remuxTried = false;
       hls.loadSource(hlsUrl);
       hls.attachMedia(video);
 
@@ -115,6 +116,19 @@ export default function WatchPage() {
 
       hls.on(Hls.Events.ERROR, (_ev, data) => {
         if (!data.fatal) return;
+        // cdnlive direct-CDN can hand the browser segments it can't decode
+        // (raw H.264 missing inline SPS/PPS → "Unsupported format"). Re-muxing
+        // can't be done client-side, so for a token stream we fall back ONCE to
+        // the server re-mux path (?remux=1) for this channel — full quality,
+        // browser-clean. Working channels never hit this and stay direct-CDN.
+        if (data.type === Hls.ErrorTypes.MEDIA_ERROR && token && !remuxTried) {
+          remuxTried = true;
+          recoverAttempts = 0;
+          setLoading(true);
+          hls.loadSource(`${window.location.origin}/live/t/${token}.m3u8?remux=1`);
+          hls.startLoad();
+          return;
+        }
         // Recover silently before surfacing an error — never die on a single
         // network/media blip. Re-buffer, don't stop. Give up only after budget.
         if (recoverAttempts < 6) {
