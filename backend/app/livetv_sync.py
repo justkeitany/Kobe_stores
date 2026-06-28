@@ -1,9 +1,11 @@
 """
 Live TV channel sync for Premium (cdnlivetv.tv / ntv.cx integration).
 
-Imports ~450 channels from ntv.cx (cdnlive backend) into country-based StreamCategory
-groups under the Premium bouquet. Tokens expire in 3h; this module runs:
-  - Full catalog sync: startup + every 6h (new channels, metadata updates)
+Builds per-country Premium *playlists* from the ntv.cx (cdnlive) catalog — staging
+playlists the admin picks channels from and imports (no streams are auto-created).
+Tokens expire in 3h; this module runs:
+  - Full catalog refresh: startup + every 6h (new channels, fresh logos) — rebuilds
+    the playlist snapshots only, never touches imported streams
   - Token refresh: every 90 min, restart running cdnlive streams with < 30 min left
     on their cached token → re-mint happens on restart, keeping viewers uninterrupted
 """
@@ -13,13 +15,11 @@ import re
 from datetime import datetime, timezone
 
 import httpx
-from sqlalchemy import select, func
+from sqlalchemy import select, func, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import AsyncSessionLocal
-from app.models import Bouquet, BouquetCategory, Stream, StreamCategory
-from app.category_sync import link_category_to_all_bouquets
-from app.routers.streams import _replace_sources
+from app.models import Bouquet, BouquetCategory, Playlist, Stream, StreamCategory
 from app.ffmpeg_manager import ffmpeg_manager
 from app.redis_client import get_redis
 
@@ -78,10 +78,31 @@ def _country_of(ch: dict) -> str:
     return _infer_country(ch.get("channel_name", ""))
 
 
-async def sync_cdnlive(db: AsyncSession) -> dict:
-    """Import/update cdnlive channels from ntv.cx into Premium country categories.
+def _category_name(country: str) -> str:
+    """Premium playlist + category name for a country's live-TV channels.
 
-    Returns {added, updated, unchanged, countries, changed_stream_ids}.
+    Suffixed with "Live TV" so it never collides with the user's own curated
+    premium playlists (e.g. "United States", "Canada").
+    """
+    return f"{country} Live TV"
+
+
+async def sync_cdnlive(db: AsyncSession) -> dict:
+    """Build per-country Premium *playlists* from the ntv.cx (cdnlive) catalog.
+
+    These are staging playlists — the admin opens one, picks the channels they
+    want, and imports them (the normal premium-playlist flow). We do NOT create
+    live Streams here; that's the user's choice via the import modal.
+
+    For each country we upsert:
+      - a Playlist row whose cached ``channels`` snapshot holds every channel
+        (name + logo + player URL), so its card shows logos and is browsable
+        instantly without re-fetching upstream.
+      - an (initially empty) StreamCategory of the same name linked to the
+        Premium bouquet, so the playlist qualifies as "premium" and its card
+        appears on the Premium → Playlists page.
+
+    Returns {playlists, channels, countries}.
     """
     try:
         async with httpx.AsyncClient(timeout=30.0) as client:
@@ -112,92 +133,132 @@ async def sync_cdnlive(db: AsyncSession) -> dict:
     # Group by country
     by_country: dict[str, list] = {}
     for ch in channels:
-        country = _country_of(ch)
-        by_country.setdefault(country, []).append(ch)
+        by_country.setdefault(_country_of(ch), []).append(ch)
 
-    added = updated = unchanged = 0
-    changed_stream_ids = []
+    now = datetime.now(timezone.utc)
+    playlists_upserted = 0
+    total_channels = 0
 
     for country, country_channels in by_country.items():
-        # Ensure category
+        name = _category_name(country)
+
+        # Build the cached channel snapshot (the import/modal row shape).
+        snapshot = []
+        for ch in country_channels:
+            cn = (ch.get("channel_name") or "").strip()
+            url = ch.get("channel_url")
+            if not cn or not url:
+                continue
+            snapshot.append({
+                "id": "",
+                "name": cn,
+                "logo": ch.get("channel_image") or "",
+                "url": url,
+                "category": name,
+            })
+        if not snapshot:
+            continue
+        total_channels += len(snapshot)
+        sample_logos = [c["logo"] for c in snapshot if c["logo"]][:6]
+        description = (
+            f"{country} live TV — {len(snapshot)} channels (cdnlive). "
+            "Open to pick the channels you want and import them."
+        )
+
+        # Upsert the Playlist (matched by name).
+        pl = (await db.execute(
+            select(Playlist).where(func.lower(Playlist.name) == name.lower())
+        )).scalars().first()
+        if not pl:
+            pl = Playlist(name=name, url=f"{_CHANNELS_API}#{country}")
+            db.add(pl)
+        pl.description = description
+        pl.channel_count = len(snapshot)
+        pl.logos = sample_logos
+        pl.channels = snapshot
+        pl.health = None
+        pl.last_refreshed = now
+        pl.last_error = None
+        playlists_upserted += 1
+
+        # Ensure a matching Premium category exists (empty until the user imports)
+        # so the playlist shows up on the Premium page.
         cat = (await db.execute(
-            select(StreamCategory).where(func.lower(StreamCategory.name) == country.lower())
+            select(StreamCategory).where(func.lower(StreamCategory.name) == name.lower())
         )).scalars().first()
         if not cat:
-            cat = StreamCategory(name=country, sort_order=0)
+            cat = StreamCategory(name=name, sort_order=0)
             db.add(cat)
             await db.flush()
-            # Link to Premium bouquet + all other bouquets so users see it
-            link_rec = (await db.execute(
-                select(BouquetCategory).where(
-                    BouquetCategory.bouquet_id == bouquet.id,
-                    BouquetCategory.category_id == cat.id,
-                )
-            )).scalars().first()
-            if not link_rec:
-                db.add(BouquetCategory(bouquet_id=bouquet.id, category_id=cat.id, sort_order=0))
-            await link_category_to_all_bouquets(db, cat.id, sort_order=0)
-
-        # Upsert channels
-        for ch in country_channels:
-            name = (ch.get("channel_name") or "").strip()
-            if not name:
-                continue
-            url = ch.get("channel_url")
-            logo = ch.get("channel_image") or ""
-
-            existing = (await db.execute(
-                select(Stream).where(Stream.stream_url == url)
-            )).scalars().first()
-
-            if existing:
-                changed = False
-                if existing.name != name:
-                    existing.name = name
-                    changed = True
-                if existing.logo_url != logo:
-                    existing.logo_url = logo
-                    changed = True
-                if existing.category_id != cat.id:
-                    existing.category_id = cat.id
-                    changed = True
-                if not existing.force_adaptive:
-                    existing.force_adaptive = True
-                    changed = True
-                if changed:
-                    updated += 1
-                    if existing.status == "running":
-                        changed_stream_ids.append(existing.id)
-                else:
-                    unchanged += 1
-            else:
-                stream = Stream(
-                    name=name,
-                    stream_url=url,
-                    logo_url=logo,
-                    category_id=cat.id,
-                    delivery_mode="restream",
-                    quality="auto",
-                    force_adaptive=True,
-                    is_enabled=True,
-                )
-                db.add(stream)
-                await db.flush()
-                await _replace_sources(db, stream, [url])
-                added += 1
+        link = (await db.execute(
+            select(BouquetCategory).where(
+                BouquetCategory.bouquet_id == bouquet.id,
+                BouquetCategory.category_id == cat.id,
+            )
+        )).scalars().first()
+        if not link:
+            db.add(BouquetCategory(bouquet_id=bouquet.id, category_id=cat.id, sort_order=0))
 
     await db.commit()
     logger.info(
-        "cdnlive sync: added=%d updated=%d unchanged=%d countries=%d changed_running=%d",
-        added, updated, unchanged, len(by_country), len(changed_stream_ids),
+        "cdnlive sync: playlists=%d channels=%d countries=%d",
+        playlists_upserted, total_channels, len(by_country),
     )
     return {
-        "added": added,
-        "updated": updated,
-        "unchanged": unchanged,
+        "playlists": playlists_upserted,
+        "channels": total_channels,
         "countries": len(by_country),
-        "changed_stream_ids": changed_stream_ids,
     }
+
+
+async def cleanup_legacy_cdnlive_streams(db: AsyncSession) -> dict:
+    """Undo the first (auto-import) sync: delete every cdnlive Stream it created.
+
+    Stops FFmpeg for each, deletes the Stream (its sources cascade), then drops
+    any country category that's left empty — except categories that back the
+    user's own premium playlists (United States, Canada, UK Radio), which are
+    preserved even when empty.
+
+    Returns {removed_streams, dropped_categories}.
+    """
+    _KEEP = {"united states", "canada", "uk radio"}
+
+    streams = (await db.execute(
+        select(Stream).where(Stream.stream_url.like("%cdnlivetv.tv%"))
+    )).scalars().all()
+
+    touched_cats = set()
+    removed = 0
+    for s in streams:
+        if s.category_id:
+            touched_cats.add(s.category_id)
+        try:
+            await ffmpeg_manager.stop_stream(s.id)
+        except Exception:
+            pass
+        await db.delete(s)
+        removed += 1
+    await db.flush()
+
+    dropped = 0
+    for cid in touched_cats:
+        cat = (await db.execute(
+            select(StreamCategory).where(StreamCategory.id == cid)
+        )).scalars().first()
+        if not cat or (cat.name or "").strip().lower() in _KEEP:
+            continue
+        remaining = (await db.execute(
+            select(func.count()).select_from(Stream).where(Stream.category_id == cid)
+        )).scalar()
+        if remaining:
+            continue
+        await db.execute(delete(BouquetCategory).where(BouquetCategory.category_id == cid))
+        await db.delete(cat)
+        dropped += 1
+
+    await db.commit()
+    logger.info("cdnlive cleanup: removed %d streams, dropped %d empty categories", removed, dropped)
+    return {"removed_streams": removed, "dropped_categories": dropped}
 
 
 async def _refresh_expiring_tokens():
@@ -264,16 +325,12 @@ async def livetv_sync_loop():
         try:
             now = datetime.now(timezone.utc)
 
-            # Full catalog sync
+            # Full catalog refresh — rebuilds the per-country playlist snapshots
+            # (new channels, fresh logos). Never touches imported streams.
             if (now - last_full_sync).total_seconds() >= full_sync_interval:
-                logger.info("cdnlive: starting full catalog sync")
+                logger.info("cdnlive: refreshing catalog playlists")
                 async with AsyncSessionLocal() as db:
-                    result = await sync_cdnlive(db)
-                # Restart changed streams
-                if result.get("changed_stream_ids"):
-                    for sid in result["changed_stream_ids"]:
-                        await ffmpeg_manager.restart_stream(sid)
-                        await asyncio.sleep(0.5)
+                    await sync_cdnlive(db)
                 last_full_sync = now
 
             # Token refresh
