@@ -24,6 +24,7 @@ from app.database import AsyncSessionLocal
 from app.models import Bouquet, BouquetCategory, Playlist, Stream, StreamCategory
 from app.ffmpeg_manager import ffmpeg_manager
 from app.redis_client import get_redis
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -87,12 +88,37 @@ def _country_of(ch: dict) -> str:
 # Locally-hosted, extracted channel logos (provider images are 401/missing for a
 # browser <img>, so we mirror them under /var/iptv/logos and serve at /logos/).
 _LOGO_DIR = os.environ.get("IPTV_LOGO_DIR", "/var/iptv/logos")
+_LOGO_CT = {"webp": "image/webp", "png": "image/png", "jpg": "image/jpeg", "jpeg": "image/jpeg"}
+
+
+def _upload_logo_r2(key: str, content: bytes, ext: str) -> None:
+    """Best-effort upload of a logo to R2 (so the public R2 URL resolves). No-op
+    if R2 isn't configured; never raises into the sync."""
+    if not (settings.R2_BUCKET and settings.R2_ACCESS_KEY_ID):
+        return
+    try:
+        from app.r2_export import _r2_client
+        _r2_client().put_object(
+            Bucket=settings.R2_BUCKET, Key=key, Body=content,
+            ContentType=_LOGO_CT.get(ext, "application/octet-stream"),
+            CacheControl="public, max-age=604800",
+        )
+    except Exception as e:
+        logger.debug("logo R2 upload failed for %s: %s", key, e)
+
+
+def _logo_base() -> str:
+    """Public base for serving logos: the R2 bucket's public domain when set
+    (offloads the VPS, absolute URL works in M3U/Xtream too), else the local
+    nginx /logos/ path."""
+    base = (settings.R2_PUBLIC_BASE or "").rstrip("/")
+    return f"{base}/logos" if base else "/logos"
 
 
 def _local_logo(image_url: str) -> str:
-    """Map a provider image URL to a locally-hosted ``/logos/`` path when we have
-    the file on disk; '' otherwise (so cards show a clean placeholder, never a
-    broken image). The provider's own URLs return 401 to a browser."""
+    """Map a provider image URL to our hosted logo URL (R2 if configured, else
+    local /logos/) when we have the file on disk; '' otherwise (clean placeholder,
+    never a broken image). The provider's own URLs return 401 to a browser."""
     try:
         parts = [x for x in urlparse(image_url).path.split("/") if x]
     except Exception:
@@ -103,7 +129,7 @@ def _local_logo(image_url: str) -> str:
     base = fname.rsplit(".", 1)[0]
     for ext in ("webp", "png", "jpg", "jpeg"):
         if os.path.exists(os.path.join(_LOGO_DIR, country, f"{base}.{ext}")):
-            return f"/logos/{country}/{base}.{ext}"
+            return f"{_logo_base()}/{country}/{base}.{ext}"
     return ""
 
 
@@ -144,6 +170,7 @@ async def _ensure_logos(channels: list[dict]) -> int:
                     os.makedirs(os.path.dirname(dst), exist_ok=True)
                     with open(dst, "wb") as f:
                         f.write(r.content)
+                    _upload_logo_r2(f"logos/{country}/{base}.{e}", r.content, e)
                     fetched += 1
                     return
             except Exception:
@@ -159,6 +186,69 @@ async def _ensure_logos(channels: list[dict]) -> int:
     return fetched
 
 
+_DEAD_HTTP = {403, 404, 410, 451, 500, 502, 503}
+
+
+async def _probe_alive(client: httpx.AsyncClient, player_url: str, force: bool = False) -> bool:
+    """True if a channel currently yields a live playlist; False on a confirmed
+    dead/blocked upstream. Transient errors (timeout/network) count as alive so a
+    blip never prunes a good channel."""
+    from app.cdnlive_stream import resolve
+    r = await resolve(player_url, force=force)
+    if not r:
+        return False
+    try:
+        resp = await client.get(r)
+    except Exception:
+        return True  # benefit of the doubt on a transient error
+    if resp.status_code == 200:
+        return any(l and not l.startswith("#") for l in resp.text.splitlines())
+    if resp.status_code in _DEAD_HTTP:
+        return False
+    return True
+
+
+async def _filter_alive(channels: list[dict]) -> list[dict]:
+    """Drop channels whose upstream is confirmed dead/blocked, so the catalog
+    shows mostly-working channels. Two-pass to avoid rate-limit false positives:
+    a gentle first pass flags suspects, then suspects are re-probed individually
+    (forcing a fresh mint) and only consistent failures are dropped. Recovered
+    channels reappear on the next 6h sync. Never raises."""
+    headers = {"Referer": "https://cdnlivetv.tv/", "User-Agent": _UA}
+    try:
+        # Pass 1 — gentle (concurrency 5).
+        sem = asyncio.Semaphore(5)
+        suspect: list[dict] = []
+        async with httpx.AsyncClient(timeout=15.0, headers=headers, follow_redirects=True) as client:
+            async def p1(ch):
+                async with sem:
+                    if not await _probe_alive(client, ch["channel_url"]):
+                        suspect.append(ch)
+            await asyncio.gather(*[p1(ch) for ch in channels])
+
+        if not suspect:
+            return channels
+
+        # Pass 2 — re-probe only suspects, slow (concurrency 2) + fresh mint.
+        sem2 = asyncio.Semaphore(2)
+        dead: set[str] = set()
+        async with httpx.AsyncClient(timeout=15.0, headers=headers, follow_redirects=True) as client:
+            async def p2(ch):
+                async with sem2:
+                    await asyncio.sleep(0.3)
+                    if not await _probe_alive(client, ch["channel_url"], force=True):
+                        dead.add(ch["channel_url"])
+            await asyncio.gather(*[p2(ch) for ch in suspect])
+
+        alive = [ch for ch in channels if ch["channel_url"] not in dead]
+        logger.info("cdnlive sync: health filter kept %d / %d (dropped %d dead)",
+                    len(alive), len(channels), len(channels) - len(alive))
+        return alive
+    except Exception as e:
+        logger.warning("cdnlive sync: health filter skipped: %s", e)
+        return channels
+
+
 def _category_name(country: str) -> str:
     """Premium playlist + category name for a country's live-TV channels.
 
@@ -168,7 +258,7 @@ def _category_name(country: str) -> str:
     return f"{country} Live TV"
 
 
-async def sync_cdnlive(db: AsyncSession) -> dict:
+async def sync_cdnlive(db: AsyncSession, prune_dead: bool = True) -> dict:
     """Build per-country Premium *playlists* from the ntv.cx (cdnlive) catalog.
 
     These are staging playlists — the admin opens one, picks the channels they
@@ -214,8 +304,13 @@ async def sync_cdnlive(db: AsyncSession) -> dict:
     logger.info("cdnlive sync: fetched %d channels", len(channels))
 
     # Extract logos to local disk first, so the snapshot below maps each channel
-    # to its locally-served /logos/ path (provider image URLs 401 in a browser).
+    # to its hosted logo URL (provider image URLs 401 in a browser).
     await _ensure_logos(channels)
+
+    # Drop channels whose upstream is confirmed dead/blocked so the catalog shows
+    # mostly-working channels (recovered ones return on the next sync).
+    if prune_dead:
+        channels = await _filter_alive(channels)
 
     # Ensure Premium bouquet
     bouquet = (await db.execute(
