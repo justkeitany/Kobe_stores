@@ -656,8 +656,12 @@ class StreamProcess:
             "-i", self._resolved_input,
             # Stream copy ('auto') or transcode down to the selected quality tier.
             # In copy mode, video is still copied but audio is forced to AAC when
-            # the source uses a browser-incompatible codec (AC-3/MP2/…).
-            *(["-c:v", "copy", *self._copy_audio_args()]
+            # the source uses a browser-incompatible codec (AC-3/MP2/…). The
+            # dump_extra BSF re-inserts SPS/PPS before every keyframe so each
+            # segment is independently decodable — some providers (e.g. cdnlive
+            # BET/BBC) only send parameter sets once, which makes the browser's
+            # MSE fail with "Unsupported format" when joining mid-stream.
+            *(["-c:v", "copy", "-bsf:v", "dump_extra=freq=k", *self._copy_audio_args()]
               if _codec_args(self.quality) == ["-c", "copy"] else _codec_args(self.quality)),
             # HLS output — flush each packet and hold a deeper segment window so
             # players have more buffered ahead of the live edge.
@@ -665,7 +669,12 @@ class StreamProcess:
             "-f", "hls",
             "-hls_time", "2",
             "-hls_list_size", "12",
-            "-hls_flags", "delete_segments+append_list+split_by_time+program_date_time",
+            # No split_by_time: it cuts mid-GOP, leaving a segment that starts on
+            # a P-frame with no SPS/PPS in scope → the browser fails to decode
+            # ("Unsupported format"). Splitting only at keyframes keeps every
+            # segment independently decodable. dump_extra (copy) and libx264
+            # (transcode) put the parameter sets on each keyframe.
+            "-hls_flags", "delete_segments+append_list+program_date_time",
             "-hls_segment_type", "mpegts",
             "-hls_segment_filename", os.path.join(self.hls_dir, "seg%d.ts"),
             "-method", "PUT",

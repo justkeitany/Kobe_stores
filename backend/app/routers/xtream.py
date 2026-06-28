@@ -847,8 +847,13 @@ async def _serve_imported(
     # polling the .m3u8 below (~every 2s), so each poll refreshes the heartbeat;
     # when it stops polling, the manager's reaper stops FFmpeg after the idle
     # window (long enough that a rebuffering player isn't killed mid-stall).
+    # The re-mux fallback (cdnlive that the browser couldn't decode direct) must
+    # RE-ENCODE: those sources emit SPS/PPS only periodically, so a copy joining
+    # mid-stream never has them and the browser fails. libx264 generates fresh
+    # parameter sets per keyframe → reliably decodable. "high" keeps 1080p.
+    eff_quality = "high" if remux else stream.quality
     sp = await ffmpeg_manager.start_stream(
-        stream_id, [r.url for r in refs], stream.name, client_key, stream.quality,
+        stream_id, [r.url for r in refs], stream.name, client_key, eff_quality,
         proxy_country=stream.proxy_country,
         force_adaptive=stream.force_adaptive,
     )
