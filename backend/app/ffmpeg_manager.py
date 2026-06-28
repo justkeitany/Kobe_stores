@@ -110,6 +110,12 @@ _VIDEO_PROBE_CACHE: Dict[str, bool] = {}
 # (has_video, height, bitrate) per resolved URL — drives both audio-only routing
 # and the "is this source heavy enough to bother transcoding?" decision.
 _SOURCE_PROBE_CACHE: Dict[str, tuple] = {}
+# First audio stream's codec per resolved URL — drives the AC-3→AAC fix below.
+_AUDIO_CODEC_CACHE: Dict[str, str] = {}
+# Audio codecs browsers/MSE (hls.js) can decode natively in HLS. Anything else
+# (ac3/eac3 Dolby, mp2, dts…) plays as SILENT video in the web player even though
+# VLC/ffmpeg handle it — so we transcode just the audio to AAC (video still copy).
+_BROWSER_SAFE_AUDIO = {"aac", "mp3"}
 
 
 async def _probe_source(url: str) -> tuple:
@@ -162,6 +168,40 @@ async def _probe_source(url: str) -> tuple:
     except (asyncio.TimeoutError, Exception):
         result = (True, 0, 0)
     return result
+
+
+async def _probe_audio_codec(url: str) -> str:
+    """First audio stream's codec_name (lowercased), '' if none/unknown. Cached.
+
+    Used to decide whether the passthrough path must transcode audio to AAC for
+    browser playback — see _BROWSER_SAFE_AUDIO. On any probe failure we return ''
+    (→ no transcode, copy as before) so a transient blip never needlessly burns
+    CPU re-encoding a stream that was already fine.
+    """
+    resolved = resolve_pluto_url(url)
+    if resolved in _AUDIO_CODEC_CACHE:
+        return _AUDIO_CODEC_CACHE[resolved]
+    ffprobe = os.path.join(os.path.dirname(settings.FFMPEG_PATH), "ffprobe")
+    codec = ""
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            ffprobe, "-v", "error",
+            "-user_agent", _BROWSER_UA,
+            "-select_streams", "a:0",
+            "-show_entries", "stream=codec_name",
+            "-of", "csv=p=0",
+            resolved,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=12)
+        if proc.returncode == 0:
+            codec = out.decode(errors="replace").strip().lower()
+            _AUDIO_CODEC_CACHE[resolved] = codec
+        # rc != 0 → leave uncached, treat as unknown (copy).
+    except (asyncio.TimeoutError, Exception):
+        codec = ""
+    return codec
 
 
 def _source_wants_ladder(height: int, bitrate: int) -> bool:
@@ -410,6 +450,9 @@ class StreamProcess:
         # (provider blocks ffprobe). Set on premium TV channels — see
         # Stream.force_adaptive. Ignored for audio-only sources.
         self.force_adaptive = force_adaptive
+        # Source's first audio codec, probed once per start(). Drives the AC-3→AAC
+        # passthrough fix (empty = unknown → copy, the pre-existing behaviour).
+        self.audio_codec = ""
         # ISO country code for proxy-assisted playlist resolution (None = off).
         self.proxy_country = proxy_country
         # FFmpeg input URL + proxy args, computed (async) once per start().
@@ -502,6 +545,18 @@ class StreamProcess:
         except OSError:
             pass
 
+    def _needs_audio_transcode(self) -> bool:
+        """True when the source audio can't play in a browser (AC-3/MP2/…) and we
+        must transcode it to AAC. Unknown ('') → False, so we copy as before."""
+        c = (self.audio_codec or "").lower()
+        return bool(c) and c not in _BROWSER_SAFE_AUDIO
+
+    def _copy_audio_args(self) -> list[str]:
+        """Audio codec args for the single-rendition passthrough path."""
+        if self._needs_audio_transcode():
+            return ["-c:a", "aac", "-b:a", "128k", "-ac", "2"]
+        return ["-c:a", "copy"]
+
     def _build_multivariant_cmd(self) -> list[str]:
         """One FFmpeg producing a shared HLS ladder: v0 source copy + v1 720p +
         v2 480p, plus per-variant playlists. The player adapts across them."""
@@ -516,8 +571,11 @@ class StreamProcess:
             "-i", self._resolved_input,
             "-filter_complex",
             "[0:v]split=2[a][b];[a]scale=-2:720[v720o];[b]scale=-2:480[v480o]",
-            # v0 — source passthrough (no transcode)
-            "-map", "0:v:0", "-map", "0:a:0?", "-c:v:0", "copy", "-c:a:0", "copy",
+            # v0 — source passthrough (video copy; audio copy unless it's a codec
+            # browsers can't decode — then transcode just the audio to AAC so the
+            # top rung isn't silently muted in the web player).
+            "-map", "0:v:0", "-map", "0:a:0?", "-c:v:0", "copy",
+            *(["-c:a:0", "aac", "-b:a:0", "128k"] if self._needs_audio_transcode() else ["-c:a:0", "copy"]),
             # v1 — 720p, capped to fit ~2 Mbps lines. force_key_frames pins a
             # keyframe exactly every 2s (= hls_time) and sc_threshold 0 stops
             # libx264 inserting extra scene-cut keyframes; together they yield
@@ -597,7 +655,10 @@ class StreamProcess:
             # redirects to a working stream. Non-Pluto URLs pass through.
             "-i", self._resolved_input,
             # Stream copy ('auto') or transcode down to the selected quality tier.
-            *_codec_args(self.quality),
+            # In copy mode, video is still copied but audio is forced to AAC when
+            # the source uses a browser-incompatible codec (AC-3/MP2/…).
+            *(["-c:v", "copy", *self._copy_audio_args()]
+              if _codec_args(self.quality) == ["-c", "copy"] else _codec_args(self.quality)),
             # HLS output — flush each packet and hold a deeper segment window so
             # players have more buffered ahead of the live edge.
             "-flush_packets", "1",
@@ -645,6 +706,10 @@ class StreamProcess:
                     has_video, height, bitrate = await _probe_source(self._resolved_input)
                     self.audio_only = not has_video
                     self.source_height = height or 0
+                    # Detect browser-incompatible audio (AC-3/MP2/…) so the copy
+                    # paths transcode just the audio to AAC. Only for video sources
+                    # — audio-only feeds use _build_audio_cmd which already → AAC.
+                    self.audio_codec = "" if self.audio_only else await _probe_audio_codec(self._resolved_input)
                     wants_ladder = _source_wants_ladder(height, bitrate)
                     # Forced premium TV: engage the ladder even when the probe was
                     # blocked (0×0). The probe returns has_video=True on failure,
