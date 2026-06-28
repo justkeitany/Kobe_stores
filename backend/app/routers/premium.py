@@ -48,6 +48,13 @@ def _is_radio_playlist(name: str) -> bool:
     return "radio" in (name or "").lower()
 
 
+def _is_livetv_playlist(name: str) -> bool:
+    """cdnlive country playlists ('<Country> Live TV'). These are already adaptive
+    HLS upstream and are relayed as stream-copy passthrough, so they must NOT get
+    the forced transcode ladder (it's what made them buffer)."""
+    return (name or "").strip().lower().endswith("live tv")
+
+
 async def _premium_categories(db: AsyncSession) -> tuple[set[int], set[str]]:
     """Resolve the Premium bouquet's category ids and (lowercased) names.
 
@@ -200,7 +207,7 @@ async def premium_sync(db: AsyncSession = Depends(get_db), _=Depends(get_current
     for p in playlists:
         await _refresh_meta(p, db)               # refresh cached feed from source
         feed = p.channels or []
-        force_adaptive = not _is_radio_playlist(p.name)
+        force_adaptive = not (_is_radio_playlist(p.name) or _is_livetv_playlist(p.name))
 
         cat = (await db.execute(
             select(StreamCategory).where(func.lower(StreamCategory.name) == (p.name or "").strip().lower())

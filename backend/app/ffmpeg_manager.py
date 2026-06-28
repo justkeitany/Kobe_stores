@@ -702,6 +702,12 @@ class StreamProcess:
                 # ffprobe can take 10+s on high-latency upstreams.
                 self.audio_only = False
                 wants_ladder = False
+                # cdnlive / ntv.cx channels are already adaptive HLS upstream, so
+                # relay them untouched (stream copy). Re-transcoding them into our
+                # own 480/720/1080 ladder is what made them buffer — never build it.
+                passthrough_only = any(
+                    s and ("cdnlivetv.tv" in s or "ntv.cx" in s) for s in self.sources
+                )
                 if self.allow_multivariant or self.quality != "auto":
                     has_video, height, bitrate = await _probe_source(self._resolved_input)
                     self.audio_only = not has_video
@@ -718,6 +724,8 @@ class StreamProcess:
                         wants_ladder = True
                         if not self.source_height:
                             self.source_height = 1080  # label top rung "1080p"
+                    if passthrough_only:
+                        wants_ladder = False  # original only — no transcode ladder
                     if self.allow_multivariant and self.quality == "auto" and not self.audio_only:
                         logger.info(
                             f"Stream {self.stream_id}: source {height or '?'}p "
