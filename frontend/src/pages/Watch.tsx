@@ -3,9 +3,10 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import Hls from "hls.js";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  Loader2, AlertCircle, Settings, ChevronLeft, Gauge, PictureInPicture2,
+  Loader2, AlertCircle, Settings, ChevronLeft, Gauge, PictureInPicture2, Tv,
 } from "lucide-react";
 import { makeHlsConfig, resyncToLiveEdge } from "../lib/hls";
+import EpgBar from "../components/EpgBar";
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -19,6 +20,8 @@ export default function WatchPage() {
   const url = params.get("url") || "";
   const token = params.get("t") || "";
   const name = params.get("name") || "Stream";
+  const sid = params.get("sid"); // stream id for the EPG strip (imported channels)
+  const streamId = sid ? parseInt(sid, 10) : NaN;
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -40,6 +43,7 @@ export default function WatchPage() {
   const [duration, setDuration] = useState(0);
   const [seeking, setSeeking] = useState(false);
   const [showControls, setShowControls] = useState(true);
+  const [showEpg, setShowEpg] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -503,6 +507,17 @@ export default function WatchPage() {
               </div>
             )}
 
+            {/* TV Guide (EPG) — only for imported channels (we need a stream id
+                to look up the guide). Toggles the bottom-quarter strip while the
+                video keeps playing behind it. */}
+            {!Number.isNaN(streamId) && (
+              <button onClick={() => setShowEpg((s) => !s)} title="TV Guide"
+                className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded transition-colors ml-1
+                  ${showEpg ? "bg-red-500/30 text-white" : "text-white/80 hover:text-white bg-white/10 hover:bg-white/20"}`}>
+                <Tv size={15} /> EPG
+              </button>
+            )}
+
             {/* Picture-in-Picture (hidden where unsupported, e.g. Firefox/iOS) */}
             {typeof document !== "undefined" && document.pictureInPictureEnabled && (
               <button onClick={togglePip} title="Picture-in-Picture (p)"
@@ -517,6 +532,12 @@ export default function WatchPage() {
             </button>
           </div>
         </div>
+      )}
+
+      {/* EPG strip — bottom quarter, video keeps playing behind it. Rendered
+          outside the showControls gate so it stays put when controls auto-hide. */}
+      {showEpg && !Number.isNaN(streamId) && (
+        <EpgBar streamId={streamId} onClose={() => setShowEpg(false)} />
       )}
     </div>
   );

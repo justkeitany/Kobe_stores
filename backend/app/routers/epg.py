@@ -590,3 +590,45 @@ async def get_now_playing(channel_id: str, db: AsyncSession = Depends(get_db)):
         "end": prog.end_time,
         "category": prog.category,
     }
+
+
+@router.get("/timeline/{stream_id}")
+async def channel_timeline(stream_id: int, db: AsyncSession = Depends(get_db)):
+    """Public per-channel EPG strip for the in-player overlay.
+
+    Returns the programmes airing on this stream's mapped EPG channel in a window
+    around 'now' (a few hours of history so the user can scroll back, ~24h ahead
+    for upcoming). Empty programmes list when the stream has no EPG mapping or no
+    data — the player then just shows a "no guide" message. Public (no admin) so
+    shared player links work, mirroring /now/{channel_id}.
+    """
+    now = datetime.now(timezone.utc)
+    stream = (await db.execute(
+        select(Stream).where(Stream.id == stream_id)
+    )).scalar_one_or_none()
+    if not stream or not stream.epg_channel_id:
+        return {"now": now.isoformat(),
+                "channel_name": stream.name if stream else "",
+                "epg_channel_id": "", "programmes": []}
+
+    win_start = now - timedelta(hours=4)
+    win_end = now + timedelta(hours=24)
+    rows = (await db.execute(
+        select(EpgData).where(
+            EpgData.channel_id == stream.epg_channel_id,
+            EpgData.end_time > win_start,
+            EpgData.start_time < win_end,
+        ).order_by(EpgData.start_time)
+    )).scalars().all()
+    return {
+        "now": now.isoformat(),
+        "channel_name": stream.name,
+        "epg_channel_id": stream.epg_channel_id,
+        "programmes": [{
+            "title": r.title,
+            "start": r.start_time.isoformat(),
+            "stop": r.end_time.isoformat(),
+            "desc": r.description,
+            "category": r.category,
+        } for r in rows],
+    }

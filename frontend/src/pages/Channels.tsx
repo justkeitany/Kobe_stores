@@ -78,7 +78,9 @@ export default function Channels() {
           : c.url
           ? await mintStreamToken({ url: c.url })
           : null;
-      if (token) nav(`/watch?t=${token}&name=${encodeURIComponent(c.name)}`);
+      // Pass the stream id so the player can pull this channel's EPG strip.
+      const sid = c.imported && c.stream_id != null ? `&sid=${c.stream_id}` : "";
+      if (token) nav(`/watch?t=${token}&name=${encodeURIComponent(c.name)}${sid}`);
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Couldn't open this channel");
     }

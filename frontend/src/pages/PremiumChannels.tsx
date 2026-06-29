@@ -43,7 +43,8 @@ export default function PremiumChannels() {
           : c.url
           ? await mintStreamToken({ url: c.url })
           : null;
-      if (token) nav(`/watch?t=${token}&name=${encodeURIComponent(c.name)}`);
+      const sid = c.imported && c.stream_id != null ? `&sid=${c.stream_id}` : "";
+      if (token) nav(`/watch?t=${token}&name=${encodeURIComponent(c.name)}${sid}`);
     } catch (e: any) {
       toast.error(e?.response?.data?.detail || "Couldn't open this channel");
     }
