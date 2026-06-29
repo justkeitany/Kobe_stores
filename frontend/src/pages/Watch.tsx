@@ -420,7 +420,7 @@ export default function WatchPage() {
   };
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50 bg-black overflow-hidden"
+    <div ref={containerRef} className="fixed inset-0 z-50 bg-black overflow-hidden [color-scheme:dark]"
       onMouseMove={keepControls}>
 
       {/* Video fills the whole container at a constant size; the control bars
@@ -519,12 +519,12 @@ export default function WatchPage() {
                 {speed === 1 ? "Speed" : `${speed}x`}
               </button>
               {showSpeed && (
-                <div className="absolute bottom-full right-0 mb-2 bg-[#1a1a2e] border border-white/10 rounded-lg overflow-hidden shadow-xl min-w-[80px]">
+                <div className="absolute bottom-full right-0 mb-2 bg-black/90 backdrop-blur-md border border-white/10 rounded-lg overflow-hidden shadow-xl min-w-[80px]">
                   {SPEEDS.map((s) => (
                     <button key={s}
                       onClick={() => { setSpeed(s); setShowSpeed(false); }}
                       className={`w-full text-left px-3 py-2 text-xs transition-colors
-                        ${s === speed ? "bg-indigo-600/40 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}>
+                        ${s === speed ? "bg-red-500/30 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}>
                       {s === 1 ? "Normal" : `${s}x`}
                     </button>
                   ))}
@@ -544,12 +544,12 @@ export default function WatchPage() {
                   {levels.find(l => l.index === currentLevel)?.label || "Auto"}
                 </button>
                 {showQuality && (
-                  <div className="absolute bottom-full right-0 mb-2 bg-[#1a1a2e] border border-white/10 rounded-lg overflow-hidden shadow-xl min-w-[120px]">
+                  <div className="absolute bottom-full right-0 mb-2 bg-black/90 backdrop-blur-md border border-white/10 rounded-lg overflow-hidden shadow-xl min-w-[120px]">
                     {levels.map((l) => (
                       <button key={l.index}
                         onClick={() => switchQuality(l.index)}
                         className={`w-full text-left px-3 py-2 text-xs transition-colors
-                          ${l.index === currentLevel ? "bg-indigo-600/40 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}>
+                          ${l.index === currentLevel ? "bg-red-500/30 text-white" : "text-white/70 hover:bg-white/10 hover:text-white"}`}>
                         {l.label}{l.bitrate > 0 && <span className="text-white/40 ml-2">{Math.round(l.bitrate / 1000)}k</span>}
                       </button>
                     ))}
@@ -580,7 +580,7 @@ export default function WatchPage() {
             {/* Picture-in-Picture (hidden where unsupported, e.g. Firefox/iOS) */}
             {typeof document !== "undefined" && document.pictureInPictureEnabled && (
               <button onClick={togglePip} title="Picture-in-Picture (p)"
-                className={`transition-colors ml-1 ${pip ? "text-indigo-400" : "text-white hover:text-white/80"}`}>
+                className={`transition-colors ml-1 ${pip ? "text-red-400" : "text-white hover:text-white/80"}`}>
                 <PictureInPicture2 size={21} />
               </button>
             )}
