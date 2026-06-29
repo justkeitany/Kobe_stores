@@ -420,7 +420,7 @@ export default function WatchPage() {
   };
 
   return (
-    <div ref={containerRef} className="fixed inset-0 z-50 bg-black overflow-hidden [color-scheme:dark]"
+    <div ref={containerRef} className="fixed inset-0 z-50 bg-black overflow-hidden [color-scheme:dark] [--color-white:#ffffff]"
       onMouseMove={keepControls}>
 
       {/* Video fills the whole container at a constant size; the control bars

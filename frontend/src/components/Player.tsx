@@ -280,7 +280,7 @@ export default function Player({ url, title }: { url: string; title?: string }) 
   return (
     <div
       ref={containerRef}
-      className="relative bg-black rounded-lg overflow-hidden group w-full max-w-4xl mx-auto [color-scheme:dark]"
+      className="relative bg-black rounded-lg overflow-hidden group w-full max-w-4xl mx-auto [color-scheme:dark] [--color-white:#ffffff]"
       onMouseMove={showControlsTemp}
       onMouseLeave={() => playing && setShowControls(false)}
       style={{ aspectRatio: "16/9" }}
