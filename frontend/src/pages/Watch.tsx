@@ -3,10 +3,11 @@ import { useSearchParams, useNavigate } from "react-router-dom";
 import Hls from "hls.js";
 import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
-  Loader2, AlertCircle, Settings, ChevronLeft, Gauge, PictureInPicture2, Tv,
+  Loader2, AlertCircle, Settings, ChevronLeft, Gauge, PictureInPicture2, Tv, LayoutGrid,
 } from "lucide-react";
 import { makeHlsConfig, resyncToLiveEdge } from "../lib/hls";
 import EpgBar from "../components/EpgBar";
+import ChannelBar from "../components/ChannelBar";
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -44,7 +45,18 @@ export default function WatchPage() {
   const [seeking, setSeeking] = useState(false);
   const [showControls, setShowControls] = useState(true);
   const [showEpg, setShowEpg] = useState(false);
+  const [showChannels, setShowChannels] = useState(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Switch the player to another channel in place. Navigating to the same route
+  // with new params updates `token`/`name`/`sid`, which re-runs the HLS init
+  // effect (deps [url, token]) — no full-page reload, video swaps over. The EPG
+  // strip follows the new `sid` automatically.
+  const switchChannel = (newToken: string, chName: string, sid: number | null) => {
+    setShowChannels(false);
+    const sidPart = sid != null ? `&sid=${sid}` : "";
+    nav(`/watch?t=${newToken}&name=${encodeURIComponent(chName)}${sidPart}`);
+  };
 
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -511,12 +523,20 @@ export default function WatchPage() {
                 to look up the guide). Toggles the bottom-quarter strip while the
                 video keeps playing behind it. */}
             {!Number.isNaN(streamId) && (
-              <button onClick={() => setShowEpg((s) => !s)} title="TV Guide"
+              <button onClick={() => { setShowEpg((s) => !s); setShowChannels(false); }} title="TV Guide"
                 className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded transition-colors ml-1
                   ${showEpg ? "bg-red-500/30 text-white" : "text-white/80 hover:text-white bg-white/10 hover:bg-white/20"}`}>
                 <Tv size={15} /> EPG
               </button>
             )}
+
+            {/* Channel switcher — swipe through every channel and tap to switch
+                in place, without going back. Available on any stream. */}
+            <button onClick={() => { setShowChannels((s) => !s); setShowEpg(false); }} title="Switch channel"
+              className={`flex items-center gap-1 text-xs font-medium px-2.5 py-1.5 rounded transition-colors ml-1
+                ${showChannels ? "bg-red-500/30 text-white" : "text-white/80 hover:text-white bg-white/10 hover:bg-white/20"}`}>
+              <LayoutGrid size={15} /> Channels
+            </button>
 
             {/* Picture-in-Picture (hidden where unsupported, e.g. Firefox/iOS) */}
             {typeof document !== "undefined" && document.pictureInPictureEnabled && (
@@ -538,6 +558,15 @@ export default function WatchPage() {
           outside the showControls gate so it stays put when controls auto-hide. */}
       {showEpg && !Number.isNaN(streamId) && (
         <EpgBar streamId={streamId} onClose={() => setShowEpg(false)} />
+      )}
+
+      {/* Channel switcher strip — swipe left/right, tap to switch in place. */}
+      {showChannels && (
+        <ChannelBar
+          currentStreamId={streamId}
+          onPick={switchChannel}
+          onClose={() => setShowChannels(false)}
+        />
       )}
     </div>
   );
