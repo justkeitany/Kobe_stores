@@ -1,3 +1,4 @@
+import Hls from "hls.js";
 import type { HlsConfig } from "hls.js";
 
 /**
@@ -111,6 +112,33 @@ export function makeHlsConfig(): Partial<HlsConfig> {
     fragLoadingMaxRetry: 8,
     fragLoadingRetryDelay: 1000,
   };
+}
+
+/**
+ * Make the live-edge distance segment-length-aware.
+ *
+ * The buffer config sits `liveSyncDurationCount` (6) SEGMENTS back from the live
+ * edge — perfect for our own 2s-segment relay (≈12s back inside a 24s window).
+ * But some upstreams (e.g. cdnlivetv) serve 10s segments in a ~6-segment window,
+ * where 6 segments back is the WHOLE window: the playhead lands on the back edge
+ * and falls off it every time the (laggy) window slides → the stream plays for a
+ * few seconds, stalls, and loops, unable to advance.
+ *
+ * So once we know the real segment length, sit a fixed ~25-30s back instead —
+ * which is ~2-3 long segments, leaving comfortable runway both ahead of the back
+ * edge and behind the live edge to absorb the provider's bursty updates. Short
+ * (2s) segments keep the default 6. hls.js reads `config.liveSyncDurationCount`
+ * live on every tick, so mutating it here takes effect immediately.
+ */
+export function tuneLiveSyncForSegmentLength(hls: Hls): void {
+  hls.on(Hls.Events.LEVEL_LOADED, (_e, data) => {
+    const td = (data as { details?: { targetduration?: number } })?.details?.targetduration;
+    if (typeof td !== "number" || td < 5) return; // normal short-segment live keeps the default
+    const count = Math.max(2, Math.min(4, Math.round(28 / td)));
+    if (hls.config.liveSyncDurationCount !== count) {
+      hls.config.liveSyncDurationCount = count;
+    }
+  });
 }
 
 /**

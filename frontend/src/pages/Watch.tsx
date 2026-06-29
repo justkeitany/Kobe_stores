@@ -6,7 +6,7 @@ import {
   Loader2, AlertCircle, Settings, ChevronLeft, Gauge, PictureInPicture2, Tv, LayoutGrid,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { makeHlsConfig, resyncToLiveEdge } from "../lib/hls";
+import { makeHlsConfig, resyncToLiveEdge, tuneLiveSyncForSegmentLength } from "../lib/hls";
 import EpgBar from "../components/EpgBar";
 import ChannelBar from "../components/ChannelBar";
 import api from "../lib/api";
@@ -112,6 +112,9 @@ export default function WatchPage() {
         // recovery + network-aware initial estimate). See src/lib/hls.ts.
         const hls = new Hls(makeHlsConfig());
         hlsRef.current = hls;
+        // Long-segment upstreams (e.g. cdnlivetv's 10s segments) need to sit
+        // fewer segments back from the live edge, or they stall and loop.
+        tuneLiveSyncForSegmentLength(hls);
         hls.loadSource(srcUrl);
         hls.attachMedia(video);
 
