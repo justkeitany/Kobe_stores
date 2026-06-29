@@ -1,4 +1,4 @@
-import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { X, Loader2, LayoutGrid, Tv, Crown } from "lucide-react";
 import api, { mintStreamToken } from "../lib/api";
@@ -30,6 +30,12 @@ const byHealth = (arr: Channel[]) =>
     .sort((a, b) => (HEALTH_ORDER[a.c.health] ?? 9) - (HEALTH_ORDER[b.c.health] ?? 9) || a.i - b.i)
     .map((x) => x.c);
 
+// How many boxes to render in the first paint, and how many to add per tick as
+// the rest stream in. Keeping the first paint small is what makes the popup open
+// instantly and keeps the video behind it from stuttering.
+const FIRST_BATCH = 15;
+const NEXT_BATCH = 24;
+
 /**
  * In-player channel switcher. Mirrors the EPG strip: pops up over the bottom
  * quarter while the video keeps playing behind it, and the user swipes/scrolls
@@ -39,6 +45,10 @@ const byHealth = (arr: Channel[]) =>
  * Premium channels are kept in their own labelled group (gold) at the front of
  * the strip, separated from the regular channels — the general /api/channels
  * directory already excludes premium, so we pull them from /api/premium/channels.
+ *
+ * To stay fast with hundreds of channels the strip renders progressively: a
+ * small first batch (covering the current channel + its neighbours) paints
+ * immediately, then the rest trickle in on a timer instead of all at once.
  */
 export default function ChannelBar({
   currentStreamId,
@@ -50,7 +60,9 @@ export default function ChannelBar({
   onClose: () => void;
 }) {
   const [switching, setSwitching] = useState<string | null>(null); // key being opened
+  const [count, setCount] = useState(FIRST_BATCH); // how many boxes are revealed
   const scrollRef = useRef<HTMLDivElement>(null);
+  const scrolledRef = useRef(false);
 
   // Shared react-query caches: ["all-channels"] is the same key the Channels page
   // uses, so coming from there the data is already warm and the strip opens
@@ -66,23 +78,50 @@ export default function ChannelBar({
     staleTime: 60_000,
   });
 
-  // Two separated groups: premium first (gold), then everything else.
-  const groups = [
-    { key: "premium", label: "Premium", premium: true, items: byHealth(playable(premium)) },
-    { key: "all", label: "All Channels", premium: false, items: byHealth(playable(others)) },
-  ].filter((g) => g.items.length > 0);
-  const total = groups.reduce((n, g) => n + g.items.length, 0);
-  // Only block on a spinner when we have nothing cached yet to show.
+  // Flatten the two groups into one ordered sequence (premium first), tagging
+  // each entry with its group + whether it's the first of that group (so we know
+  // where to drop the group label). One flat list makes progressive slicing and
+  // "scroll to current" trivial.
+  const premItems = byHealth(playable(premium));
+  const allItems = byHealth(playable(others));
+  const flat: { c: Channel; premium: boolean; groupStart: boolean }[] = [
+    ...premItems.map((c, i) => ({ c, premium: true, groupStart: i === 0 })),
+    ...allItems.map((c, i) => ({ c, premium: false, groupStart: i === 0 })),
+  ];
+  const total = flat.length;
   const loading = total === 0 && (l1 || l2);
 
-  // Open the strip starting at the channel that's playing now (left edge), so the
-  // boxes to its right are the "next" channels — not from the top of the list.
-  // useLayoutEffect + instant behavior so there's no visible jump from the start.
+  const currentIndex = Number.isNaN(currentStreamId)
+    ? -1
+    : flat.findIndex((e) => e.c.stream_id === currentStreamId);
+
+  // Always render through the current channel (+ a buffer) on the first paint so
+  // it's present for the scroll-to-current below, even if it sorts deep.
+  const renderCount = Math.min(
+    total,
+    Math.max(count, currentIndex >= 0 ? currentIndex + FIRST_BATCH : 0),
+  );
+  const shown = flat.slice(0, renderCount);
+
+  // Trickle in the remaining boxes after the first paint — "load what's needed
+  // now, then the rest slowly" — so we never block on rendering the whole list.
+  useEffect(() => {
+    if (count >= total) return;
+    const id = window.setTimeout(() => setCount((c) => Math.min(total, c + NEXT_BATCH)), 90);
+    return () => window.clearTimeout(id);
+  }, [count, total]);
+
+  // Open the strip scrolled to the channel that's playing now (left edge), once,
+  // so the boxes to its right are the "next" channels. Instant (no animation) and
+  // only on first open — switching channels later won't yank the strip around.
   useLayoutEffect(() => {
-    if (loading || !scrollRef.current || Number.isNaN(currentStreamId)) return;
+    if (scrolledRef.current || loading || !scrollRef.current || currentIndex < 0) return;
     const el = scrollRef.current.querySelector<HTMLElement>('[data-current="1"]');
-    if (el) el.scrollIntoView({ behavior: "instant" as ScrollBehavior, inline: "start", block: "nearest" });
-  }, [loading, others, premium, currentStreamId]);
+    if (el) {
+      el.scrollIntoView({ behavior: "instant" as ScrollBehavior, inline: "start", block: "nearest" });
+      scrolledRef.current = true;
+    }
+  }, [loading, total, currentIndex]);
 
   async function pick(c: Channel) {
     if (switching) return;
@@ -94,7 +133,10 @@ export default function ChannelBar({
           : c.url
           ? await mintStreamToken({ url: c.url })
           : null;
+      // Hand off to the player. It keeps this popup open (spinner stays on this
+      // box) until the new channel actually starts playing, then closes it.
       if (token) onPick(token, c.name, c.imported ? c.stream_id : null);
+      else setSwitching(null);
     } catch {
       setSwitching(null);
     }
@@ -119,13 +161,15 @@ export default function ChannelBar({
             ? "bg-black/40 border-[#f5c86e]/35 hover:bg-black/55 hover:border-[#f5c86e]/60"
             : "bg-black/40 border-white/15 hover:bg-black/55 hover:border-white/30"}`}
       >
-        {/* Logo (or a fallback TV glyph), centered. */}
+        {/* Logo (or a fallback TV glyph), centered. Lazy + async so off-screen
+            logos don't all decode at once and stall the video. */}
         <div className="h-10 flex items-center justify-center shrink-0">
           {c.logo ? (
             <img
               src={c.logo}
               alt=""
               loading="lazy"
+              decoding="async"
               className="max-h-10 max-w-[72px] object-contain"
               onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
@@ -163,10 +207,31 @@ export default function ChannelBar({
     );
   }
 
+  function groupLabel(isPremium: boolean) {
+    return (
+      <div
+        key={isPremium ? "lbl-premium" : "lbl-all"}
+        style={{ flex: "0 0 auto" }}
+        className="self-stretch flex items-center pr-1"
+      >
+        <div className={`flex flex-col items-center gap-1.5 ${isPremium ? "text-[#f5c86e]" : "text-white/45"}`}>
+          {isPremium ? <Crown size={16} /> : <LayoutGrid size={15} />}
+          <span
+            style={{ writingMode: "vertical-rl" }}
+            className="rotate-180 text-[10px] font-bold uppercase tracking-[0.15em] whitespace-nowrap"
+          >
+            {isPremium ? "Premium" : "All Channels"}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="absolute bottom-0 left-0 right-0 z-30 h-1/4 min-h-[190px] flex flex-col"
-      // Don't let taps/scrolls here toggle the video play state behind it.
+      // Don't let taps/scrolls here toggle the video play state behind it — the
+      // video keeps playing in the background while the switcher is open.
       onClick={(e) => e.stopPropagation()}
     >
       {/* Header — no background panel; a drop-shadow keeps it legible over video. */}
@@ -201,21 +266,10 @@ export default function ChannelBar({
         >
           {/* Labels and boxes are flat siblings of the scroll container so each
               box's `width: calc((100% - 2rem) / 5)` resolves against the strip. */}
-          {groups.map((g) => (
-            <Fragment key={g.key}>
-              {/* Slim vertical group label that separates premium from the rest. */}
-              <div style={{ flex: "0 0 auto" }} className="self-stretch flex items-center pr-1">
-                <div className={`flex flex-col items-center gap-1.5 ${g.premium ? "text-[#f5c86e]" : "text-white/45"}`}>
-                  {g.premium ? <Crown size={16} /> : <LayoutGrid size={15} />}
-                  <span
-                    style={{ writingMode: "vertical-rl" }}
-                    className="rotate-180 text-[10px] font-bold uppercase tracking-[0.15em] whitespace-nowrap"
-                  >
-                    {g.label}
-                  </span>
-                </div>
-              </div>
-              {g.items.map((c) => box(c, g.premium))}
+          {shown.map((e) => (
+            <Fragment key={e.c.key}>
+              {e.groupStart && groupLabel(e.premium)}
+              {box(e.c, e.premium)}
             </Fragment>
           ))}
         </div>

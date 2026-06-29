@@ -49,6 +49,8 @@ export default function WatchPage() {
   const [showControls, setShowControls] = useState(true);
   const [showEpg, setShowEpg] = useState(false);
   const [showChannels, setShowChannels] = useState(false);
+  const [switchPending, setSwitchPending] = useState(false);
+  const switchSawLoading = useRef(false);
   const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Switch the player to another channel in place. Navigating to the same route
@@ -57,11 +59,25 @@ export default function WatchPage() {
   // strip follows the new `sid` automatically. `replace` so we don't pile up a
   // history entry per channel — Back goes straight to where the user started
   // (e.g. the Channels page), not back through every channel they sampled.
+  //
+  // We DON'T close the switcher here — it stays open (with a spinner on the
+  // picked box) until the new channel actually starts playing; see the effect
+  // below. That way the channel plays first, then the popup closes.
   const switchChannel = (newToken: string, chName: string, sid: number | null) => {
-    setShowChannels(false);
+    switchSawLoading.current = false;
+    setSwitchPending(true);
     const sidPart = sid != null ? `&sid=${sid}` : "";
     nav(`/watch?t=${newToken}&name=${encodeURIComponent(chName)}${sidPart}`, { replace: true });
   };
+
+  // Close the switcher once the picked channel is actually playing. We wait for
+  // `loading` to go true (new stream booting) and then false (buffered & playing)
+  // so we don't close on the stale pre-switch state.
+  useEffect(() => {
+    if (!switchPending) return;
+    if (loading) { switchSawLoading.current = true; return; }
+    if (switchSawLoading.current) { setShowChannels(false); setSwitchPending(false); }
+  }, [switchPending, loading]);
 
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
 
