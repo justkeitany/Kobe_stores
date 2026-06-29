@@ -31,7 +31,6 @@ export default function EpgBar({ streamId, onClose }: { streamId: number; onClos
   const [data, setData] = useState<Timeline | null>(null);
   const [loading, setLoading] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const liveRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -44,15 +43,15 @@ export default function EpgBar({ streamId, onClose }: { streamId: number; onClos
     return () => { cancelled = true; };
   }, [streamId]);
 
-  // Center the live programme once the strip has rendered.
+  // The live programme should sit first on the left, so start scrolled to 0.
   useEffect(() => {
-    if (!loading && liveRef.current) {
-      liveRef.current.scrollIntoView({ inline: "center", block: "nearest", behavior: "auto" });
-    }
+    if (!loading && scrollRef.current) scrollRef.current.scrollLeft = 0;
   }, [loading, data]);
 
   const now = data ? new Date(data.now).getTime() : Date.now();
-  const progs = data?.programmes ?? [];
+  // Drop programmes that already finished — the one airing now leads the strip,
+  // followed by what's coming up next.
+  const progs = (data?.programmes ?? []).filter((p) => new Date(p.stop).getTime() > now);
 
   return (
     <div
@@ -98,21 +97,19 @@ export default function EpgBar({ streamId, onClose }: { streamId: number; onClos
             const start = new Date(p.start).getTime();
             const stop = new Date(p.stop).getTime();
             const isLive = now >= start && now < stop;
-            const isPast = stop <= now;
             const progress = isLive ? Math.min(1, Math.max(0, (now - start) / (stop - start))) : 0;
             return (
               <div
                 key={i}
-                ref={isLive ? liveRef : undefined}
                 // Exactly 5 boxes fit the row (1/5 of the width minus the four
                 // 0.5rem gaps between them); scroll horizontally for the rest.
                 style={{ flex: "0 0 auto", width: "calc((100% - 2rem) / 5)" }}
-                className={`relative rounded-lg px-3 py-2 flex flex-col overflow-hidden border
+                // Solid-enough fill (~30-40%) over the video so text stays
+                // readable; a light blur softens busy backgrounds behind it.
+                className={`relative rounded-lg px-3 py-2 flex flex-col overflow-hidden border backdrop-blur-sm
                   ${isLive
-                    ? "bg-red-500/15 border-red-500/60"
-                    : isPast
-                    ? "bg-white/5 border-white/10 opacity-50"
-                    : "bg-white/[0.07] border-white/10"}`}
+                    ? "bg-red-600/30 border-red-500/70"
+                    : "bg-black/40 border-white/15"}`}
               >
                 <div className="flex items-center gap-1.5 text-[11px] mb-1 shrink-0">
                   {isLive && (

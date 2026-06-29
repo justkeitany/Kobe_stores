@@ -620,14 +620,21 @@ async def channel_timeline(stream_id: int, db: AsyncSession = Depends(get_db)):
             EpgData.start_time < win_end,
         ).order_by(EpgData.start_time)
     )).scalars().all()
+    # Always emit an explicit UTC offset so the browser can convert each time to
+    # the viewer's own timezone. (Rows are stored UTC; tag any naive value too.)
+    def iso_utc(dt: datetime) -> str:
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt.astimezone(timezone.utc).isoformat()
+
     return {
-        "now": now.isoformat(),
+        "now": iso_utc(now),
         "channel_name": stream.name,
         "epg_channel_id": stream.epg_channel_id,
         "programmes": [{
             "title": r.title,
-            "start": r.start_time.isoformat(),
-            "stop": r.end_time.isoformat(),
+            "start": iso_utc(r.start_time),
+            "stop": iso_utc(r.end_time),
             "desc": r.description,
             "category": r.category,
         } for r in rows],
