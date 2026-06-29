@@ -56,19 +56,19 @@ export default function EpgBar({ streamId, onClose }: { streamId: number; onClos
 
   return (
     <div
-      className="absolute bottom-0 left-0 right-0 z-30 h-1/4 min-h-[190px]
-        bg-gradient-to-t from-black via-black/95 to-black/70 backdrop-blur-sm
-        border-t border-white/10 flex flex-col"
-      // Don't let taps/scrolls here toggle the video play state behind it.
+      className="absolute bottom-0 left-0 right-0 z-30 h-1/4 min-h-[190px] flex flex-col"
+      // Don't let taps/scrolls here toggle the video play state behind it —
+      // the video keeps playing in the background while the guide is open.
       onClick={(e) => e.stopPropagation()}
     >
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 pt-2.5 pb-1.5 shrink-0">
+      {/* Header — no background panel, so a drop-shadow keeps the channel name
+          and logo legible over whatever is playing behind. */}
+      <div className="flex items-center gap-2 px-4 pt-2.5 pb-1.5 shrink-0 drop-shadow-[0_1px_3px_rgba(0,0,0,0.9)]">
         <Tv size={15} className="text-red-500" />
         <span className="text-white text-sm font-semibold truncate">
           {data?.channel_name || "Guide"}
         </span>
-        <span className="text-white/40 text-xs">· TV Guide</span>
+        <span className="text-white/50 text-xs">· TV Guide</span>
         <div className="flex-1" />
         <button
           onClick={onClose}
@@ -104,9 +104,9 @@ export default function EpgBar({ streamId, onClose }: { streamId: number; onClos
               <div
                 key={i}
                 ref={isLive ? liveRef : undefined}
-                // Equal-width boxes — ~5 visible at once on a typical player,
-                // never narrower than a readable card; scroll for the rest.
-                style={{ flex: "0 0 auto", width: "clamp(190px, 18vw, 290px)" }}
+                // Exactly 5 boxes fit the row (1/5 of the width minus the four
+                // 0.5rem gaps between them); scroll horizontally for the rest.
+                style={{ flex: "0 0 auto", width: "calc((100% - 2rem) / 5)" }}
                 className={`relative rounded-lg px-3 py-2 flex flex-col overflow-hidden border
                   ${isLive
                     ? "bg-red-500/15 border-red-500/60"
@@ -123,12 +123,14 @@ export default function EpgBar({ streamId, onClose }: { streamId: number; onClos
                 <div className="text-white text-[13px] font-semibold leading-tight line-clamp-2 shrink-0">
                   {p.title}
                 </div>
+                {/* Description fills whatever space is left in the box (clips if
+                    it runs long) so boxes don't sit half-empty. */}
                 {p.desc ? (
-                  <p className="text-white/55 text-[11px] leading-snug mt-1 line-clamp-3 overflow-hidden">
+                  <p className="text-white/55 text-[11px] leading-snug mt-1 flex-1 min-h-0 overflow-hidden">
                     {p.desc}
                   </p>
                 ) : p.category ? (
-                  <p className="text-white/40 text-[11px] mt-1 truncate">{p.category}</p>
+                  <p className="text-white/40 text-[11px] mt-1 flex-1 min-h-0 overflow-hidden">{p.category}</p>
                 ) : null}
                 {isLive && (
                   <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/10">
