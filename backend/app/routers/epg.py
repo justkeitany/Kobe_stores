@@ -297,7 +297,7 @@ _COUNTRY_PREFIX = re.compile(r"^(us|usa|uk|gb|ca|can)\b")
 # likewise kept as a token so base channels never match their +1 variant.
 _NOISE = re.compile(
     r"\b("
-    r"hd|sd|fhd|uhd|4k|\d+p|"
+    r"hd|sd|fhd|uhd|4k|\d+[pi]|"
     r"east|eastern|feed|"
     r"pluto\s*tv|pluto|samsung\s*tv\s*plus|samsung|plex|roku|tubi|stirr|xumo|"
     r"channel|network|tv"
