@@ -126,9 +126,20 @@ export default function Player({ url, title }: { url: string; title?: string }) 
         stalls = 0;
         try {
           h.startLoad();
+          // Only ever move FORWARD. The two stall causes need opposite handling:
+          //  (1) a hole mid-buffer  -> jump ahead to the next buffered range;
+          //  (2) starved at the live edge (source dipped / no new segments yet)
+          //      -> there is nothing ahead to seek to, so DO NOTHING and let the
+          //      loader refill. Seeking back toward buffered.end here replays the
+          //      same instant every 6s = the "stuck in a loop" symptom.
           const edge = h.liveSyncPosition;
-          if (typeof edge === "number" && isFinite(edge) && edge > v.currentTime) v.currentTime = edge;
-          else if (v.buffered.length) { const e = v.buffered.end(v.buffered.length - 1); if (e > v.currentTime) v.currentTime = e - 0.3; }
+          if (typeof edge === "number" && isFinite(edge) && edge > v.currentTime + 0.5) {
+            v.currentTime = edge;
+          } else {
+            for (let i = 0; i < v.buffered.length; i++) {
+              if (v.buffered.start(i) > v.currentTime + 0.1) { v.currentTime = v.buffered.start(i) + 0.05; break; }
+            }
+          }
           v.play().catch(() => {});
         } catch { /* ignore */ }
       }, 3000);
