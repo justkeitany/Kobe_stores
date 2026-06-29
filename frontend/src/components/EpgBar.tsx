@@ -17,11 +17,6 @@ interface Timeline {
   programmes: Programme[];
 }
 
-// Horizontal scale: pixels per minute. Wide enough that a 30-min show is a
-// comfortable tap target and a movie reads as visibly longer.
-const PX_PER_MIN = 5;
-const MIN_CARD_PX = 96;
-
 function hhmm(iso: string): string {
   const d = new Date(iso);
   return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
@@ -61,7 +56,7 @@ export default function EpgBar({ streamId, onClose }: { streamId: number; onClos
 
   return (
     <div
-      className="absolute bottom-0 left-0 right-0 z-30 h-1/4 min-h-[150px]
+      className="absolute bottom-0 left-0 right-0 z-30 h-1/4 min-h-[190px]
         bg-gradient-to-t from-black via-black/95 to-black/70 backdrop-blur-sm
         border-t border-white/10 flex flex-col"
       // Don't let taps/scrolls here toggle the video play state behind it.
@@ -96,41 +91,45 @@ export default function EpgBar({ streamId, onClose }: { streamId: number; onClos
       ) : (
         <div
           ref={scrollRef}
-          className="flex-1 flex items-stretch gap-1.5 overflow-x-auto overflow-y-hidden
+          className="flex-1 flex items-stretch gap-2 overflow-x-auto overflow-y-hidden
             px-4 pb-3 scroll-smooth [scrollbar-width:thin]"
         >
           {progs.map((p, i) => {
             const start = new Date(p.start).getTime();
             const stop = new Date(p.stop).getTime();
-            const durMin = Math.max(1, (stop - start) / 60000);
             const isLive = now >= start && now < stop;
             const isPast = stop <= now;
-            const width = Math.max(MIN_CARD_PX, Math.round(durMin * PX_PER_MIN));
             const progress = isLive ? Math.min(1, Math.max(0, (now - start) / (stop - start))) : 0;
             return (
               <div
                 key={i}
                 ref={isLive ? liveRef : undefined}
-                style={{ width }}
-                className={`relative shrink-0 rounded-lg px-3 py-2 flex flex-col overflow-hidden border
+                // Equal-width boxes — ~5 visible at once on a typical player,
+                // never narrower than a readable card; scroll for the rest.
+                style={{ flex: "0 0 auto", width: "clamp(190px, 18vw, 290px)" }}
+                className={`relative rounded-lg px-3 py-2 flex flex-col overflow-hidden border
                   ${isLive
                     ? "bg-red-500/15 border-red-500/60"
                     : isPast
                     ? "bg-white/5 border-white/10 opacity-50"
                     : "bg-white/[0.07] border-white/10"}`}
               >
-                <div className="flex items-center gap-1.5 text-[11px] mb-0.5">
+                <div className="flex items-center gap-1.5 text-[11px] mb-1 shrink-0">
                   {isLive && (
                     <span className="text-red-400 font-bold tracking-wide">● LIVE</span>
                   )}
-                  <span className="text-white/55 tabular-nums">{hhmm(p.start)}</span>
+                  <span className="text-white/55 tabular-nums">{hhmm(p.start)} – {hhmm(p.stop)}</span>
                 </div>
-                <div className="text-white text-[13px] font-medium leading-tight line-clamp-2">
+                <div className="text-white text-[13px] font-semibold leading-tight line-clamp-2 shrink-0">
                   {p.title}
                 </div>
-                {p.category && (
-                  <div className="text-white/40 text-[11px] mt-auto pt-1 truncate">{p.category}</div>
-                )}
+                {p.desc ? (
+                  <p className="text-white/55 text-[11px] leading-snug mt-1 line-clamp-3 overflow-hidden">
+                    {p.desc}
+                  </p>
+                ) : p.category ? (
+                  <p className="text-white/40 text-[11px] mt-1 truncate">{p.category}</p>
+                ) : null}
                 {isLive && (
                   <div className="absolute bottom-0 left-0 right-0 h-[3px] bg-white/10">
                     <div className="h-full bg-red-500" style={{ width: `${progress * 100}%` }} />
