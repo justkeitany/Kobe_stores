@@ -1,4 +1,5 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useLayoutEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { X, Loader2, LayoutGrid, Tv, Crown } from "lucide-react";
 import api, { mintStreamToken } from "../lib/api";
 
@@ -48,27 +49,22 @@ export default function ChannelBar({
   onPick: (token: string, name: string, sid: number | null) => void;
   onClose: () => void;
 }) {
-  const [others, setOthers] = useState<Channel[]>([]);
-  const [premium, setPremium] = useState<Channel[]>([]);
-  const [loading, setLoading] = useState(true);
   const [switching, setSwitching] = useState<string | null>(null); // key being opened
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    Promise.all([
-      api.get<Channel[]>("/channels").then((r) => r.data).catch(() => [] as Channel[]),
-      api.get<Channel[]>("/premium/channels").then((r) => r.data).catch(() => [] as Channel[]),
-    ])
-      .then(([all, prem]) => {
-        if (cancelled) return;
-        setOthers(all);
-        setPremium(prem);
-      })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
+  // Shared react-query caches: ["all-channels"] is the same key the Channels page
+  // uses, so coming from there the data is already warm and the strip opens
+  // instantly. staleTime keeps reopens instant without hammering the API.
+  const { data: others = [], isLoading: l1 } = useQuery<Channel[]>({
+    queryKey: ["all-channels"],
+    queryFn: () => api.get<Channel[]>("/channels").then((r) => r.data),
+    staleTime: 60_000,
+  });
+  const { data: premium = [], isLoading: l2 } = useQuery<Channel[]>({
+    queryKey: ["premium-channels"],
+    queryFn: () => api.get<Channel[]>("/premium/channels").then((r) => r.data),
+    staleTime: 60_000,
+  });
 
   // Two separated groups: premium first (gold), then everything else.
   const groups = [
@@ -76,13 +72,16 @@ export default function ChannelBar({
     { key: "all", label: "All Channels", premium: false, items: byHealth(playable(others)) },
   ].filter((g) => g.items.length > 0);
   const total = groups.reduce((n, g) => n + g.items.length, 0);
+  // Only block on a spinner when we have nothing cached yet to show.
+  const loading = total === 0 && (l1 || l2);
 
-  // Bring the channel that's playing now into view so the user starts from where
-  // they are rather than the top of the list.
-  useEffect(() => {
+  // Open the strip starting at the channel that's playing now (left edge), so the
+  // boxes to its right are the "next" channels — not from the top of the list.
+  // useLayoutEffect + instant behavior so there's no visible jump from the start.
+  useLayoutEffect(() => {
     if (loading || !scrollRef.current || Number.isNaN(currentStreamId)) return;
     const el = scrollRef.current.querySelector<HTMLElement>('[data-current="1"]');
-    if (el) el.scrollIntoView({ inline: "center", block: "nearest" });
+    if (el) el.scrollIntoView({ behavior: "instant" as ScrollBehavior, inline: "start", block: "nearest" });
   }, [loading, others, premium, currentStreamId]);
 
   async function pick(c: Channel) {

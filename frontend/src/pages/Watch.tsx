@@ -5,9 +5,11 @@ import {
   Play, Pause, Volume2, VolumeX, Maximize, Minimize,
   Loader2, AlertCircle, Settings, ChevronLeft, Gauge, PictureInPicture2, Tv, LayoutGrid,
 } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { makeHlsConfig, resyncToLiveEdge } from "../lib/hls";
 import EpgBar from "../components/EpgBar";
 import ChannelBar from "../components/ChannelBar";
+import api from "../lib/api";
 
 function formatTime(s: number): string {
   const m = Math.floor(s / 60);
@@ -18,6 +20,7 @@ function formatTime(s: number): string {
 export default function WatchPage() {
   const [params] = useSearchParams();
   const nav = useNavigate();
+  const qc = useQueryClient();
   const url = params.get("url") || "";
   const token = params.get("t") || "";
   const name = params.get("name") || "Stream";
@@ -51,11 +54,13 @@ export default function WatchPage() {
   // Switch the player to another channel in place. Navigating to the same route
   // with new params updates `token`/`name`/`sid`, which re-runs the HLS init
   // effect (deps [url, token]) — no full-page reload, video swaps over. The EPG
-  // strip follows the new `sid` automatically.
+  // strip follows the new `sid` automatically. `replace` so we don't pile up a
+  // history entry per channel — Back goes straight to where the user started
+  // (e.g. the Channels page), not back through every channel they sampled.
   const switchChannel = (newToken: string, chName: string, sid: number | null) => {
     setShowChannels(false);
     const sidPart = sid != null ? `&sid=${sid}` : "";
-    nav(`/watch?t=${newToken}&name=${encodeURIComponent(chName)}${sidPart}`);
+    nav(`/watch?t=${newToken}&name=${encodeURIComponent(chName)}${sidPart}`, { replace: true });
   };
 
   const SPEEDS = [0.5, 0.75, 1, 1.25, 1.5, 2];
@@ -212,6 +217,21 @@ export default function WatchPage() {
 
     return () => { if (watchdog) clearInterval(watchdog); if (hlsRef.current) { hlsRef.current.destroy(); hlsRef.current = null; } };
   }, [url, token]);
+
+  // Warm the channel-switcher data the moment the player opens, so tapping
+  // "Channels" shows the strip instantly instead of waiting on a fetch.
+  useEffect(() => {
+    qc.prefetchQuery({
+      queryKey: ["all-channels"],
+      queryFn: () => api.get("/channels").then((r) => r.data),
+      staleTime: 60_000,
+    });
+    qc.prefetchQuery({
+      queryKey: ["premium-channels"],
+      queryFn: () => api.get("/premium/channels").then((r) => r.data),
+      staleTime: 60_000,
+    });
+  }, [qc]);
 
   // Time update
   useEffect(() => {
