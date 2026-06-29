@@ -62,14 +62,21 @@ export default function WatchPage() {
       : url.startsWith("/") ? `${window.location.origin}${url}` : url;
 
     if (Hls.isSupported()) {
-      // Shared, production-tuned config (ABR + cap-to-player-size + gap
-      // recovery + network-aware initial estimate). See src/lib/hls.ts.
-      const hls = new Hls(makeHlsConfig());
-      hlsRef.current = hls;
       let recoverAttempts = 0;
       let remuxTried = false;
-      hls.loadSource(hlsUrl);
-      hls.attachMedia(video);
+
+      // (Re)create the hls.js instance pointed at a source. Used for the initial
+      // load and to switch a channel to the server re-mux fallback — a fatally
+      // errored instance can't be reused, so we tear it down and build a fresh
+      // one with all handlers re-attached.
+      const setupHls = (srcUrl: string) => {
+        if (hlsRef.current) { try { hlsRef.current.destroy(); } catch { /* ignore */ } }
+        // Shared, production-tuned config (ABR + cap-to-player-size + gap
+        // recovery + network-aware initial estimate). See src/lib/hls.ts.
+        const hls = new Hls(makeHlsConfig());
+        hlsRef.current = hls;
+        hls.loadSource(srcUrl);
+        hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
         const qs = [{ index: -1, label: "Auto", bitrate: 0 }];
@@ -125,8 +132,8 @@ export default function WatchPage() {
           remuxTried = true;
           recoverAttempts = 0;
           setLoading(true);
-          hls.loadSource(`${window.location.origin}/live/t/${token}.m3u8?remux=1`);
-          hls.startLoad();
+          // Fresh instance — a fatally errored one won't restart on loadSource.
+          setupHls(`${window.location.origin}/live/t/${token}.m3u8?remux=1`);
           return;
         }
         // Recover silently before surfacing an error — never die on a single
@@ -144,6 +151,9 @@ export default function WatchPage() {
         hls.destroy();
         hlsRef.current = null;
       });
+      };  // end setupHls
+
+      setupHls(hlsUrl);
 
       // Liveness watchdog — some live/audio (radio) streams make hls.js quietly
       // stop fetching: it drains its buffer and freezes with no error event. If

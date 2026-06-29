@@ -127,16 +127,20 @@ export function resyncToLiveEdge(
   hls: { liveSyncPosition?: number | null } | null,
 ): void {
   try {
+    // Only skip ahead when genuinely far behind (>30s of stale backlog, e.g.
+    // after a long spell in a background tab). Seeking on a live stream forces a
+    // rebuffer, so for normal small drift we do NOTHING here and let hls.js's
+    // gentle catch-up (maxLiveSyncPlaybackRate 1.1x) ease back — otherwise every
+    // tab refocus would stall a stream that was playing fine.
+    const THRESHOLD = 30;
     const edge = hls?.liveSyncPosition;
-    if (typeof edge === "number" && isFinite(edge) && edge > video.currentTime) {
+    if (typeof edge === "number" && isFinite(edge) && edge - video.currentTime > THRESHOLD) {
       video.currentTime = edge;
       return;
     }
     if (video.buffered.length) {
       const end = video.buffered.end(video.buffered.length - 1);
-      // Only resync if we're more than ~6s behind the buffered edge — avoids
-      // pointless micro-seeks that would themselves cause a tiny rebuffer.
-      if (end - video.currentTime > 6) video.currentTime = end - 0.5;
+      if (end - video.currentTime > THRESHOLD) video.currentTime = end - 0.5;
     }
   } catch {
     /* ignore — resync is best-effort */
