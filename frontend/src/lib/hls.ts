@@ -114,33 +114,44 @@ export function makeHlsConfig(): Partial<HlsConfig> {
 }
 
 /**
- * Jump a (live) video element to the freshest point it can play. Used when a
- * tab regains focus: a backgrounded live stream keeps draining its buffer, so
- * on return we skip the stale backlog straight to the live edge — exactly what
- * YouTube/Twitch do — instead of playing minutes-old footage.
+ * Recover a (live) video element after a tab regains focus or the network comes
+ * back, WITHOUT causing a needless rebuffer.
  *
- * Safe for VOD too: it only ever moves forward toward the buffered end and
- * leaves a small safety margin so it doesn't land past what's decoded.
+ * Earlier this always skipped to the live edge when the playhead had drifted
+ * behind ("be fresh like YouTube"). But a seek on a live stream ALWAYS forces a
+ * visible rebuffer, so every refocus stalled a stream that was playing fine —
+ * the "it stops and buffers when I come back to the window" complaint.
+ *
+ * New policy, matching this player's stated priority (smoothness > latency): if
+ * the playhead is still inside a buffered range, do NOTHING — keep playing and
+ * let hls.js's gentle 1.1x catch-up ease back toward live with no stall. Only
+ * seek when the playhead has fallen OUT of the buffer (segments expired while
+ * backgrounded), where a rebuffer is unavoidable anyway — then jump to the
+ * freshest playable point.
  */
 export function resyncToLiveEdge(
   video: HTMLVideoElement,
   hls: { liveSyncPosition?: number | null } | null,
 ): void {
   try {
-    // Only skip ahead when genuinely far behind (>30s of stale backlog, e.g.
-    // after a long spell in a background tab). Seeking on a live stream forces a
-    // rebuffer, so for normal small drift we do NOTHING here and let hls.js's
-    // gentle catch-up (maxLiveSyncPlaybackRate 1.1x) ease back — otherwise every
-    // tab refocus would stall a stream that was playing fine.
-    const THRESHOLD = 30;
+    const t = video.currentTime;
+    // Still inside buffered media? Leave it alone — no seek, no rebuffer.
+    for (let i = 0; i < video.buffered.length; i++) {
+      if (t >= video.buffered.start(i) - 0.1 && t <= video.buffered.end(i) + 0.1) {
+        return;
+      }
+    }
+    // Playhead is past/before the buffer (data gone): move to the freshest
+    // playable point. A rebuffer here is unavoidable — the media we were on no
+    // longer exists.
     const edge = hls?.liveSyncPosition;
-    if (typeof edge === "number" && isFinite(edge) && edge - video.currentTime > THRESHOLD) {
+    if (typeof edge === "number" && isFinite(edge) && edge > t) {
       video.currentTime = edge;
       return;
     }
     if (video.buffered.length) {
       const end = video.buffered.end(video.buffered.length - 1);
-      if (end - video.currentTime > THRESHOLD) video.currentTime = end - 0.5;
+      if (end > t) video.currentTime = end - 0.5;
     }
   } catch {
     /* ignore — resync is best-effort */
