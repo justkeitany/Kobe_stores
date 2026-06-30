@@ -100,11 +100,55 @@ def _base_from_request(request: Request) -> str:
 
 
 async def _base_url(request: Request) -> str:
-    """Public base URL: the dashboard-configured domain if set, else the request host:port."""
+    """Public base URL: the dashboard-configured domain if set, else the request host:port.
+
+    This is the ORIGIN — used for API / auth / admin and as the CDN's pull origin.
+    """
     configured = await _configured_server_url()
     if configured:
         return configured.rstrip("/")
     return _base_from_request(request).rstrip("/")
+
+
+async def _cdn_base() -> Optional[str]:
+    """The CDN host for viewer-facing delivery, or None when not configured.
+
+    Resolution order (so it can be toggled off without a redeploy if the CDN
+    has problems): DB Settings `cdn_url` → env BUNNY_CDN_URL → None (= origin).
+    """
+    async with AsyncSessionLocal() as db:
+        row = await db.execute(
+            select(SettingsModel).where(SettingsModel.key == "cdn_url")
+        )
+        setting = row.scalar_one_or_none()
+    val = (setting.value.strip() if setting and setting.value else "") or settings.BUNNY_CDN_URL
+    return val.rstrip("/") if val and val.strip() else None
+
+
+async def _delivery_base_url(request: Request) -> str:
+    """Base URL for VIEWER-FACING HLS delivery (.m3u8 / .ts) and logos.
+
+    The Bunny CDN host when configured, else the same origin as the API — so if
+    the CDN is unset or taken down, delivery silently falls back to the origin
+    and nothing breaks.
+    """
+    return (await _cdn_base()) or await _base_url(request)
+
+
+def _cdn_logo(logo: Optional[str], origin: str, delivery: str) -> str:
+    """Point a channel logo at the CDN, but only when it's one WE host.
+
+    Most logos are external provider URLs (left untouched). Logos served by the
+    panel itself (absolute origin URL, or a root-relative /logos/… path) are
+    swapped onto the delivery host so they too come from the edge.
+    """
+    if not logo or delivery == origin:
+        return logo or ""
+    if logo.startswith(origin):
+        return delivery + logo[len(origin):]
+    if logo.startswith("/"):
+        return delivery + logo
+    return logo
 
 
 async def _check_credentials(username: str, password: str):
@@ -272,13 +316,18 @@ async def player_api(
             result = await db.execute(q)
             streams = result.scalars().all()
 
+            # Logos (only the panel's own) come from the CDN edge when configured;
+            # the API response itself still rides the origin host.
+            origin = await _base_url(request)
+            delivery = await _delivery_base_url(request)
+
             return [
                 {
                     "num": s.id,
                     "name": s.name,
                     "stream_type": "live",
                     "stream_id": s.id,
-                    "stream_icon": s.logo_url or "",
+                    "stream_icon": _cdn_logo(s.logo_url, origin, delivery),
                     "epg_channel_id": s.epg_channel_id or "",
                     "added": "0",
                     "category_id": str(s.category_id) if s.category_id else "0",
@@ -372,7 +421,8 @@ async def get_playlist(
     if not user_data:
         raise HTTPException(401, "Unauthorized")
 
-    base_url = await _base_url(request)
+    base_url = await _base_url(request)          # origin — API/auth
+    delivery_url = await _delivery_base_url(request)  # CDN (or origin) — segments/logos
 
     async with AsyncSessionLocal() as db:
         allowed_cats = await _allowed_category_ids(db, user_data.get("bouquet_id"))
@@ -403,7 +453,8 @@ async def get_playlist(
 
         if is_youtube_url(primary_url):
             # YouTube streams are served through the proxy, which resolves a fresh
-            # HLS manifest on demand (and re-resolves when it expires).
+            # HLS manifest on demand (and re-resolves when it expires). This is a
+            # dynamic resolver (not cacheable segments), so it stays on origin.
             stream_url = f"{base_url}/proxy/stream?url={quote(primary_url, safe='')}"
         elif stream.delivery_mode == "balanced":
             # Balanced: hand the player a mirror directly (sticky by username),
@@ -411,7 +462,9 @@ async def get_playlist(
             chosen = pick_source_for_user(refs, username)
             stream_url = chosen.url if chosen else primary_url
         else:
-            stream_url = f"{base_url}/live/{username}/{password}/{stream.id}"
+            # HLS/TS delivery → CDN edge when configured (segments are cached
+            # there; the live .m3u8 stays no-cache so it's always fresh).
+            stream_url = f"{delivery_url}/live/{username}/{password}/{stream.id}"
             if output == "ts":
                 stream_url += ".ts"
             elif output == "m3u8":
@@ -420,7 +473,7 @@ async def get_playlist(
         lines.append(
             f'#EXTINF:-1 tvg-id="{stream.epg_channel_id or ""}" '
             f'tvg-name="{stream.name}" '
-            f'tvg-logo="{stream.logo_url or ""}" '
+            f'tvg-logo="{_cdn_logo(stream.logo_url, base_url, delivery_url)}" '
             f'group-title="{cat_name}",{stream.name}'
         )
         lines.append(stream_url)
@@ -438,12 +491,13 @@ async def get_playlist(
             if c.get("category"):
                 cat = f"{pl.name} - {c['category']}"
             # Restream the URL through FFmpeg (same buffering pipeline as
-            # imported streams: ABR, 2s segments, input resilience).
-            final_url = f"{base_url}/live/pl/{username}/{password}?url={quote(c['url'], safe='')}"
+            # imported streams: ABR, 2s segments, input resilience). Delivered via
+            # the CDN edge when configured.
+            final_url = f"{delivery_url}/live/pl/{username}/{password}?url={quote(c['url'], safe='')}"
             lines.append(
                 f'#EXTINF:-1 tvg-id="{c.get("epg") or ""}" '
                 f'tvg-name="{safe_name}" '
-                f'tvg-logo="{safe_logo}" '
+                f'tvg-logo="{_cdn_logo(safe_logo, base_url, delivery_url)}" '
                 f'group-title="{cat}",{safe_name}'
             )
             lines.append(final_url)
@@ -690,10 +744,11 @@ async def serve_playlist_restream_file(
             headers=no_cache,
         )
 
-    # .ts or bare — redirect to .m3u8
-    base_url = await _base_url(request)
+    # .ts or bare — redirect to .m3u8. RELATIVE (no host) so a viewer who reached
+    # us via the CDN edge stays on the CDN for the playlist + segments instead of
+    # being bounced back to the origin mid-session.
     return RedirectResponse(
-        url=f"{base_url}/live/pl/{username}/{password}/{stream_id}.m3u8",
+        url=f"/live/pl/{username}/{password}/{stream_id}.m3u8",
         status_code=302,
     )
 
@@ -991,12 +1046,15 @@ async def serve_token_live(
 
 @router.get("/xmltv.php")
 async def xmltv(
+    request: Request,
     username: str = Query(...),
     password: str = Query(...),
 ):
     user_data = await _check_credentials(username, password)
     if not user_data:
         raise HTTPException(401, "Unauthorized")
+    origin = await _base_url(request)
+    delivery = await _delivery_base_url(request)
 
     async with AsyncSessionLocal() as db:
         allowed_cats = await _allowed_category_ids(db, user_data.get("bouquet_id"))
@@ -1051,7 +1109,7 @@ async def xmltv(
         lines.append(f'  <channel id="{_xml_escape(s.epg_channel_id)}">')
         lines.append(f'    <display-name>{_xml_escape(s.name)}</display-name>')
         if s.logo_url:
-            lines.append(f'    <icon src="{s.logo_url}" />')
+            lines.append(f'    <icon src="{_cdn_logo(s.logo_url, origin, delivery)}" />')
         lines.append("  </channel>")
     for eid, dname in pl_channels.items():
         if eid in emitted_channels:

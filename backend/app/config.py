@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     SERVER_URL: str = ""
     PANEL_PORT: int = 8000
 
+    # Bunny CDN (or any pull-zone CDN) for viewer-facing HLS delivery + logos.
+    # When set (e.g. https://cdn.keitanyfrank.store), the M3U playlist and Xtream
+    # responses hand out .m3u8 / .ts / logo URLs on this host so segments come
+    # from the nearest edge. API / auth / admin always stay on the origin
+    # (SERVER_URL). Leave EMPTY to deliver everything from the origin — so if the
+    # CDN is ever down, just clear this (or the DB `cdn_url` setting) and the
+    # panel keeps working unchanged. The DB setting `cdn_url` overrides this.
+    BUNNY_CDN_URL: str = ""
+
     # Cloudflare R2 (S3-compatible) — premium-playlist backup/export. All blank by
     # default; export stays dormant until these are set. Create an R2 API token
     # with Object Read & Write scoped to the bucket.
