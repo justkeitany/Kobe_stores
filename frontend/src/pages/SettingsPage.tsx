@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import {
   Settings, Save, Copy, Link, KeyRound, Eye, EyeOff,
   Globe, Server as ServerIcon, Loader2, CheckCircle2, AlertCircle,
-  Shield, RotateCcw,
+  Shield, RotateCcw, Zap,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import api, { xtreamBaseUrl } from "../lib/api";
@@ -25,6 +25,10 @@ export default function SettingsPage() {
   const [maxRetry, setMaxRetry]           = useState("5");
   const [healthCheck, setHealthCheck]     = useState("30");
   const [savingSettings, setSavingSettings] = useState(false);
+
+  // ── CDN (Bunny / pull-zone) delivery ────────────────────────
+  const [cdnUrl, setCdnUrl]               = useState("");
+  const [savingCdn, setSavingCdn]         = useState(false);
 
   // ── Change password ─────────────────────────────────────────
   const [currentPass, setCurrentPass]   = useState("");
@@ -59,6 +63,7 @@ export default function SettingsPage() {
       setHlsListSize(s.hls_list_size || "6");
       setMaxRetry(s.max_retry || "5");
       setHealthCheck(s.health_check || "30");
+      setCdnUrl(s.cdn_url || "");
     }).catch(() => {});
     api.get("/settings/proxy/pool").then((r) => {
       setProxyRaw(r.data.raw || "");
@@ -118,6 +123,20 @@ export default function SettingsPage() {
       toast.error("Failed to save settings");
     } finally {
       setSavingSettings(false);
+    }
+  }
+
+  async function saveCdn(nextValue?: string) {
+    const value = (nextValue ?? cdnUrl).trim().replace(/\/+$/, "");
+    setSavingCdn(true);
+    try {
+      await api.put("/settings", { key: "cdn_url", value });
+      setCdnUrl(value);
+      toast.success(value ? "CDN enabled — delivery via edge" : "CDN disabled — delivery from origin");
+    } catch {
+      toast.error("Failed to save CDN setting");
+    } finally {
+      setSavingCdn(false);
     }
   }
 
@@ -292,6 +311,55 @@ export default function SettingsPage() {
         <button className="btn-primary w-fit" onClick={saveSettings} disabled={savingSettings}>
           <Save size={13} /> {savingSettings ? "Saving..." : "Save Settings"}
         </button>
+      </div>
+
+      {/* ── Content Delivery (CDN) ───────────────────────────── */}
+      <div className="card space-y-4">
+        <h2 className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+          <Zap size={14} className="text-gray-400" /> Content Delivery (CDN)
+        </h2>
+        <p className="text-xs text-gray-400">
+          Deliver HLS playlists (<code>.m3u8</code>), segments (<code>.ts</code>) and your
+          hosted channel logos from a pull-zone CDN (e.g. Bunny) so viewers stream from the
+          nearest edge. API, login and admin always stay on the origin. Leave blank to serve
+          everything from this server — clear it any time the CDN has problems and delivery
+          falls back to the origin instantly.
+        </p>
+        <div className="flex gap-2">
+          <input
+            className="input"
+            value={cdnUrl}
+            onChange={(e) => setCdnUrl(e.target.value)}
+            placeholder="https://cdn.example.com"
+          />
+          <button
+            className="btn-primary px-3 whitespace-nowrap"
+            onClick={() => saveCdn()}
+            disabled={savingCdn}
+          >
+            {savingCdn ? <Loader2 size={13} className="animate-spin" /> : <Save size={13} />}
+            Save
+          </button>
+        </div>
+        {cdnUrl.trim() ? (
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <p className="text-xs text-green-600 flex items-center gap-1.5">
+              <CheckCircle2 size={12} /> CDN active — delivery via{" "}
+              <span className="font-mono">{cdnUrl.trim().replace(/\/+$/, "")}</span>
+            </p>
+            <button
+              className="btn-secondary text-[11px] px-2 py-1"
+              onClick={() => { setCdnUrl(""); saveCdn(""); }}
+              disabled={savingCdn}
+            >
+              <RotateCcw size={11} /> Turn off
+            </button>
+          </div>
+        ) : (
+          <p className="text-xs text-gray-400 flex items-center gap-1.5">
+            <ServerIcon size={12} /> CDN off — delivering directly from the origin server.
+          </p>
+        )}
       </div>
 
       {/* ── Xtream Endpoints ─────────────────────────────────── */}
